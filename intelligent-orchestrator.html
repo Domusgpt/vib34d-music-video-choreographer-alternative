@@ -33,11 +33,14 @@
             height: 100%;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
+            display: none;
         }
 
         .system-layer.active {
             opacity: 1;
+            display: block;
+            pointer-events: auto;
         }
 
         .system-layer canvas {
