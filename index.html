@@ -386,8 +386,8 @@
             </button>
             <button class="mode-btn" onclick="selectMode('choreographed')">
                 <span class="emoji">🎬</span>
-                <span>CHOREOGRAPHY MODE</span>
-                <span class="subtitle">Design custom sequences<br>Program exact timing & effects</span>
+                <span>HYBRID MODE</span>
+                <span class="subtitle">Choreographed sequences<br>+ Audio reactivity + System switching</span>
             </button>
         </div>
     </div>
@@ -455,8 +455,8 @@
 
             if (mode === 'choreographed') {
                 document.getElementById('timeline-editor').classList.add('active');
-                document.getElementById('mode-title').textContent = '🎬 CHOREOGRAPHY MODE';
-                document.getElementById('mode-description').textContent = 'Design custom sequences with precise timing';
+                document.getElementById('mode-title').textContent = '🎬 HYBRID MODE';
+                document.getElementById('mode-description').textContent = 'Choreographed sequences + Full audio reactivity + System switching';
             } else {
                 document.getElementById('mode-title').textContent = '🎧 REACTIVE MODE';
                 document.getElementById('mode-description').textContent = 'Real-time audio analysis with automatic parameter mapping';

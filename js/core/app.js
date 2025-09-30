@@ -51,6 +51,11 @@ export class VIB34DApp {
                             // ReactivityManager.autoSelectDefaults() is called automatically by setActiveSystem
                         }
                         
+                        // CRITICAL: Reset reactivity grid to system defaults
+                        if (window.resetReactivityGridToDefaults) {
+                            window.resetReactivityGridToDefaults(system);
+                        }
+                        
                         // OPTIMIZED: Coordinated parameter sync with 60ms buffer
                         setTimeout(() => {
                             window.applyParametersCoordinated(system, newEngine);

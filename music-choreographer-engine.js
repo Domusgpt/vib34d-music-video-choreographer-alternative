@@ -117,67 +117,91 @@ export class MusicVideoChoreographer {
     }
 
     async generateDefaultChoreography() {
-        // Auto-generate choreography sequences
+        // Auto-generate choreography sequences WITH SYSTEM SWITCHING
         this.sequences = [
             {
                 time: 0,
                 duration: 15,
                 effects: {
+                    system: 'faceted', // Start with Faceted
                     geometry: 'cycle',
                     rotation: 'smooth',
                     chaos: 0.1,
                     speed: 0.5,
-                    colorShift: 'slow'
+                    colorShift: 'slow',
+                    densityBoost: 0
                 }
             },
             {
                 time: 15,
                 duration: 15,
                 effects: {
+                    system: 'faceted', // Stay on Faceted
                     geometry: 'morph',
                     rotation: 'accelerate',
                     chaos: 0.3,
                     speed: 1.0,
-                    colorShift: 'medium'
+                    colorShift: 'medium',
+                    densityBoost: 10
                 }
             },
             {
                 time: 30,
-                duration: 30,
+                duration: 20,
                 effects: {
+                    system: 'quantum', // SWITCH to Quantum for drop
                     geometry: 'random',
                     rotation: 'chaos',
                     chaos: 0.8,
                     speed: 2.0,
-                    colorShift: 'fast'
+                    colorShift: 'fast',
+                    densityBoost: 20
+                }
+            },
+            {
+                time: 50,
+                duration: 10,
+                effects: {
+                    system: 'holographic', // SWITCH to Holographic
+                    geometry: 'explosive',
+                    rotation: 'extreme',
+                    chaos: 0.9,
+                    speed: 2.5,
+                    colorShift: 'rainbow',
+                    densityBoost: 30
                 }
             },
             {
                 time: 60,
                 duration: 15,
                 effects: {
+                    system: 'faceted', // BACK to Faceted for breakdown
                     geometry: 'hold',
                     rotation: 'minimal',
                     chaos: 0.05,
                     speed: 0.3,
-                    colorShift: 'freeze'
+                    colorShift: 'freeze',
+                    baseHue: 240,
+                    densityBoost: -5
                 }
             },
             {
                 time: 75,
                 duration: 999,
                 effects: {
+                    system: 'quantum', // Final drop on Quantum
                     geometry: 'explosive',
                     rotation: 'extreme',
                     chaos: 1.0,
                     speed: 3.0,
-                    colorShift: 'rainbow'
+                    colorShift: 'rainbow',
+                    densityBoost: 40
                 }
             }
         ];
 
         this.renderSequenceList();
-        console.log('🎬 Generated default choreography');
+        console.log('🎬 Generated default choreography with system switching');
     }
 
     renderSequenceList() {
@@ -193,6 +217,13 @@ export class MusicVideoChoreographer {
 
                     <label>Duration (s)</label>
                     <input type="number" value="${seq.duration}" onchange="choreographer.updateSequence(${index}, 'duration', this.value)">
+
+                    <label>🎨 System</label>
+                    <select onchange="choreographer.updateSequence(${index}, 'system', this.value)" style="grid-column: span 2;">
+                        <option value="faceted" ${seq.effects.system === 'faceted' ? 'selected' : ''}>🔷 Faceted</option>
+                        <option value="quantum" ${seq.effects.system === 'quantum' ? 'selected' : ''}>🌌 Quantum</option>
+                        <option value="holographic" ${seq.effects.system === 'holographic' ? 'selected' : ''}>✨ Holographic</option>
+                    </select>
 
                     <label>Geometry</label>
                     <select onchange="choreographer.updateSequence(${index}, 'geometry', this.value)">
@@ -212,11 +243,11 @@ export class MusicVideoChoreographer {
                         <option value="extreme" ${seq.effects.rotation === 'extreme' ? 'selected' : ''}>Extreme</option>
                     </select>
 
-                    <label>Chaos</label>
-                    <input type="number" step="0.1" min="0" max="1" value="${seq.effects.chaos}" onchange="choreographer.updateSequence(${index}, 'chaos', this.value)">
+                    <label>Chaos Base</label>
+                    <input type="number" step="0.1" min="0" max="1" value="${seq.effects.chaos || 0.5}" onchange="choreographer.updateSequence(${index}, 'chaos', this.value)">
 
-                    <label>Speed</label>
-                    <input type="number" step="0.1" min="0.1" max="3" value="${seq.effects.speed}" onchange="choreographer.updateSequence(${index}, 'speed', this.value)">
+                    <label>Speed Base</label>
+                    <input type="number" step="0.1" min="0.1" max="3" value="${seq.effects.speed || 1.0}" onchange="choreographer.updateSequence(${index}, 'speed', this.value)">
 
                     <label>Color Shift</label>
                     <select onchange="choreographer.updateSequence(${index}, 'colorShift', this.value)">
@@ -226,6 +257,9 @@ export class MusicVideoChoreographer {
                         <option value="fast" ${seq.effects.colorShift === 'fast' ? 'selected' : ''}>Fast</option>
                         <option value="rainbow" ${seq.effects.colorShift === 'rainbow' ? 'selected' : ''}>Rainbow</option>
                     </select>
+                </div>
+                <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,255,255,0.05); border-radius: 3px;">
+                    ℹ️ Audio reactivity is ALWAYS active - these are base values that audio modulates
                 </div>
                 <button onclick="choreographer.deleteSequence(${index})" style="margin-top: 10px; background: #f44; font-size: 10px; padding: 5px;">Delete</button>
             </div>
@@ -453,7 +487,9 @@ export class MusicVideoChoreographer {
     }
 
     /**
-     * CHOREOGRAPHED MODE: Timeline-based choreography with audio overlay
+     * CHOREOGRAPHED MODE: Timeline-based choreography with FULL audio reactivity
+     * Choreography controls: system switching, geometry changes, base parameters
+     * Audio reactivity: ALWAYS active, overlays on choreographed parameters
      */
     applyChoreography(audioData) {
         const currentTime = this.audio.currentTime;
@@ -477,6 +513,12 @@ export class MusicVideoChoreographer {
             }
         };
 
+        // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)
+        if (effects.system && effects.system !== this.currentSystem) {
+            console.log(`🎬 Choreography: Switching to ${effects.system} system at ${currentTime.toFixed(1)}s`);
+            this.switchSystem(effects.system);
+        }
+
         // Geometry choreography
         if (effects.geometry === 'cycle') {
             const geomIndex = Math.floor((currentTime - activeSequence.time) / 2) % 9;
@@ -489,47 +531,73 @@ export class MusicVideoChoreographer {
             setParam('geometry', geomIndex);
         }
 
-        // Rotation choreography
+        // Rotation choreography (WITH audio overlay)
         if (effects.rotation === 'chaos') {
             setParam('rot4dXW', Math.sin(currentTime * 2) * Math.PI * audioData.bass);
             setParam('rot4dYW', Math.cos(currentTime * 1.5) * Math.PI * audioData.mid);
             setParam('rot4dZW', Math.sin(currentTime * 3) * Math.PI * audioData.high);
         } else if (effects.rotation === 'smooth') {
-            setParam('rot4dXW', Math.sin(currentTime * 0.5) * Math.PI);
-            setParam('rot4dYW', Math.cos(currentTime * 0.3) * Math.PI);
+            // Base smooth rotation + audio influence
+            setParam('rot4dXW', Math.sin(currentTime * 0.5 + audioData.bass * 2) * Math.PI);
+            setParam('rot4dYW', Math.cos(currentTime * 0.3 + audioData.mid * 2) * Math.PI);
+            setParam('rot4dZW', Math.sin(currentTime * 0.4 + audioData.high * 2) * Math.PI * 0.5);
         } else if (effects.rotation === 'extreme') {
             setParam('rot4dXW', Math.sin(currentTime * 5) * Math.PI * (1 + audioData.energy));
             setParam('rot4dYW', Math.cos(currentTime * 4) * Math.PI * (1 + audioData.bass));
             setParam('rot4dZW', Math.sin(currentTime * 6) * Math.PI * (1 + audioData.high));
         } else if (effects.rotation === 'accelerate') {
             const accel = (currentTime - activeSequence.time) / activeSequence.duration;
-            setParam('rot4dXW', Math.sin(currentTime * (0.5 + accel * 2)) * Math.PI);
-            setParam('rot4dYW', Math.cos(currentTime * (0.3 + accel * 1.5)) * Math.PI);
+            setParam('rot4dXW', Math.sin(currentTime * (0.5 + accel * 2 + audioData.bass)) * Math.PI);
+            setParam('rot4dYW', Math.cos(currentTime * (0.3 + accel * 1.5 + audioData.mid)) * Math.PI);
+        } else if (effects.rotation === 'minimal') {
+            // Minimal rotation BUT still audio reactive
+            setParam('rot4dXW', audioData.bass * Math.PI * 0.3);
+            setParam('rot4dYW', audioData.mid * Math.PI * 0.3);
+            setParam('rot4dZW', audioData.high * Math.PI * 0.2);
         }
 
-        // Apply sequence parameters with audio overlay
-        setParam('chaos', effects.chaos + audioData.energy * 0.3);
-        setParam('speed', effects.speed * (1 + audioData.energy * 0.5));
+        // AUDIO REACTIVITY ALWAYS ACTIVE - overlays on choreographed base values
 
+        // Chaos: Base from sequence + audio boost
+        const chaosBase = effects.chaos || 0.5;
+        setParam('chaos', chaosBase + audioData.energy * 0.4);
+
+        // Speed: Base from sequence + audio multiplier
+        const speedBase = effects.speed || 1.0;
+        setParam('speed', speedBase * (1 + audioData.energy * 0.6));
+
+        // Morph Factor: Audio-reactive morphing
         const morphBase = effects.rotation === 'chaos' ? 1.5 : 1.0;
-        setParam('morphFactor', morphBase + audioData.mid * 0.5);
+        setParam('morphFactor', morphBase + audioData.mid * 0.7);
 
-        const densityBase = 15 + audioData.bass * 30;
-        setParam('gridDensity', Math.floor(densityBase));
+        // Grid Density: ALWAYS audio-reactive
+        const densityBase = 15 + (effects.densityBoost || 0);
+        setParam('gridDensity', Math.floor(densityBase + audioData.bass * 35));
 
-        // Color shifting based on choreography
+        // Color shifting: Choreographed pattern + audio modulation
+        let hueValue = 0;
         if (effects.colorShift === 'rainbow') {
-            setParam('hue', (currentTime * 60) % 360);
+            hueValue = (currentTime * 60 + audioData.energy * 60) % 360;
         } else if (effects.colorShift === 'fast') {
-            setParam('hue', (currentTime * 30 + audioData.bass * 120) % 360);
+            hueValue = (currentTime * 30 + audioData.bass * 120) % 360;
         } else if (effects.colorShift === 'medium') {
-            setParam('hue', (currentTime * 10) % 360);
+            hueValue = (currentTime * 10 + audioData.mid * 60) % 360;
         } else if (effects.colorShift === 'slow') {
-            setParam('hue', (currentTime * 5) % 360);
+            hueValue = (currentTime * 5 + audioData.high * 30) % 360;
+        } else if (effects.colorShift === 'freeze') {
+            // Even "freeze" gets audio modulation
+            hueValue = (effects.baseHue || 180) + audioData.energy * 30;
         }
+        setParam('hue', hueValue % 360);
 
+        // Intensity & Saturation: ALWAYS audio-reactive
         setParam('intensity', 0.5 + audioData.energy * 0.5);
         setParam('saturation', 0.7 + audioData.bass * 0.3);
+
+        // ENABLE BUILT-IN AUDIO REACTIVITY for engines that have it
+        if (this.currentEngine && this.currentEngine.audioEnabled !== undefined) {
+            this.currentEngine.audioEnabled = true;
+        }
     }
 
     updateTimeline() {
