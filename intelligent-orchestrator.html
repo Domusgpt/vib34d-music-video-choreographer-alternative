@@ -760,23 +760,26 @@
             }
 
             applyAudioReactivity(audioData) {
-                // Grid density reacts to bass
-                const density = 15 + audioData.bass * 35;
+                // Grid density reacts to bass (moderate)
+                const baseDensity = this.params.gridDensity;
+                const density = baseDensity + audioData.bass * 15; // Reduced from 35
                 this.setParam('gridDensity', Math.floor(density));
 
-                // Hue shifts with mid frequencies
-                const hue = (this.params.hue + audioData.mid * 60) % 360;
+                // Hue shifts VERY SUBTLY with mid frequencies (not rainbow!)
+                const baseHue = this.params.hue;
+                const hue = (baseHue + audioData.mid * 10) % 360; // Reduced from 60
                 this.setParam('hue', Math.floor(hue));
 
-                // Intensity boosts with energy
-                const intensity = this.params.intensity * (0.7 + audioData.energy * 0.6);
+                // Intensity boosts with energy (subtle)
+                const baseIntensity = this.params.intensity;
+                const intensity = baseIntensity * (0.8 + audioData.energy * 0.3); // Reduced multiplier
                 this.setParam('intensity', intensity);
 
-                // Update UI (throttled)
+                // Update UI (throttled) - show base values, not reactive ones
                 if (Math.random() < 0.1) {
-                    document.getElementById('gridDensity-val').textContent = Math.floor(density);
-                    document.getElementById('hue-val').textContent = Math.floor(hue);
-                    document.getElementById('intensity-val').textContent = intensity.toFixed(2);
+                    document.getElementById('gridDensity-val').textContent = baseDensity;
+                    document.getElementById('hue-val').textContent = Math.floor(baseHue);
+                    document.getElementById('intensity-val').textContent = baseIntensity.toFixed(2);
                 }
             }
 
