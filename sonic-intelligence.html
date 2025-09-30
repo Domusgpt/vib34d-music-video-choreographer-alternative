@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Sonic Intelligence - Full System Orchestration</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        /* Visualization Container */
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .system-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 1.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+
+        .system-layer.active { opacity: 1; }
+
+        .system-layer canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Minimal Bottom UI */
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0));
+            padding: 20px;
+            z-index: 1000;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover { transform: scale(1.05); box-shadow: 0 0 20px #0ff; }
+        button:disabled { opacity: 0.3; }
+
+        .file-input-label {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        input[type="file"] { display: none; }
+
+        /* Waveform Timeline */
+        #timeline {
+            width: 100%;
+            height: 60px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 5px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        #waveform {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #timeline-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(0,255,255,0.3), rgba(255,0,255,0.3));
+            pointer-events: none;
+        }
+
+        /* Frequency Visualizer */
+        #freq-viz {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 200px;
+            height: 100px;
+            z-index: 1000;
+            opacity: 0.8;
+        }
+
+        /* Info Overlay */
+        #info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #0ff;
+            border-radius: 5px;
+            padding: 15px;
+            font-size: 11px;
+            z-index: 1000;
+            max-width: 250px;
+        }
+
+        #info h3 {
+            color: #0ff;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        #info p {
+            color: #888;
+            margin: 3px 0;
+            line-height: 1.4;
+        }
+
+        .highlight { color: #0ff; font-weight: bold; }
+
+        @media (max-width: 768px) {
+            #freq-viz { width: 150px; height: 75px; }
+            #info { max-width: 200px; font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <!-- Faceted System -->
+        <div class="system-layer active" id="faceted-layer">
+            <canvas id="background-canvas"></canvas>
+            <canvas id="shadow-canvas"></canvas>
+            <canvas id="content-canvas"></canvas>
+            <canvas id="highlight-canvas"></canvas>
+            <canvas id="accent-canvas"></canvas>
+        </div>
+
+        <!-- Quantum System -->
+        <div class="system-layer" id="quantum-layer">
+            <canvas id="quantum-background-canvas"></canvas>
+            <canvas id="quantum-shadow-canvas"></canvas>
+            <canvas id="quantum-content-canvas"></canvas>
+            <canvas id="quantum-highlight-canvas"></canvas>
+            <canvas id="quantum-accent-canvas"></canvas>
+        </div>
+
+        <!-- Holographic System -->
+        <div class="system-layer" id="holographic-layer">
+            <canvas id="holo-layer-0"></canvas>
+            <canvas id="holo-layer-1"></canvas>
+            <canvas id="holo-layer-2"></canvas>
+            <canvas id="holo-layer-3"></canvas>
+            <canvas id="holo-layer-4"></canvas>
+        </div>
+    </div>
+
+    <!-- Frequency Visualizer -->
+    <canvas id="freq-viz"></canvas>
+
+    <!-- Info Panel -->
+    <div id="info">
+        <h3>🎵 SONIC INTELLIGENCE</h3>
+        <p><span class="highlight" id="current-system">FACETED</span></p>
+        <p><span class="highlight" id="current-geometry">TETRAHEDRON</span></p>
+        <p>Kick: <span class="highlight" id="kick">--</span></p>
+        <p>Snare: <span class="highlight" id="snare">--</span></p>
+        <p>HiHat: <span class="highlight" id="hihat">--</span></p>
+        <p>Bass: <span class="highlight" id="bass">--</span></p>
+        <p>BPM: <span class="highlight" id="bpm">--</span></p>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls">
+        <div id="timeline">
+            <canvas id="waveform"></canvas>
+            <div id="timeline-progress"></div>
+        </div>
+        <div class="control-row">
+            <label for="audio-file" class="file-input-label">📁 LOAD AUDIO</label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="play-btn" disabled>▶</button>
+            <button id="pause-btn" disabled>⏸</button>
+            <button id="stop-btn" disabled>⏹</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+
+        /**
+         * SONIC INTELLIGENCE ENGINE
+         * Maps every audio frequency to intelligent visual responses
+         */
+        class SonicIntelligence {
+            constructor() {
+                this.audio = new Audio();
+                this.audioContext = null;
+                this.analyser = null;
+                this.dataArray = null;
+                this.frequencyData = null;
+                this.timeDomainData = null;
+
+                // All 3 engines running
+                this.engines = { faceted: null, quantum: null, holographic: null };
+                this.currentSystem = 'faceted';
+                this.isPlaying = false;
+
+                // Advanced audio detection
+                this.kickDetector = new KickDetector();
+                this.snareDetector = new SnareDetector();
+                this.hihatDetector = new HiHatDetector();
+                this.bpmDetector = new BPMDetector();
+
+                // Geometry intelligence mapping
+                this.geometryMap = {
+                    0: { name: 'TETRAHEDRON', sonic: 'Sharp transients, geometric precision' },
+                    1: { name: 'HYPERCUBE', sonic: '4D depth, complex harmonics' },
+                    2: { name: 'SPHERE', sonic: 'Smooth bass, sustained notes' },
+                    3: { name: 'TORUS', sonic: 'Cyclical patterns, loops' },
+                    4: { name: 'KLEIN BOTTLE', sonic: 'Inverted frequencies, phase shifts' },
+                    5: { name: 'FRACTAL', sonic: 'Harmonic overtones, self-similarity' },
+                    6: { name: 'WAVE', sonic: 'Pure oscillation, rhythm' },
+                    7: { name: 'CRYSTAL', sonic: 'Sharp attacks, crystalline highs' }
+                };
+
+                this.init();
+            }
+
+            async init() {
+                console.log('🧠 Initializing Sonic Intelligence System...');
+
+                // Audio setup
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 2048;
+                this.analyser.smoothingTimeConstant = 0.3;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+                this.timeDomainData = new Uint8Array(this.analyser.fftSize);
+
+                // Initialize canvases
+                this.initCanvases();
+
+                // Create all engines
+                await this.createEngines();
+
+                // Setup
+                this.setupEventListeners();
+                this.setupFrequencyVisualizer();
+
+                console.log('✅ Sonic Intelligence ready');
+            }
+
+            initCanvases() {
+                document.querySelectorAll('canvas:not(#waveform):not(#freq-viz)').forEach(canvas => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                });
+
+                window.addEventListener('resize', () => {
+                    document.querySelectorAll('canvas:not(#waveform):not(#freq-viz)').forEach(canvas => {
+                        canvas.width = window.innerWidth;
+                        canvas.height = window.innerHeight;
+                    });
+                });
+            }
+
+            async createEngines() {
+                try {
+                    this.engines.faceted = new VIB34DIntegratedEngine();
+                    this.engines.quantum = new QuantumEngine();
+                    this.engines.holographic = new RealHolographicSystem();
+                    console.log('🎨 All visualization engines active');
+                } catch (error) {
+                    console.error('Engine creation failed:', error);
+                }
+            }
+
+            setupEventListeners() {
+                document.getElementById('audio-file').addEventListener('change', (e) => {
+                    this.loadAudio(e.target.files[0]);
+                });
+
+                document.getElementById('play-btn').addEventListener('click', () => this.play());
+                document.getElementById('pause-btn').addEventListener('click', () => this.pause());
+                document.getElementById('stop-btn').addEventListener('click', () => this.stop());
+
+                document.getElementById('timeline').addEventListener('click', (e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    this.audio.currentTime = pos * this.audio.duration;
+                });
+
+                this.audio.addEventListener('ended', () => this.stop());
+            }
+
+            setupFrequencyVisualizer() {
+                const canvas = document.getElementById('freq-viz');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 200;
+                canvas.height = 100;
+
+                const draw = () => {
+                    if (!this.isPlaying) return requestAnimationFrame(draw);
+
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    this.analyser.getByteFrequencyData(this.frequencyData);
+
+                    const barWidth = canvas.width / 32;
+                    for (let i = 0; i < 32; i++) {
+                        const value = this.frequencyData[i * 4] / 255;
+                        const height = value * canvas.height;
+
+                        const hue = (i / 32) * 360;
+                        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+                        ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 1, height);
+                    }
+
+                    requestAnimationFrame(draw);
+                };
+                draw();
+            }
+
+            async loadAudio(file) {
+                if (!file) return;
+
+                const url = URL.createObjectURL(file);
+                this.audio.src = url;
+
+                if (!this.sourceNode) {
+                    this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+                    this.sourceNode.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+                }
+
+                // Generate waveform
+                await this.generateWaveform(file);
+
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = false;
+
+                console.log('🎵 Audio loaded:', file.name);
+            }
+
+            async generateWaveform(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+                const canvas = document.getElementById('waveform');
+                const ctx = canvas.getContext('2d');
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+
+                const data = audioBuffer.getChannelData(0);
+                const step = Math.ceil(data.length / canvas.width);
+                const amp = canvas.height / 2;
+
+                ctx.fillStyle = 'rgba(0,255,255,0.1)';
+                ctx.strokeStyle = '#0ff';
+                ctx.lineWidth = 1;
+
+                ctx.beginPath();
+                for (let i = 0; i < canvas.width; i++) {
+                    let min = 1.0;
+                    let max = -1.0;
+                    for (let j = 0; j < step; j++) {
+                        const datum = data[(i * step) + j];
+                        if (datum < min) min = datum;
+                        if (datum > max) max = datum;
+                    }
+                    ctx.moveTo(i, (1 + min) * amp);
+                    ctx.lineTo(i, (1 + max) * amp);
+                }
+                ctx.stroke();
+            }
+
+            play() {
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                this.audio.play();
+                this.isPlaying = true;
+                this.startIntelligentOrchestration();
+            }
+
+            pause() {
+                this.audio.pause();
+                this.isPlaying = false;
+            }
+
+            stop() {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.isPlaying = false;
+            }
+
+            /**
+             * INTELLIGENT ORCHESTRATION ENGINE
+             * Maps every sonic element to visual intelligence
+             */
+            startIntelligentOrchestration() {
+                const orchestrate = () => {
+                    if (!this.isPlaying) return;
+
+                    // Get audio analysis
+                    this.analyser.getByteFrequencyData(this.frequencyData);
+                    this.analyser.getByteTimeDomainData(this.timeDomainData);
+
+                    const analysis = this.analyzeAudio();
+
+                    // Detect rhythmic elements
+                    const kick = this.kickDetector.detect(analysis);
+                    const snare = this.snareDetector.detect(analysis);
+                    const hihat = this.hihatDetector.detect(analysis);
+                    const bpm = this.bpmDetector.detect(kick);
+
+                    // Update UI
+                    this.updateInfo(analysis, kick, snare, hihat, bpm);
+
+                    // Apply intelligent orchestration
+                    this.applyIntelligentMapping(analysis, kick, snare, hihat);
+
+                    // Update timeline
+                    const progress = (this.audio.currentTime / this.audio.duration) * 100;
+                    document.getElementById('timeline-progress').style.width = progress + '%';
+
+                    requestAnimationFrame(orchestrate);
+                };
+                orchestrate();
+            }
+
+            analyzeAudio() {
+                // Frequency bands
+                const bass = this.getAverage(this.frequencyData, 0, 60) / 255;
+                const lowMid = this.getAverage(this.frequencyData, 60, 250) / 255;
+                const mid = this.getAverage(this.frequencyData, 250, 2000) / 255;
+                const highMid = this.getAverage(this.frequencyData, 2000, 6000) / 255;
+                const high = this.getAverage(this.frequencyData, 6000, 16000) / 255;
+
+                // Spectral features
+                const energy = (bass + lowMid + mid + highMid + high) / 5;
+                const spectralCentroid = this.calculateSpectralCentroid();
+                const spectralFlux = this.calculateSpectralFlux();
+
+                return { bass, lowMid, mid, highMid, high, energy, spectralCentroid, spectralFlux };
+            }
+
+            getAverage(array, startFreq, endFreq) {
+                const nyquist = this.audioContext.sampleRate / 2;
+                const startBin = Math.floor((startFreq / nyquist) * array.length);
+                const endBin = Math.floor((endFreq / nyquist) * array.length);
+
+                let sum = 0;
+                for (let i = startBin; i < endBin; i++) {
+                    sum += array[i];
+                }
+                return sum / (endBin - startBin);
+            }
+
+            calculateSpectralCentroid() {
+                let weightedSum = 0;
+                let sum = 0;
+                for (let i = 0; i < this.frequencyData.length; i++) {
+                    weightedSum += this.frequencyData[i] * i;
+                    sum += this.frequencyData[i];
+                }
+                return sum > 0 ? weightedSum / sum / this.frequencyData.length : 0;
+            }
+
+            calculateSpectralFlux() {
+                if (!this.lastFrequencyData) {
+                    this.lastFrequencyData = new Uint8Array(this.frequencyData);
+                    return 0;
+                }
+
+                let flux = 0;
+                for (let i = 0; i < this.frequencyData.length; i++) {
+                    const diff = this.frequencyData[i] - this.lastFrequencyData[i];
+                    flux += diff > 0 ? diff : 0;
+                }
+
+                this.lastFrequencyData = new Uint8Array(this.frequencyData);
+                return flux / this.frequencyData.length / 255;
+            }
+
+            /**
+             * INTELLIGENT VISUAL MAPPING
+             * Each sonic element triggers specific visual responses
+             */
+            applyIntelligentMapping(analysis, kick, snare, hihat) {
+                const time = this.audio.currentTime;
+
+                // KICK → Geometry changes + System transitions
+                if (kick) {
+                    this.onKick(time, analysis);
+                }
+
+                // SNARE → 4D rotations + Click intensity
+                if (snare) {
+                    this.onSnare(time, analysis);
+                }
+
+                // HIHAT → Grid density + Chaos
+                if (hihat) {
+                    this.onHiHat(time, analysis);
+                }
+
+                // Continuous parameter mapping
+                this.updateAllEngines(analysis, time);
+            }
+
+            onKick(time, analysis) {
+                // Kick drives geometry changes
+                const currentGeom = Math.floor(time / 4) % 8;
+                this.setParameter('geometry', currentGeom);
+
+                // Trigger click intensity (volumetric pulse)
+                Object.values(this.engines).forEach(engine => {
+                    if (engine && engine.triggerClick) {
+                        engine.triggerClick(1.0);
+                    }
+                });
+
+                // Heavy bass kicks switch systems
+                if (analysis.bass > 0.8) {
+                    const systems = ['faceted', 'quantum', 'holographic'];
+                    const nextSystem = systems[(systems.indexOf(this.currentSystem) + 1) % 3];
+                    this.transitionSystem(nextSystem);
+                }
+
+                console.log(`🥁 KICK → Geometry ${currentGeom} (${this.geometryMap[currentGeom].name})`);
+            }
+
+            onSnare(time, analysis) {
+                // Snare drives 4D rotation
+                const rotationIntensity = analysis.mid * Math.PI;
+
+                this.setParameter('rot4dXW', Math.sin(time * 2) * rotationIntensity);
+                this.setParameter('rot4dYW', Math.cos(time * 1.5) * rotationIntensity);
+                this.setParameter('rot4dZW', Math.sin(time * 3) * rotationIntensity * 0.5);
+
+                console.log(`🥁 SNARE → 4D Rotation (intensity: ${rotationIntensity.toFixed(2)})`);
+            }
+
+            onHiHat(time, analysis) {
+                // HiHat drives grid density and chaos
+                const densityBoost = 15 + analysis.high * 40;
+                const chaosBoost = 0.2 + analysis.high * 0.6;
+
+                this.setParameter('gridDensity', densityBoost);
+                this.setParameter('chaos', chaosBoost);
+
+                console.log(`🥁 HIHAT → Density ${densityBoost.toFixed(0)}, Chaos ${chaosBoost.toFixed(2)}`);
+            }
+
+            updateAllEngines(analysis, time) {
+                // Bass → Morph factor (shape transformation)
+                const morph = 1.0 + analysis.bass * 1.5;
+                this.setParameter('morphFactor', morph);
+
+                // Mid frequencies → Speed
+                const speed = 0.5 + analysis.mid * 2.0;
+                this.setParameter('speed', speed);
+
+                // High frequencies → Hue (color shifts)
+                const hue = (time * 20 + analysis.high * 180) % 360;
+                this.setParameter('hue', hue);
+
+                // Energy → Intensity
+                const intensity = 0.4 + analysis.energy * 0.6;
+                this.setParameter('intensity', intensity);
+
+                // Spectral centroid → Saturation
+                const saturation = 0.5 + analysis.spectralCentroid * 0.5;
+                this.setParameter('saturation', saturation);
+            }
+
+            setParameter(param, value) {
+                Object.entries(this.engines).forEach(([name, engine]) => {
+                    if (!engine) return;
+
+                    if (engine.parameterManager) {
+                        engine.parameterManager.setParameter(param, value);
+                    } else if (engine.updateParameter) {
+                        engine.updateParameter(param, value);
+                    }
+                });
+            }
+
+            transitionSystem(newSystem) {
+                if (newSystem === this.currentSystem) return;
+
+                console.log(`🎬 Transitioning: ${this.currentSystem} → ${newSystem}`);
+
+                document.getElementById(`${this.currentSystem}-layer`).classList.remove('active');
+                document.getElementById(`${newSystem}-layer`).classList.add('active');
+
+                this.currentSystem = newSystem;
+                document.getElementById('current-system').textContent = newSystem.toUpperCase();
+            }
+
+            updateInfo(analysis, kick, snare, hihat, bpm) {
+                document.getElementById('kick').textContent = kick ? '●' : '○';
+                document.getElementById('snare').textContent = snare ? '●' : '○';
+                document.getElementById('hihat').textContent = hihat ? '●' : '○';
+                document.getElementById('bass').textContent = (analysis.bass * 100).toFixed(0) + '%';
+                document.getElementById('bpm').textContent = bpm || '--';
+
+                // Update current geometry
+                const currentGeom = Math.floor(this.audio.currentTime / 4) % 8;
+                document.getElementById('current-geometry').textContent = this.geometryMap[currentGeom].name;
+            }
+        }
+
+        /**
+         * KICK DETECTOR
+         * Detects bass drum hits using spectral flux and low frequency energy
+         */
+        class KickDetector {
+            constructor() {
+                this.threshold = 0.75;
+                this.lastKickTime = 0;
+                this.minInterval = 150; // ms
+            }
+
+            detect(analysis) {
+                const now = Date.now();
+                if (now - this.lastKickTime < this.minInterval) return false;
+
+                if (analysis.bass > this.threshold && analysis.spectralFlux > 0.3) {
+                    this.lastKickTime = now;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        /**
+         * SNARE DETECTOR
+         * Detects snare hits using mid-high frequency transients
+         */
+        class SnareDetector {
+            constructor() {
+                this.threshold = 0.65;
+                this.lastSnareTime = 0;
+                this.minInterval = 150;
+            }
+
+            detect(analysis) {
+                const now = Date.now();
+                if (now - this.lastSnareTime < this.minInterval) return false;
+
+                if (analysis.mid > this.threshold && analysis.highMid > 0.5) {
+                    this.lastSnareTime = now;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        /**
+         * HI-HAT DETECTOR
+         * Detects hi-hat hits using high frequency analysis
+         */
+        class HiHatDetector {
+            constructor() {
+                this.threshold = 0.55;
+                this.lastHiHatTime = 0;
+                this.minInterval = 80;
+            }
+
+            detect(analysis) {
+                const now = Date.now();
+                if (now - this.lastHiHatTime < this.minInterval) return false;
+
+                if (analysis.high > this.threshold && analysis.spectralCentroid > 0.6) {
+                    this.lastHiHatTime = now;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        /**
+         * BPM DETECTOR
+         * Estimates tempo from kick pattern
+         */
+        class BPMDetector {
+            constructor() {
+                this.kickTimes = [];
+                this.maxHistory = 8;
+            }
+
+            detect(kickDetected) {
+                if (kickDetected) {
+                    const now = Date.now();
+                    this.kickTimes.push(now);
+                    if (this.kickTimes.length > this.maxHistory) {
+                        this.kickTimes.shift();
+                    }
+
+                    if (this.kickTimes.length >= 4) {
+                        const intervals = [];
+                        for (let i = 1; i < this.kickTimes.length; i++) {
+                            intervals.push(this.kickTimes[i] - this.kickTimes[i-1]);
+                        }
+                        const avgInterval = intervals.reduce((a,b) => a + b) / intervals.length;
+                        const bpm = Math.round(60000 / avgInterval);
+                        return bpm;
+                    }
+                }
+                return null;
+            }
+        }
+
+        // Initialize
+        const sonicIntelligence = new SonicIntelligence();
+        window.sonicIntelligence = sonicIntelligence;
+    </script>
+</body>
+</html>
