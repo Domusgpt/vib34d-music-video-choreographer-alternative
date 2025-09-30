@@ -513,14 +513,14 @@
                 holoLayer.id = 'holographic-layer';
                 container.appendChild(holoLayer);
 
-                for (let i = 0; i < 5; i++) {
+                ['background', 'shadow', 'content', 'highlight', 'accent'].forEach(name => {
                     const canvas = document.createElement('canvas');
-                    canvas.id = `holo-layer-${i}`;
+                    canvas.id = `holo-${name}-canvas`;
                     canvas.width = window.innerWidth;
                     canvas.height = window.innerHeight;
                     holoLayer.appendChild(canvas);
                     this.systems.holographic.canvases.push(canvas);
-                }
+                });
 
                 try {
                     this.systems.holographic.engine = new RealHolographicSystem();
