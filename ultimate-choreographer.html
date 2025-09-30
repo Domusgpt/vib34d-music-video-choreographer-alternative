@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Ultimate Choreographer - The Best Music Video System Ever</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        /* Fullscreen visualization */
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .system-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1s ease;
+            display: none;
+        }
+
+        .system-layer.active {
+            opacity: 1;
+            display: block;
+        }
+
+        .system-layer canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Minimal bottom controls */
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, transparent 100%);
+            padding: 15px 20px 10px 20px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        #timeline {
+            width: 100%;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            position: relative;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        #timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f, #ff0);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(135deg, rgba(10, 77, 104, 0.8), rgba(0, 255, 255, 0.6));
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            color: #fff;
+            padding: 8px 14px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.9), rgba(255, 0, 255, 0.7));
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Top-right info */
+        #info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 15px;
+            z-index: 1000;
+            font-size: 10px;
+            backdrop-filter: blur(15px);
+            min-width: 200px;
+        }
+
+        #info p {
+            margin: 4px 0;
+            color: #aaa;
+        }
+
+        #info p span {
+            color: #0ff;
+            font-weight: 700;
+        }
+
+        /* Left panel */
+        #panel {
+            position: fixed;
+            top: 100px;
+            left: -380px;
+            width: 370px;
+            max-height: calc(100vh - 200px);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 0 10px 10px 0;
+            padding: 20px;
+            z-index: 1000;
+            overflow-y: auto;
+            transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+        }
+
+        #panel.open {
+            left: 0;
+        }
+
+        #panel-toggle {
+            position: fixed;
+            top: 110px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            color: #0ff;
+            padding: 12px 8px;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            z-index: 1001;
+            font-size: 11px;
+            writing-mode: vertical-rl;
+            backdrop-filter: blur(10px);
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+
+        #panel-toggle:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+        }
+
+        .section h3 {
+            font-size: 12px;
+            color: #0ff;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .param-group {
+            margin: 10px 0;
+        }
+
+        .param-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        .param-group label span {
+            color: #0ff;
+            font-weight: 700;
+        }
+
+        .param-group input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 255, 255, 0.2);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .param-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #0ff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        .param-group select {
+            width: 100%;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #0ff;
+            padding: 6px;
+            font-size: 10px;
+            border-radius: 4px;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .system-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .system-btn {
+            flex: 1;
+            padding: 10px 6px;
+            font-size: 9px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #0ff;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+
+        .system-btn.active {
+            background: rgba(0, 255, 255, 0.4);
+            border-color: #0ff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+
+        .color-picker {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .color-swatch {
+            width: 100%;
+            height: 25px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        .color-swatch.active {
+            border-color: #fff;
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 9px;
+            background: rgba(255, 0, 255, 0.1);
+            border: 1px solid rgba(255, 0, 255, 0.3);
+            color: #f0f;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active {
+            background: rgba(255, 0, 255, 0.4);
+            border-color: #f0f;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            #panel { width: 90%; left: -90%; }
+            #panel.open { left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <!-- Dynamically created system layers -->
+    </div>
+
+    <div id="info">
+        <p><span id="system-name">FACETED</span></p>
+        <p>Geometry: <span id="geometry-name">Hypercube</span></p>
+        <p>BPM: <span id="bpm-display">--</span></p>
+        <p>Time: <span id="time-display">0:00</span> / <span id="duration-display">0:00</span></p>
+    </div>
+
+    <div id="panel-toggle" onclick="togglePanel()">CONTROLS</div>
+
+    <div id="panel">
+        <!-- SYSTEM SELECTOR -->
+        <div class="system-selector">
+            <button class="system-btn active" onclick="choreographer.switchSystem('faceted')">🔷 FACETED</button>
+            <button class="system-btn" onclick="choreographer.switchSystem('quantum')">🌌 QUANTUM</button>
+            <button class="system-btn" onclick="choreographer.switchSystem('holographic')">✨ HOLO</button>
+        </div>
+
+        <!-- AUDIO REACTIVITY TOGGLE -->
+        <div class="section">
+            <h3>🎵 AUDIO REACTIVITY</h3>
+            <div class="toggle-group">
+                <button class="toggle-btn active" id="audio-toggle" onclick="choreographer.toggleAudioReactivity()">ENABLED</button>
+            </div>
+            <div class="param-group">
+                <label>Reactivity Strength: <span id="reactivity-val">0.5</span></label>
+                <input type="range" id="reactivity" min="0" max="1" step="0.1" value="0.5" oninput="choreographer.setReactivityStrength(this.value)">
+            </div>
+        </div>
+
+        <!-- GEOMETRY -->
+        <div class="section">
+            <h3>🔮 GEOMETRY</h3>
+            <div class="param-group">
+                <select id="geometry" onchange="choreographer.setParam('geometry', parseInt(this.value))">
+                    <option value="0">Tetrahedron</option>
+                    <option value="1" selected>Hypercube</option>
+                    <option value="2">Sphere</option>
+                    <option value="3">Torus</option>
+                    <option value="4">Klein Bottle</option>
+                    <option value="5">Fractal</option>
+                    <option value="6">Wave</option>
+                    <option value="7">Crystal</option>
+                </select>
+            </div>
+            <div class="param-group">
+                <label>Grid Density: <span id="gridDensity-val">15</span></label>
+                <input type="range" id="gridDensity" min="5" max="100" value="15" oninput="choreographer.setParam('gridDensity', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Morph Factor: <span id="morphFactor-val">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="3" step="0.1" value="1.0" oninput="choreographer.setParam('morphFactor', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <!-- COLOR -->
+        <div class="section">
+            <h3>🎨 COLOR</h3>
+            <div class="param-group">
+                <label>Hue: <span id="hue-val">200</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" oninput="choreographer.setParam('hue', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Saturation: <span id="saturation-val">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="choreographer.setParam('saturation', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Intensity: <span id="intensity-val">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="choreographer.setParam('intensity', parseFloat(this.value))">
+            </div>
+            <div class="color-picker" id="color-presets"></div>
+        </div>
+
+        <!-- 4D ROTATION -->
+        <div class="section">
+            <h3>🌀 4D ROTATION</h3>
+            <div class="param-group">
+                <label>X-W Plane: <span id="rot4dXW-val">0.0</span></label>
+                <input type="range" id="rot4dXW" min="-6.28" max="6.28" step="0.1" value="0" oninput="choreographer.setParam('rot4dXW', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Y-W Plane: <span id="rot4dYW-val">0.0</span></label>
+                <input type="range" id="rot4dYW" min="-6.28" max="6.28" step="0.1" value="0" oninput="choreographer.setParam('rot4dYW', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Z-W Plane: <span id="rot4dZW-val">0.0</span></label>
+                <input type="range" id="rot4dZW" min="-6.28" max="6.28" step="0.1" value="0" oninput="choreographer.setParam('rot4dZW', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <!-- DYNAMICS -->
+        <div class="section">
+            <h3>⚡ DYNAMICS</h3>
+            <div class="param-group">
+                <label>Speed: <span id="speed-val">1.0</span></label>
+                <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1.0" oninput="choreographer.setParam('speed', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Chaos: <span id="chaos-val">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="choreographer.setParam('chaos', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <!-- PRESETS -->
+        <div class="section">
+            <h3>💾 QUICK PRESETS</h3>
+            <button onclick="choreographer.applyPreset('calm')" style="width: 100%; margin: 4px 0;">Calm Waters</button>
+            <button onclick="choreographer.applyPreset('intense')" style="width: 100%; margin: 4px 0;">Intense Energy</button>
+            <button onclick="choreographer.applyPreset('psychedelic')" style="width: 100%; margin: 4px 0;">Psychedelic</button>
+            <button onclick="choreographer.applyPreset('minimal')" style="width: 100%; margin: 4px 0;">Minimal</button>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div id="timeline">
+            <div id="timeline-progress"></div>
+        </div>
+        <div class="control-row">
+            <label for="audio-file" style="background: linear-gradient(135deg, rgba(74, 10, 104, 0.8), rgba(255, 0, 255, 0.6)); padding: 8px 14px; border-radius: 5px; cursor: pointer; font-size: 10px; border: 1px solid rgba(255, 0, 255, 0.4); font-weight: 700;">
+                📁 LOAD AUDIO
+            </label>
+            <input type="file" id="audio-file" accept="audio/*" style="display: none;">
+            <button id="play-btn" disabled>▶ PLAY</button>
+            <button id="pause-btn" disabled>⏸ PAUSE</button>
+            <button id="stop-btn" disabled>⏹ STOP</button>
+            <button onclick="choreographer.randomize()">🎲 RANDOM</button>
+            <button onclick="choreographer.reset()">↺ RESET</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+
+        window.togglePanel = function() {
+            document.getElementById('panel').classList.toggle('open');
+        };
+
+        class UltimateChoreographer {
+            constructor() {
+                this.audio = new Audio();
+                this.audioContext = null;
+                this.analyser = null;
+                this.dataArray = null;
+
+                // System engines
+                this.systems = {
+                    faceted: { engine: null, layer: null, canvases: [], name: 'FACETED' },
+                    quantum: { engine: null, layer: null, canvases: [], name: 'QUANTUM' },
+                    holographic: { engine: null, layer: null, canvases: [], name: 'HOLOGRAPHIC' }
+                };
+                this.currentSystem = 'faceted';
+                this.isPlaying = false;
+
+                // Geometry names
+                this.geometryNames = [
+                    'Tetrahedron', 'Hypercube', 'Sphere', 'Torus',
+                    'Klein Bottle', 'Fractal', 'Wave', 'Crystal'
+                ];
+
+                // Base parameters (user-set, NOT affected by audio)
+                this.baseParams = {
+                    geometry: 1,
+                    gridDensity: 15,
+                    morphFactor: 1.0,
+                    chaos: 0.2,
+                    speed: 1.0,
+                    hue: 200,
+                    intensity: 0.5,
+                    saturation: 0.8,
+                    rot4dXW: 0.0,
+                    rot4dYW: 0.0,
+                    rot4dZW: 0.0
+                };
+
+                // Audio reactivity settings
+                this.audioReactivityEnabled = true;
+                this.reactivityStrength = 0.5;
+
+                // Beat detection
+                this.beatDetection = {
+                    kick: { threshold: 0.75, lastTime: 0, minInterval: 150 },
+                    snare: { threshold: 0.65, lastTime: 0, minInterval: 150 },
+                    hihat: { threshold: 0.55, lastTime: 0, minInterval: 80 }
+                };
+
+                // BPM tracking
+                this.detectedBPM = 0;
+                this.kickHistory = [];
+
+                this.init();
+            }
+
+            async init() {
+                console.log('🌟 Initializing Ultimate Choreographer...');
+
+                // Audio setup
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 4096;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+                // Create all systems
+                await this.createAllSystems();
+
+                // Setup UI
+                this.setupEventListeners();
+                this.generateColorPresets();
+                this.updateAllSliders();
+
+                console.log('✅ Ultimate Choreographer ready');
+            }
+
+            async createAllSystems() {
+                const container = document.getElementById('visualizer-container');
+
+                // FACETED
+                const facetedLayer = document.createElement('div');
+                facetedLayer.className = 'system-layer active';
+                facetedLayer.id = 'faceted-layer';
+                container.appendChild(facetedLayer);
+
+                ['background', 'shadow', 'content', 'highlight', 'accent'].forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    facetedLayer.appendChild(canvas);
+                    this.systems.faceted.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.faceted.engine = new VIB34DIntegratedEngine();
+                    this.systems.faceted.layer = facetedLayer;
+                    if (this.systems.faceted.engine.setActive) {
+                        this.systems.faceted.engine.setActive(true);
+                    }
+                    console.log('✅ Faceted created and activated');
+                } catch (e) {
+                    console.error('Faceted error:', e);
+                }
+
+                // QUANTUM
+                const quantumLayer = document.createElement('div');
+                quantumLayer.className = 'system-layer';
+                quantumLayer.id = 'quantum-layer';
+                container.appendChild(quantumLayer);
+
+                ['background', 'shadow', 'content', 'highlight', 'accent'].forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `quantum-${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    quantumLayer.appendChild(canvas);
+                    this.systems.quantum.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.quantum.engine = new QuantumEngine();
+                    this.systems.quantum.layer = quantumLayer;
+                    console.log('✅ Quantum created');
+                } catch (e) {
+                    console.error('Quantum error:', e);
+                }
+
+                // HOLOGRAPHIC
+                const holoLayer = document.createElement('div');
+                holoLayer.className = 'system-layer';
+                holoLayer.id = 'holographic-layer';
+                container.appendChild(holoLayer);
+
+                ['background', 'shadow', 'content', 'highlight', 'accent'].forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `holo-${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    holoLayer.appendChild(canvas);
+                    this.systems.holographic.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.holographic.engine = new RealHolographicSystem();
+                    this.systems.holographic.layer = holoLayer;
+                    console.log('✅ Holographic created');
+                } catch (e) {
+                    console.error('Holographic error:', e);
+                }
+
+                // Resize handler
+                window.addEventListener('resize', () => {
+                    Object.values(this.systems).forEach(sys => {
+                        sys.canvases.forEach(canvas => {
+                            canvas.width = window.innerWidth;
+                            canvas.height = window.innerHeight;
+                        });
+                    });
+                });
+            }
+
+            switchSystem(systemName) {
+                if (!this.systems[systemName]) return;
+
+                // Deactivate current
+                const currentSys = this.systems[this.currentSystem];
+                if (currentSys.layer) currentSys.layer.classList.remove('active');
+                if (currentSys.engine && currentSys.engine.setActive) {
+                    currentSys.engine.setActive(false);
+                }
+
+                // Activate new
+                const newSys = this.systems[systemName];
+                newSys.layer.classList.add('active');
+                if (newSys.engine && newSys.engine.setActive) {
+                    newSys.engine.setActive(true);
+                }
+
+                this.currentSystem = systemName;
+
+                // Update UI
+                document.querySelectorAll('.system-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.textContent.toLowerCase().includes(systemName.substring(0, 4))) {
+                        btn.classList.add('active');
+                    }
+                });
+
+                document.getElementById('system-name').textContent = this.systems[systemName].name;
+                console.log(`🔄 Switched to ${systemName}`);
+
+                // Apply current base parameters to new system
+                this.applyBaseParameters();
+            }
+
+            toggleAudioReactivity() {
+                this.audioReactivityEnabled = !this.audioReactivityEnabled;
+                const btn = document.getElementById('audio-toggle');
+                btn.textContent = this.audioReactivityEnabled ? 'ENABLED' : 'DISABLED';
+                btn.classList.toggle('active', this.audioReactivityEnabled);
+                console.log(`🎵 Audio reactivity: ${this.audioReactivityEnabled ? 'ON' : 'OFF'}`);
+            }
+
+            setReactivityStrength(value) {
+                this.reactivityStrength = parseFloat(value);
+                document.getElementById('reactivity-val').textContent = this.reactivityStrength.toFixed(1);
+            }
+
+            setParam(param, value) {
+                // Store in BASE parameters (user-set values)
+                this.baseParams[param] = value;
+
+                // Apply to all engines
+                this.applyBaseParameters();
+
+                // Update UI
+                const valSpan = document.getElementById(`${param}-val`);
+                if (valSpan) {
+                    valSpan.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+                }
+
+                // Update geometry name
+                if (param === 'geometry') {
+                    document.getElementById('geometry-name').textContent = this.geometryNames[value];
+                }
+            }
+
+            applyBaseParameters() {
+                Object.values(this.systems).forEach(sys => {
+                    if (!sys.engine) return;
+
+                    Object.entries(this.baseParams).forEach(([param, value]) => {
+                        if (sys.engine.parameterManager) {
+                            sys.engine.parameterManager.setParameter(param, value);
+                        } else if (sys.engine.updateParameter) {
+                            sys.engine.updateParameter(param, value);
+                        }
+                    });
+                });
+            }
+
+            setupEventListeners() {
+                document.getElementById('audio-file').addEventListener('change', (e) => {
+                    this.loadAudioFile(e.target.files[0]);
+                });
+
+                document.getElementById('play-btn').addEventListener('click', () => this.play());
+                document.getElementById('pause-btn').addEventListener('click', () => this.pause());
+                document.getElementById('stop-btn').addEventListener('click', () => this.stop());
+
+                document.getElementById('timeline').addEventListener('click', (e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    this.audio.currentTime = pos * this.audio.duration;
+                });
+
+                this.audio.addEventListener('timeupdate', () => this.updateTimeline());
+            }
+
+            async loadAudioFile(file) {
+                if (!file) return;
+
+                const url = URL.createObjectURL(file);
+                this.audio.src = url;
+
+                if (!this.sourceNode) {
+                    this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+                    this.sourceNode.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+                }
+
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = false;
+
+                // Update duration display
+                this.audio.addEventListener('loadedmetadata', () => {
+                    document.getElementById('duration-display').textContent = this.formatTime(this.audio.duration);
+                });
+
+                console.log('🎵 Audio loaded');
+            }
+
+            play() {
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                this.audio.play();
+                this.isPlaying = true;
+                this.startOrchestration();
+            }
+
+            pause() {
+                this.audio.pause();
+                this.isPlaying = false;
+            }
+
+            stop() {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.isPlaying = false;
+            }
+
+            startOrchestration() {
+                const render = () => {
+                    if (!this.isPlaying) return;
+
+                    this.analyser.getByteFrequencyData(this.dataArray);
+                    const audioData = this.processAudioData();
+
+                    this.detectBeats(audioData);
+
+                    if (this.audioReactivityEnabled) {
+                        this.applyAudioReactivity(audioData);
+                    }
+
+                    requestAnimationFrame(render);
+                };
+                render();
+            }
+
+            processAudioData() {
+                const bass = this.getAverage(0, 100) / 255;
+                const mid = this.getAverage(100, 400) / 255;
+                const high = this.getAverage(400, 1024) / 255;
+                const energy = (bass + mid + high) / 3;
+
+                return { bass, mid, high, energy, time: this.audio.currentTime };
+            }
+
+            getAverage(start, end) {
+                let sum = 0;
+                for (let i = start; i < end; i++) {
+                    sum += this.dataArray[i];
+                }
+                return sum / (end - start);
+            }
+
+            detectBeats(audioData) {
+                const now = Date.now();
+
+                // Kick detection with BPM calculation
+                if (audioData.bass > this.beatDetection.kick.threshold &&
+                    now - this.beatDetection.kick.lastTime > this.beatDetection.kick.minInterval) {
+                    this.beatDetection.kick.lastTime = now;
+                    this.kickHistory.push(now);
+
+                    // Keep last 8 kicks for BPM
+                    if (this.kickHistory.length > 8) {
+                        this.kickHistory.shift();
+                    }
+
+                    if (this.kickHistory.length > 2) {
+                        const intervals = [];
+                        for (let i = 1; i < this.kickHistory.length; i++) {
+                            intervals.push(this.kickHistory[i] - this.kickHistory[i - 1]);
+                        }
+                        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                        this.detectedBPM = Math.round(60000 / avgInterval);
+                        document.getElementById('bpm-display').textContent = this.detectedBPM;
+                    }
+
+                    this.onKick(audioData);
+                }
+
+                // Snare detection
+                if (audioData.mid > this.beatDetection.snare.threshold &&
+                    now - this.beatDetection.snare.lastTime > this.beatDetection.snare.minInterval) {
+                    this.beatDetection.snare.lastTime = now;
+                    this.onSnare(audioData);
+                }
+
+                // HiHat detection
+                if (audioData.high > this.beatDetection.hihat.threshold &&
+                    now - this.beatDetection.hihat.lastTime > this.beatDetection.hihat.minInterval) {
+                    this.beatDetection.hihat.lastTime = now;
+                    this.onHiHat(audioData);
+                }
+            }
+
+            onKick(audioData) {
+                // Heavy kicks can trigger geometry change
+                if (audioData.bass > 0.85 && Math.random() < 0.3) {
+                    const nextGeom = (this.baseParams.geometry + 1) % 8;
+                    this.setParam('geometry', nextGeom);
+                    document.getElementById('geometry').value = nextGeom;
+                }
+            }
+
+            onSnare(audioData) {
+                // Snares add rotation burst
+                // This is temporary, doesn't change base values
+            }
+
+            onHiHat(audioData) {
+                // HiHats add subtle chaos
+                // This is temporary, doesn't change base values
+            }
+
+            applyAudioReactivity(audioData) {
+                // CRITICAL FIX: Apply reactivity as TEMPORARY modifications only
+                // Never modify base values
+
+                const strength = this.reactivityStrength;
+
+                Object.values(this.systems).forEach(sys => {
+                    if (!sys.engine) return;
+
+                    const setParam = (param, value) => {
+                        if (sys.engine.parameterManager) {
+                            sys.engine.parameterManager.setParameter(param, value);
+                        } else if (sys.engine.updateParameter) {
+                            sys.engine.updateParameter(param, value);
+                        }
+                    };
+
+                    // Grid density: base + audio boost (FIXED: doesn't accumulate)
+                    const density = this.baseParams.gridDensity + (audioData.bass * 15 * strength);
+                    setParam('gridDensity', Math.floor(density));
+
+                    // Hue: base + subtle shift (FIXED: doesn't accumulate)
+                    const hue = (this.baseParams.hue + audioData.mid * 10 * strength) % 360;
+                    setParam('hue', Math.floor(hue));
+
+                    // Intensity: base * multiplier (FIXED: doesn't accumulate)
+                    const intensity = this.baseParams.intensity * (0.8 + audioData.energy * 0.3 * strength);
+                    setParam('intensity', Math.min(1, intensity));
+
+                    // 4D rotations: Add audio influence to base
+                    const rotXW = this.baseParams.rot4dXW + (Math.sin(audioData.time * 2) * audioData.bass * Math.PI * 0.5 * strength);
+                    const rotYW = this.baseParams.rot4dYW + (Math.cos(audioData.time * 1.5) * audioData.mid * Math.PI * 0.5 * strength);
+                    const rotZW = this.baseParams.rot4dZW + (Math.sin(audioData.time * 3) * audioData.high * Math.PI * 0.3 * strength);
+
+                    setParam('rot4dXW', rotXW);
+                    setParam('rot4dYW', rotYW);
+                    setParam('rot4dZW', rotZW);
+                });
+            }
+
+            updateTimeline() {
+                const progress = (this.audio.currentTime / this.audio.duration) * 100;
+                document.getElementById('timeline-progress').style.width = progress + '%';
+                document.getElementById('time-display').textContent = this.formatTime(this.audio.currentTime);
+            }
+
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            generateColorPresets() {
+                const presets = [
+                    { hue: 0, name: 'Red' },
+                    { hue: 30, name: 'Orange' },
+                    { hue: 60, name: 'Yellow' },
+                    { hue: 120, name: 'Green' },
+                    { hue: 180, name: 'Cyan' },
+                    { hue: 240, name: 'Blue' },
+                    { hue: 280, name: 'Purple' },
+                    { hue: 320, name: 'Magenta' }
+                ];
+
+                const container = document.getElementById('color-presets');
+                presets.forEach(preset => {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'color-swatch';
+                    swatch.style.background = `hsl(${preset.hue}, 80%, 50%)`;
+                    swatch.title = preset.name;
+                    swatch.onclick = () => {
+                        this.setParam('hue', preset.hue);
+                        document.getElementById('hue').value = preset.hue;
+                        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                        swatch.classList.add('active');
+                    };
+                    container.appendChild(swatch);
+                });
+            }
+
+            applyPreset(presetName) {
+                const presets = {
+                    calm: {
+                        geometry: 2,
+                        gridDensity: 10,
+                        morphFactor: 0.8,
+                        chaos: 0.05,
+                        speed: 0.5,
+                        hue: 200,
+                        saturation: 0.6,
+                        intensity: 0.4
+                    },
+                    intense: {
+                        geometry: 5,
+                        gridDensity: 50,
+                        morphFactor: 2.0,
+                        chaos: 0.8,
+                        speed: 3.0,
+                        hue: 0,
+                        saturation: 1.0,
+                        intensity: 1.0
+                    },
+                    psychedelic: {
+                        geometry: 6,
+                        gridDensity: 35,
+                        morphFactor: 1.5,
+                        chaos: 0.6,
+                        speed: 2.0,
+                        hue: 280,
+                        saturation: 1.0,
+                        intensity: 0.8
+                    },
+                    minimal: {
+                        geometry: 1,
+                        gridDensity: 8,
+                        morphFactor: 0.5,
+                        chaos: 0.0,
+                        speed: 0.3,
+                        hue: 180,
+                        saturation: 0.3,
+                        intensity: 0.3
+                    }
+                };
+
+                const preset = presets[presetName];
+                if (!preset) return;
+
+                Object.entries(preset).forEach(([param, value]) => {
+                    this.setParam(param, value);
+                });
+
+                this.updateAllSliders();
+                console.log(`🎨 Applied preset: ${presetName}`);
+            }
+
+            randomize() {
+                this.setParam('geometry', Math.floor(Math.random() * 8));
+                this.setParam('gridDensity', Math.floor(5 + Math.random() * 95));
+                this.setParam('morphFactor', Math.random() * 3);
+                this.setParam('chaos', Math.random());
+                this.setParam('speed', 0.1 + Math.random() * 4.9);
+                this.setParam('hue', Math.floor(Math.random() * 360));
+                this.setParam('saturation', Math.random());
+                this.setParam('intensity', Math.random());
+
+                this.updateAllSliders();
+                console.log('🎲 Randomized parameters');
+            }
+
+            reset() {
+                this.setParam('geometry', 1);
+                this.setParam('gridDensity', 15);
+                this.setParam('morphFactor', 1.0);
+                this.setParam('chaos', 0.2);
+                this.setParam('speed', 1.0);
+                this.setParam('hue', 200);
+                this.setParam('saturation', 0.8);
+                this.setParam('intensity', 0.5);
+                this.setParam('rot4dXW', 0);
+                this.setParam('rot4dYW', 0);
+                this.setParam('rot4dZW', 0);
+
+                this.updateAllSliders();
+                console.log('↺ Reset to defaults');
+            }
+
+            updateAllSliders() {
+                Object.entries(this.baseParams).forEach(([param, value]) => {
+                    const slider = document.getElementById(param);
+                    const valSpan = document.getElementById(`${param}-val`);
+                    if (slider) slider.value = value;
+                    if (valSpan) valSpan.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+                });
+            }
+        }
+
+        // Initialize
+        const choreographer = new UltimateChoreographer();
+        window.choreographer = choreographer;
+    </script>
+
+    <!-- Signature -->
+    <div style="position: fixed; bottom: 5px; right: 10px; font-size: 7px; color: rgba(0, 255, 255, 0.3); z-index: 2000;">
+        🌟 A Paul Phillips Manifestation
+    </div>
+</body>
+</html>
+
+<!--
+🌟 A Paul Phillips Manifestation
+Paul@clearseassolutions.com | Parserator.com
+"The Revolution Will Not be in a Structured Format"
+© 2025 Paul Phillips - Clear Seas Solutions LLC
+-->
