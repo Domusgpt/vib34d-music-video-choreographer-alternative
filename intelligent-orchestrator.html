@@ -479,7 +479,11 @@
                 try {
                     this.systems.faceted.engine = new VIB34DIntegratedEngine();
                     this.systems.faceted.layer = facetedLayer;
-                    console.log('✅ Faceted created');
+                    // Set faceted as active by default
+                    if (this.systems.faceted.engine.setActive) {
+                        this.systems.faceted.engine.setActive(true);
+                    }
+                    console.log('✅ Faceted created and activated');
                 } catch (e) {
                     console.error('Faceted error:', e);
                 }
@@ -544,20 +548,29 @@
             switchSystem(systemName) {
                 if (!this.systems[systemName]) return;
 
-                // Deactivate current
-                Object.values(this.systems).forEach(sys => {
-                    if (sys.layer) sys.layer.classList.remove('active');
-                });
+                // Deactivate current system engine
+                const currentSys = this.systems[this.currentSystem];
+                if (currentSys.layer) currentSys.layer.classList.remove('active');
+                if (currentSys.engine && currentSys.engine.setActive) {
+                    currentSys.engine.setActive(false);
+                }
 
-                // Activate new
-                this.systems[systemName].layer.classList.add('active');
+                // Activate new system
+                const newSys = this.systems[systemName];
+                newSys.layer.classList.add('active');
+                if (newSys.engine && newSys.engine.setActive) {
+                    newSys.engine.setActive(true);
+                }
+
                 this.currentSystem = systemName;
 
                 // Update UI
                 document.querySelectorAll('.system-btn').forEach(btn => {
                     btn.classList.remove('active');
+                    if (btn.textContent.toLowerCase().includes(systemName.substring(0, 4))) {
+                        btn.classList.add('active');
+                    }
                 });
-                event.target.classList.add('active');
 
                 document.getElementById('system-name').textContent = `System: ${this.systems[systemName].name}`;
                 console.log(`🔄 Switched to ${systemName}`);
