@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Intelligent Orchestrator - Full System Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        /* Full-screen visualization */
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .system-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .system-layer.active {
+            opacity: 1;
+        }
+
+        .system-layer canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Minimal bottom controls */
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, transparent 100%);
+            padding: 15px 20px 10px 20px;
+            z-index: 1000;
+        }
+
+        #timeline {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        #timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f, #ff0);
+            border-radius: 2px;
+            width: 0%;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button {
+            background: linear-gradient(135deg, rgba(10, 77, 104, 0.8), rgba(0, 255, 255, 0.6));
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            color: #fff;
+            padding: 6px 12px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.8), rgba(255, 0, 255, 0.6));
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+
+        /* Top-right compact info */
+        #info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 6px;
+            padding: 8px 12px;
+            z-index: 1000;
+            font-size: 9px;
+            backdrop-filter: blur(10px);
+        }
+
+        #info p {
+            margin: 2px 0;
+            color: #aaa;
+        }
+
+        /* Collapsible control panel */
+        #panel {
+            position: fixed;
+            top: 80px;
+            left: -350px;
+            width: 340px;
+            max-height: calc(100vh - 160px);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 0 8px 8px 0;
+            padding: 15px;
+            z-index: 1000;
+            overflow-y: auto;
+            transition: left 0.3s ease;
+            backdrop-filter: blur(15px);
+        }
+
+        #panel.open {
+            left: 0;
+        }
+
+        #panel-toggle {
+            position: fixed;
+            top: 90px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            color: #0ff;
+            padding: 10px 6px;
+            border-radius: 0 6px 6px 0;
+            cursor: pointer;
+            z-index: 1001;
+            font-size: 12px;
+            writing-mode: vertical-rl;
+            backdrop-filter: blur(10px);
+        }
+
+        .section {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+        }
+
+        .section h3 {
+            font-size: 11px;
+            color: #0ff;
+            margin-bottom: 8px;
+        }
+
+        .param-group {
+            margin: 6px 0;
+        }
+
+        .param-group label {
+            display: block;
+            font-size: 9px;
+            color: #aaa;
+            margin-bottom: 3px;
+        }
+
+        .param-group input[type="range"] {
+            width: 100%;
+            height: 3px;
+        }
+
+        .param-group select {
+            width: 100%;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #0ff;
+            padding: 4px;
+            font-size: 9px;
+            border-radius: 3px;
+        }
+
+        .color-picker {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            margin-top: 5px;
+        }
+
+        .color-swatch {
+            width: 100%;
+            height: 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .color-swatch.active {
+            border-color: #fff;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        .system-selector {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .system-btn {
+            flex: 1;
+            padding: 8px 4px;
+            font-size: 9px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #0ff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .system-btn.active {
+            background: rgba(0, 255, 255, 0.4);
+            border-color: #0ff;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            #panel { width: 90%; left: -90%; }
+            #panel.open { left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <!-- Dynamically created system layers -->
+    </div>
+
+    <div id="info">
+        <p id="system-name">System: Faceted</p>
+        <p id="geometry-name">Geometry: Hypercube</p>
+        <p id="bpm-info">BPM: --</p>
+        <p id="section-info">Section: --</p>
+    </div>
+
+    <div id="panel-toggle" onclick="togglePanel()">CONTROLS</div>
+
+    <div id="panel">
+        <!-- SYSTEM SELECTOR -->
+        <div class="system-selector">
+            <button class="system-btn active" onclick="orchestrator.switchSystem('faceted')">🔷 FACETED</button>
+            <button class="system-btn" onclick="orchestrator.switchSystem('quantum')">🌌 QUANTUM</button>
+            <button class="system-btn" onclick="orchestrator.switchSystem('holographic')">✨ HOLO</button>
+        </div>
+
+        <!-- GEOMETRY -->
+        <div class="section">
+            <h3>🔮 GEOMETRY</h3>
+            <div class="param-group">
+                <select id="geometry" onchange="orchestrator.setParam('geometry', parseInt(this.value))">
+                    <option value="0">Tetrahedron</option>
+                    <option value="1" selected>Hypercube</option>
+                    <option value="2">Sphere</option>
+                    <option value="3">Torus</option>
+                    <option value="4">Klein Bottle</option>
+                    <option value="5">Fractal</option>
+                    <option value="6">Wave</option>
+                    <option value="7">Crystal</option>
+                </select>
+            </div>
+            <div class="param-group">
+                <label>Grid Density: <span id="gridDensity-val">15</span></label>
+                <input type="range" id="gridDensity" min="5" max="100" value="15" oninput="orchestrator.setParam('gridDensity', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Morph Factor: <span id="morphFactor-val">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="3" step="0.1" value="1.0" oninput="orchestrator.setParam('morphFactor', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <!-- COLOR SYSTEM -->
+        <div class="section">
+            <h3>🎨 COLOR</h3>
+            <div class="param-group">
+                <label>Hue: <span id="hue-val">200</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" oninput="orchestrator.setParam('hue', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Saturation: <span id="saturation-val">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="orchestrator.setParam('saturation', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Intensity: <span id="intensity-val">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="orchestrator.setParam('intensity', parseFloat(this.value))">
+            </div>
+            <div class="color-picker" id="color-presets">
+                <!-- Generated dynamically -->
+            </div>
+        </div>
+
+        <!-- 4D ROTATION -->
+        <div class="section">
+            <h3>🌀 4D ROTATION</h3>
+            <div class="param-group">
+                <label>X-W Plane: <span id="rot4dXW-val">0.0</span></label>
+                <input type="range" id="rot4dXW" min="-6.28" max="6.28" step="0.1" value="0" oninput="orchestrator.setParam('rot4dXW', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Y-W Plane: <span id="rot4dYW-val">0.0</span></label>
+                <input type="range" id="rot4dYW" min="-6.28" max="6.28" step="0.1" value="0" oninput="orchestrator.setParam('rot4dYW', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Z-W Plane: <span id="rot4dZW-val">0.0</span></label>
+                <input type="range" id="rot4dZW" min="-6.28" max="6.28" step="0.1" value="0" oninput="orchestrator.setParam('rot4dZW', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <!-- DYNAMICS -->
+        <div class="section">
+            <h3>⚡ DYNAMICS</h3>
+            <div class="param-group">
+                <label>Speed: <span id="speed-val">1.0</span></label>
+                <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1.0" oninput="orchestrator.setParam('speed', parseFloat(this.value))">
+            </div>
+            <div class="param-group">
+                <label>Chaos: <span id="chaos-val">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="orchestrator.setParam('chaos', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <!-- PRESETS -->
+        <div class="section">
+            <h3>💾 PRESETS</h3>
+            <button onclick="orchestrator.applyPreset('calm')" style="width: 100%; margin: 3px 0;">Calm Waters</button>
+            <button onclick="orchestrator.applyPreset('intense')" style="width: 100%; margin: 3px 0;">Intense Energy</button>
+            <button onclick="orchestrator.applyPreset('psychedelic')" style="width: 100%; margin: 3px 0;">Psychedelic</button>
+            <button onclick="orchestrator.applyPreset('minimal')" style="width: 100%; margin: 3px 0;">Minimal</button>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div id="timeline">
+            <div id="timeline-progress"></div>
+        </div>
+        <div class="control-row">
+            <label for="audio-file" style="background: linear-gradient(135deg, rgba(74, 10, 104, 0.8), rgba(255, 0, 255, 0.6)); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 10px; border: 1px solid rgba(255, 0, 255, 0.4);">
+                📁 LOAD AUDIO
+            </label>
+            <input type="file" id="audio-file" accept="audio/*" style="display: none;">
+            <button id="play-btn" disabled>▶ PLAY</button>
+            <button id="pause-btn" disabled>⏸ PAUSE</button>
+            <button id="stop-btn" disabled>⏹ STOP</button>
+            <button onclick="orchestrator.randomize()">🎲 RANDOM</button>
+            <button onclick="orchestrator.reset()">↺ RESET</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+
+        window.togglePanel = function() {
+            document.getElementById('panel').classList.toggle('open');
+        };
+
+        class IntelligentOrchestrator {
+            constructor() {
+                this.audio = new Audio();
+                this.audioContext = null;
+                this.analyser = null;
+                this.dataArray = null;
+
+                // Three system engines
+                this.systems = {
+                    faceted: { engine: null, layer: null, canvases: [], name: 'Faceted' },
+                    quantum: { engine: null, layer: null, canvases: [], name: 'Quantum' },
+                    holographic: { engine: null, layer: null, canvases: [], name: 'Holographic' }
+                };
+                this.currentSystem = 'faceted';
+                this.isPlaying = false;
+
+                // Geometry names
+                this.geometryNames = [
+                    'Tetrahedron', 'Hypercube', 'Sphere', 'Torus',
+                    'Klein Bottle', 'Fractal', 'Wave', 'Crystal'
+                ];
+
+                // Current parameters (universal)
+                this.params = {
+                    geometry: 1,
+                    gridDensity: 15,
+                    morphFactor: 1.0,
+                    chaos: 0.2,
+                    speed: 1.0,
+                    hue: 200,
+                    intensity: 0.5,
+                    saturation: 0.8,
+                    rot4dXW: 0.0,
+                    rot4dYW: 0.0,
+                    rot4dZW: 0.0
+                };
+
+                // Musical structure
+                this.musicStructure = {
+                    sections: [],
+                    currentSection: null,
+                    detectedBPM: 0,
+                    beatHistory: []
+                };
+
+                // Beat detection
+                this.beatDetection = {
+                    kick: { threshold: 0.75, lastTime: 0, minInterval: 150 },
+                    snare: { threshold: 0.65, lastTime: 0, minInterval: 150 },
+                    hihat: { threshold: 0.55, lastTime: 0, minInterval: 80 }
+                };
+
+                this.init();
+            }
+
+            async init() {
+                console.log('🌟 Initializing Intelligent Orchestrator...');
+
+                // Audio setup
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 4096;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+                // Create all systems
+                await this.createAllSystems();
+
+                // Setup UI
+                this.setupEventListeners();
+                this.generateColorPresets();
+                this.updateAllSliders();
+
+                console.log('✅ Intelligent Orchestrator ready');
+            }
+
+            async createAllSystems() {
+                const container = document.getElementById('visualizer-container');
+
+                // FACETED
+                const facetedLayer = document.createElement('div');
+                facetedLayer.className = 'system-layer active';
+                facetedLayer.id = 'faceted-layer';
+                container.appendChild(facetedLayer);
+
+                ['background', 'shadow', 'content', 'highlight', 'accent'].forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    facetedLayer.appendChild(canvas);
+                    this.systems.faceted.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.faceted.engine = new VIB34DIntegratedEngine();
+                    this.systems.faceted.layer = facetedLayer;
+                    console.log('✅ Faceted created');
+                } catch (e) {
+                    console.error('Faceted error:', e);
+                }
+
+                // QUANTUM
+                const quantumLayer = document.createElement('div');
+                quantumLayer.className = 'system-layer';
+                quantumLayer.id = 'quantum-layer';
+                container.appendChild(quantumLayer);
+
+                ['background', 'shadow', 'content', 'highlight', 'accent'].forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `quantum-${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    quantumLayer.appendChild(canvas);
+                    this.systems.quantum.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.quantum.engine = new QuantumEngine();
+                    this.systems.quantum.layer = quantumLayer;
+                    console.log('✅ Quantum created');
+                } catch (e) {
+                    console.error('Quantum error:', e);
+                }
+
+                // HOLOGRAPHIC
+                const holoLayer = document.createElement('div');
+                holoLayer.className = 'system-layer';
+                holoLayer.id = 'holographic-layer';
+                container.appendChild(holoLayer);
+
+                for (let i = 0; i < 5; i++) {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `holo-layer-${i}`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    holoLayer.appendChild(canvas);
+                    this.systems.holographic.canvases.push(canvas);
+                }
+
+                try {
+                    this.systems.holographic.engine = new RealHolographicSystem();
+                    this.systems.holographic.layer = holoLayer;
+                    console.log('✅ Holographic created');
+                } catch (e) {
+                    console.error('Holographic error:', e);
+                }
+
+                // Resize handler
+                window.addEventListener('resize', () => {
+                    Object.values(this.systems).forEach(sys => {
+                        sys.canvases.forEach(canvas => {
+                            canvas.width = window.innerWidth;
+                            canvas.height = window.innerHeight;
+                        });
+                    });
+                });
+            }
+
+            switchSystem(systemName) {
+                if (!this.systems[systemName]) return;
+
+                // Deactivate current
+                Object.values(this.systems).forEach(sys => {
+                    if (sys.layer) sys.layer.classList.remove('active');
+                });
+
+                // Activate new
+                this.systems[systemName].layer.classList.add('active');
+                this.currentSystem = systemName;
+
+                // Update UI
+                document.querySelectorAll('.system-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+
+                document.getElementById('system-name').textContent = `System: ${this.systems[systemName].name}`;
+                console.log(`🔄 Switched to ${systemName}`);
+            }
+
+            setParam(param, value) {
+                this.params[param] = value;
+
+                // Update all engines
+                Object.values(this.systems).forEach(sys => {
+                    if (!sys.engine) return;
+
+                    if (sys.engine.parameterManager) {
+                        sys.engine.parameterManager.setParameter(param, value);
+                    } else if (sys.engine.updateParameter) {
+                        sys.engine.updateParameter(param, value);
+                    }
+                });
+
+                // Update UI
+                const valSpan = document.getElementById(`${param}-val`);
+                if (valSpan) {
+                    valSpan.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+                }
+
+                // Update geometry name
+                if (param === 'geometry') {
+                    document.getElementById('geometry-name').textContent = `Geometry: ${this.geometryNames[value]}`;
+                }
+            }
+
+            setupEventListeners() {
+                document.getElementById('audio-file').addEventListener('change', (e) => {
+                    this.loadAudioFile(e.target.files[0]);
+                });
+
+                document.getElementById('play-btn').addEventListener('click', () => this.play());
+                document.getElementById('pause-btn').addEventListener('click', () => this.pause());
+                document.getElementById('stop-btn').addEventListener('click', () => this.stop());
+
+                document.getElementById('timeline').addEventListener('click', (e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    this.audio.currentTime = pos * this.audio.duration;
+                });
+
+                this.audio.addEventListener('timeupdate', () => this.updateTimeline());
+            }
+
+            async loadAudioFile(file) {
+                if (!file) return;
+
+                const url = URL.createObjectURL(file);
+                this.audio.src = url;
+
+                if (!this.sourceNode) {
+                    this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+                    this.sourceNode.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+                }
+
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = false;
+
+                console.log('🎵 Audio loaded');
+            }
+
+            play() {
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                this.audio.play();
+                this.isPlaying = true;
+                this.startOrchestration();
+            }
+
+            pause() {
+                this.audio.pause();
+                this.isPlaying = false;
+            }
+
+            stop() {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.isPlaying = false;
+            }
+
+            startOrchestration() {
+                const render = () => {
+                    if (!this.isPlaying) return;
+
+                    this.analyser.getByteFrequencyData(this.dataArray);
+                    const audioData = this.processAudioData();
+
+                    this.detectBeats(audioData);
+                    this.applyAudioReactivity(audioData);
+
+                    requestAnimationFrame(render);
+                };
+                render();
+            }
+
+            processAudioData() {
+                const bass = this.getAverage(0, 100) / 255;
+                const mid = this.getAverage(100, 400) / 255;
+                const high = this.getAverage(400, 1024) / 255;
+                const energy = (bass + mid + high) / 3;
+
+                return { bass, mid, high, energy, time: this.audio.currentTime };
+            }
+
+            getAverage(start, end) {
+                let sum = 0;
+                for (let i = start; i < end; i++) {
+                    sum += this.dataArray[i];
+                }
+                return sum / (end - start);
+            }
+
+            detectBeats(audioData) {
+                const now = Date.now();
+
+                // Kick detection
+                if (audioData.bass > this.beatDetection.kick.threshold &&
+                    now - this.beatDetection.kick.lastTime > this.beatDetection.kick.minInterval) {
+                    this.beatDetection.kick.lastTime = now;
+                    this.onKick(audioData);
+
+                    // BPM calculation
+                    this.beatDetection.kick.history = this.beatDetection.kick.history || [];
+                    this.beatDetection.kick.history.push(now);
+                    if (this.beatDetection.kick.history.length > 8) {
+                        this.beatDetection.kick.history.shift();
+                        const intervals = [];
+                        for (let i = 1; i < this.beatDetection.kick.history.length; i++) {
+                            intervals.push(this.beatDetection.kick.history[i] - this.beatDetection.kick.history[i - 1]);
+                        }
+                        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                        this.musicStructure.detectedBPM = Math.round(60000 / avgInterval);
+                        document.getElementById('bpm-info').textContent = `BPM: ${this.musicStructure.detectedBPM}`;
+                    }
+                }
+
+                // Snare detection
+                if (audioData.mid > this.beatDetection.snare.threshold &&
+                    now - this.beatDetection.snare.lastTime > this.beatDetection.snare.minInterval) {
+                    this.beatDetection.snare.lastTime = now;
+                    this.onSnare(audioData);
+                }
+
+                // HiHat detection
+                if (audioData.high > this.beatDetection.hihat.threshold &&
+                    now - this.beatDetection.hihat.lastTime > this.beatDetection.hihat.minInterval) {
+                    this.beatDetection.hihat.lastTime = now;
+                    this.onHiHat(audioData);
+                }
+            }
+
+            onKick(audioData) {
+                // Geometry change on kick
+                if (audioData.bass > 0.8) {
+                    const nextGeom = (this.params.geometry + 1) % 8;
+                    this.setParam('geometry', nextGeom);
+                    document.getElementById('geometry').value = nextGeom;
+                }
+            }
+
+            onSnare(audioData) {
+                // 4D rotation burst on snare
+                const intensity = audioData.mid * Math.PI;
+                this.setParam('rot4dXW', Math.sin(audioData.time * 2) * intensity);
+                this.setParam('rot4dYW', Math.cos(audioData.time * 1.5) * intensity);
+                this.updateAllSliders();
+            }
+
+            onHiHat(audioData) {
+                // Chaos boost on hi-hat
+                const chaosBoost = 0.2 + audioData.high * 0.6;
+                this.setParam('chaos', chaosBoost);
+                document.getElementById('chaos').value = chaosBoost;
+                document.getElementById('chaos-val').textContent = chaosBoost.toFixed(2);
+            }
+
+            applyAudioReactivity(audioData) {
+                // Grid density reacts to bass
+                const density = 15 + audioData.bass * 35;
+                this.setParam('gridDensity', Math.floor(density));
+
+                // Hue shifts with mid frequencies
+                const hue = (this.params.hue + audioData.mid * 60) % 360;
+                this.setParam('hue', Math.floor(hue));
+
+                // Intensity boosts with energy
+                const intensity = this.params.intensity * (0.7 + audioData.energy * 0.6);
+                this.setParam('intensity', intensity);
+
+                // Update UI (throttled)
+                if (Math.random() < 0.1) {
+                    document.getElementById('gridDensity-val').textContent = Math.floor(density);
+                    document.getElementById('hue-val').textContent = Math.floor(hue);
+                    document.getElementById('intensity-val').textContent = intensity.toFixed(2);
+                }
+            }
+
+            updateTimeline() {
+                const progress = (this.audio.currentTime / this.audio.duration) * 100;
+                document.getElementById('timeline-progress').style.width = progress + '%';
+            }
+
+            generateColorPresets() {
+                const presets = [
+                    { hue: 0, name: 'Red' },
+                    { hue: 30, name: 'Orange' },
+                    { hue: 60, name: 'Yellow' },
+                    { hue: 120, name: 'Green' },
+                    { hue: 180, name: 'Cyan' },
+                    { hue: 240, name: 'Blue' },
+                    { hue: 280, name: 'Purple' },
+                    { hue: 320, name: 'Magenta' }
+                ];
+
+                const container = document.getElementById('color-presets');
+                presets.forEach(preset => {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'color-swatch';
+                    swatch.style.background = `hsl(${preset.hue}, 80%, 50%)`;
+                    swatch.title = preset.name;
+                    swatch.onclick = () => {
+                        this.setParam('hue', preset.hue);
+                        document.getElementById('hue').value = preset.hue;
+                        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                        swatch.classList.add('active');
+                    };
+                    container.appendChild(swatch);
+                });
+            }
+
+            applyPreset(presetName) {
+                const presets = {
+                    calm: {
+                        geometry: 2,
+                        gridDensity: 10,
+                        morphFactor: 0.8,
+                        chaos: 0.05,
+                        speed: 0.5,
+                        hue: 200,
+                        saturation: 0.6,
+                        intensity: 0.4
+                    },
+                    intense: {
+                        geometry: 5,
+                        gridDensity: 50,
+                        morphFactor: 2.0,
+                        chaos: 0.8,
+                        speed: 3.0,
+                        hue: 0,
+                        saturation: 1.0,
+                        intensity: 1.0
+                    },
+                    psychedelic: {
+                        geometry: 6,
+                        gridDensity: 35,
+                        morphFactor: 1.5,
+                        chaos: 0.6,
+                        speed: 2.0,
+                        hue: 280,
+                        saturation: 1.0,
+                        intensity: 0.8
+                    },
+                    minimal: {
+                        geometry: 1,
+                        gridDensity: 8,
+                        morphFactor: 0.5,
+                        chaos: 0.0,
+                        speed: 0.3,
+                        hue: 180,
+                        saturation: 0.3,
+                        intensity: 0.3
+                    }
+                };
+
+                const preset = presets[presetName];
+                if (!preset) return;
+
+                Object.entries(preset).forEach(([param, value]) => {
+                    this.setParam(param, value);
+                });
+
+                this.updateAllSliders();
+                console.log(`🎨 Applied preset: ${presetName}`);
+            }
+
+            randomize() {
+                this.setParam('geometry', Math.floor(Math.random() * 8));
+                this.setParam('gridDensity', Math.floor(5 + Math.random() * 95));
+                this.setParam('morphFactor', Math.random() * 3);
+                this.setParam('chaos', Math.random());
+                this.setParam('speed', 0.1 + Math.random() * 4.9);
+                this.setParam('hue', Math.floor(Math.random() * 360));
+                this.setParam('saturation', Math.random());
+                this.setParam('intensity', Math.random());
+
+                this.updateAllSliders();
+                console.log('🎲 Randomized parameters');
+            }
+
+            reset() {
+                this.setParam('geometry', 1);
+                this.setParam('gridDensity', 15);
+                this.setParam('morphFactor', 1.0);
+                this.setParam('chaos', 0.2);
+                this.setParam('speed', 1.0);
+                this.setParam('hue', 200);
+                this.setParam('saturation', 0.8);
+                this.setParam('intensity', 0.5);
+                this.setParam('rot4dXW', 0);
+                this.setParam('rot4dYW', 0);
+                this.setParam('rot4dZW', 0);
+
+                this.updateAllSliders();
+                console.log('↺ Reset to defaults');
+            }
+
+            updateAllSliders() {
+                Object.entries(this.params).forEach(([param, value]) => {
+                    const slider = document.getElementById(param);
+                    const valSpan = document.getElementById(`${param}-val`);
+                    if (slider) slider.value = value;
+                    if (valSpan) valSpan.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+                });
+            }
+        }
+
+        // Initialize
+        const orchestrator = new IntelligentOrchestrator();
+        window.orchestrator = orchestrator;
+    </script>
+
+    <!-- Signature -->
+    <div style="position: fixed; bottom: 5px; right: 10px; font-size: 7px; color: rgba(0, 255, 255, 0.3); z-index: 2000;">
+        🌟 A Paul Phillips Manifestation
+    </div>
+</body>
+</html>
+
+<!--
+🌟 A Paul Phillips Manifestation
+Paul@clearseassolutions.com | Parserator.com
+"The Revolution Will Not be in a Structured Format"
+© 2025 Paul Phillips - Clear Seas Solutions LLC
+-->
