@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Advanced Music Orchestrator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        /* Canvas Layers */
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .system-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .system-layer.active {
+            opacity: 1;
+        }
+
+        .system-layer canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Controls */
+        #controls {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #0ff;
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1000;
+            min-width: 500px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            padding: 8px 16px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 11px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 2px;
+        }
+
+        button:hover { transform: scale(1.05); box-shadow: 0 0 15px #0ff; }
+
+        #timeline {
+            width: 100%;
+            height: 6px;
+            background: #111;
+            border-radius: 3px;
+            position: relative;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+
+        #timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            border-radius: 3px;
+            width: 0%;
+        }
+
+        /* Info Panel */
+        #info-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #0ff;
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 1000;
+            font-size: 10px;
+            max-width: 280px;
+        }
+
+        #info-panel h3 {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #0ff;
+        }
+
+        #info-panel p {
+            margin: 4px 0;
+            color: #aaa;
+        }
+
+        /* Reactivity Mappings Panel */
+        #mappings-panel {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #f0f;
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 1000;
+            font-size: 10px;
+            max-width: 250px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .mapping-item {
+            background: rgba(255, 0, 255, 0.1);
+            border: 1px solid #f0f;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 6px 0;
+        }
+
+        .mapping-item label {
+            display: block;
+            color: #f0f;
+            margin-bottom: 4px;
+            font-size: 9px;
+        }
+
+        .mapping-item input[type="checkbox"] {
+            margin-right: 5px;
+        }
+
+        .mapping-item input[type="range"] {
+            width: 100%;
+        }
+
+        /* Pattern Sequencer Panel */
+        #patterns-panel {
+            position: fixed;
+            bottom: 80px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #ff0;
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 1000;
+            font-size: 10px;
+            max-width: 300px;
+        }
+
+        .pattern-display {
+            font-family: 'Courier New', monospace;
+            color: #ff0;
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255, 255, 0, 0.1);
+            border-radius: 3px;
+        }
+
+        @media (max-width: 768px) {
+            #controls { min-width: 90%; }
+            #info-panel, #mappings-panel, #patterns-panel {
+                max-width: 90%;
+                left: 5%;
+                right: 5%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <!-- Dynamically created system layers -->
+    </div>
+
+    <div id="info-panel">
+        <h3>🎵 ADVANCED ORCHESTRATOR</h3>
+        <p id="system-info">System: Initializing...</p>
+        <p id="section-info">Section: --</p>
+        <p id="bpm-info">BPM: --</p>
+        <p id="energy-info">Energy: --</p>
+        <p id="pattern-info">Pattern: --</p>
+    </div>
+
+    <div id="mappings-panel">
+        <h3 style="color: #f0f; font-size: 11px; margin-bottom: 8px;">🎛️ AUDIO MAPPINGS</h3>
+        <div id="mappings-list">
+            <!-- Dynamically populated -->
+        </div>
+        <button onclick="orchestrator.addCustomMapping()" style="width: 100%; margin-top: 10px;">+ Add Mapping</button>
+    </div>
+
+    <div id="patterns-panel">
+        <h3 style="color: #ff0; font-size: 11px; margin-bottom: 8px;">📊 PATTERN SEQUENCER</h3>
+        <div id="pattern-display" class="pattern-display">Ready</div>
+        <button onclick="orchestrator.createPattern('+3-2+3-2', 'density')" style="width: 100%;">Density +3-2+3-2</button>
+        <button onclick="orchestrator.createPattern('+4-3+4-3', 'chaos')" style="width: 100%; margin-top: 5px;">Chaos +4-3+4-3</button>
+        <button onclick="orchestrator.createPattern('inverse', 'hue')" style="width: 100%; margin-top: 5px;">Hue Inverse Drop</button>
+    </div>
+
+    <div id="controls">
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+            <label for="audio-file" style="background: linear-gradient(135deg, #4a0a68, #f0f); padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 11px;">
+                📁 Load Audio
+            </label>
+            <input type="file" id="audio-file" accept="audio/*" style="display: none;">
+            <button id="play-btn" disabled>▶ Play</button>
+            <button id="pause-btn" disabled>⏸ Pause</button>
+            <button id="stop-btn" disabled>⏹ Stop</button>
+            <button onclick="orchestrator.exportState()">💾 Export</button>
+        </div>
+
+        <div id="timeline">
+            <div id="timeline-progress"></div>
+        </div>
+
+        <div id="status" style="text-align: center; font-size: 10px; color: #0ff;">
+            Load audio to begin advanced orchestration
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+
+        class AdvancedOrchestrator {
+            constructor() {
+                this.audio = new Audio();
+                this.audioContext = null;
+                this.analyser = null;
+                this.dataArray = null;
+
+                // System management
+                this.systems = {
+                    faceted: { engine: null, layer: null, canvases: [] },
+                    quantum: { engine: null, layer: null, canvases: [] },
+                    holographic: { engine: null, layer: null, canvases: [] }
+                };
+                this.currentSystem = 'faceted';
+                this.isPlaying = false;
+
+                // Musical structure detection
+                this.musicStructure = {
+                    sections: [], // { time, type: 'verse'|'chorus'|'bridge', energy, characteristics }
+                    currentSection: null,
+                    detectedBPM: 0,
+                    beatHistory: []
+                };
+
+                // Pattern sequencing
+                this.patterns = {
+                    active: new Map(), // parameter -> pattern object
+                    library: new Map() // name -> pattern definition
+                };
+
+                // Modular audio reactivity
+                this.audioMappings = [
+                    { id: 1, enabled: true, source: 'bass', target: 'gridDensity', strength: 35, offset: 15, type: 'add' },
+                    { id: 2, enabled: true, source: 'mid', target: 'morphFactor', strength: 0.7, offset: 1.0, type: 'add' },
+                    { id: 3, enabled: true, source: 'high', target: 'chaos', strength: 0.6, offset: 0.2, type: 'add' },
+                    { id: 4, enabled: true, source: 'energy', target: 'speed', strength: 0.8, offset: 1.0, type: 'multiply' },
+                    { id: 5, enabled: true, source: 'bass', target: 'rot4dXW', strength: 2.0, offset: 0, type: 'trig', func: 'sin' },
+                    { id: 6, enabled: true, source: 'mid', target: 'rot4dYW', strength: 2.0, offset: 0, type: 'trig', func: 'cos' },
+                    { id: 7, enabled: true, source: 'high', target: 'rot4dZW', strength: 1.5, offset: 0, type: 'trig', func: 'sin' },
+                    { id: 8, enabled: true, source: 'energy', target: 'intensity', strength: 0.5, offset: 0.5, type: 'add' }
+                ];
+                this.nextMappingId = 9;
+
+                // Custom parameters (extensible)
+                this.customParameters = new Map();
+
+                // Advanced beat detection
+                this.beatDetection = {
+                    kick: { threshold: 0.75, lastTime: 0, minInterval: 150, history: [] },
+                    snare: { threshold: 0.65, lastTime: 0, minInterval: 150, history: [] },
+                    hihat: { threshold: 0.55, lastTime: 0, minInterval: 80, history: [] }
+                };
+
+                this.init();
+            }
+
+            async init() {
+                console.log('🌟 Initializing Advanced Orchestrator...');
+
+                // Audio setup
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 4096; // Higher resolution for better structure detection
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+                // Create all system layers with proper canvas management
+                await this.createAllSystems();
+
+                // Setup UI
+                this.setupEventListeners();
+                this.renderMappingsUI();
+
+                // Define pattern library
+                this.definePatternLibrary();
+
+                console.log('✅ Advanced Orchestrator ready');
+            }
+
+            async createAllSystems() {
+                const container = document.getElementById('visualizer-container');
+
+                // Create FACETED system
+                const facetedLayer = document.createElement('div');
+                facetedLayer.className = 'system-layer active';
+                facetedLayer.id = 'faceted-layer';
+                container.appendChild(facetedLayer);
+
+                const facetedCanvases = ['background', 'shadow', 'content', 'highlight', 'accent'];
+                facetedCanvases.forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    facetedLayer.appendChild(canvas);
+                    this.systems.faceted.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.faceted.engine = new VIB34DIntegratedEngine();
+                    this.systems.faceted.layer = facetedLayer;
+                    console.log('✅ Faceted system created');
+                } catch (error) {
+                    console.error('Failed to create Faceted system:', error);
+                }
+
+                // Create QUANTUM system
+                const quantumLayer = document.createElement('div');
+                quantumLayer.className = 'system-layer';
+                quantumLayer.id = 'quantum-layer';
+                container.appendChild(quantumLayer);
+
+                const quantumCanvases = ['background', 'shadow', 'content', 'highlight', 'accent'];
+                quantumCanvases.forEach(name => {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `quantum-${name}-canvas`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    quantumLayer.appendChild(canvas);
+                    this.systems.quantum.canvases.push(canvas);
+                });
+
+                try {
+                    this.systems.quantum.engine = new QuantumEngine();
+                    this.systems.quantum.layer = quantumLayer;
+                    console.log('✅ Quantum system created');
+                } catch (error) {
+                    console.error('Failed to create Quantum system:', error);
+                }
+
+                // Create HOLOGRAPHIC system
+                const holoLayer = document.createElement('div');
+                holoLayer.className = 'system-layer';
+                holoLayer.id = 'holographic-layer';
+                container.appendChild(holoLayer);
+
+                for (let i = 0; i < 5; i++) {
+                    const canvas = document.createElement('canvas');
+                    canvas.id = `holo-layer-${i}`;
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    holoLayer.appendChild(canvas);
+                    this.systems.holographic.canvases.push(canvas);
+                }
+
+                try {
+                    this.systems.holographic.engine = new RealHolographicSystem();
+                    this.systems.holographic.layer = holoLayer;
+                    console.log('✅ Holographic system created');
+                } catch (error) {
+                    console.error('Failed to create Holographic system:', error);
+                }
+
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    Object.values(this.systems).forEach(sys => {
+                        sys.canvases.forEach(canvas => {
+                            canvas.width = window.innerWidth;
+                            canvas.height = window.innerHeight;
+                        });
+                    });
+                });
+
+                console.log('🎨 All systems initialized with proper canvas management');
+            }
+
+            switchSystem(systemName) {
+                if (!this.systems[systemName]) {
+                    console.error('Unknown system:', systemName);
+                    return;
+                }
+
+                console.log(`🔄 Switching to ${systemName} system`);
+
+                // Deactivate current
+                if (this.systems[this.currentSystem].layer) {
+                    this.systems[this.currentSystem].layer.classList.remove('active');
+                }
+
+                // Activate new
+                this.systems[systemName].layer.classList.add('active');
+                this.currentSystem = systemName;
+
+                document.getElementById('system-info').textContent = `System: ${systemName.toUpperCase()}`;
+            }
+
+            setupEventListeners() {
+                document.getElementById('audio-file').addEventListener('change', (e) => {
+                    this.loadAudioFile(e.target.files[0]);
+                });
+
+                document.getElementById('play-btn').addEventListener('click', () => this.play());
+                document.getElementById('pause-btn').addEventListener('click', () => this.pause());
+                document.getElementById('stop-btn').addEventListener('click', () => this.stop());
+
+                document.getElementById('timeline').addEventListener('click', (e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    this.audio.currentTime = pos * this.audio.duration;
+                });
+
+                this.audio.addEventListener('ended', () => this.stop());
+                this.audio.addEventListener('timeupdate', () => this.updateTimeline());
+            }
+
+            async loadAudioFile(file) {
+                if (!file) return;
+
+                const url = URL.createObjectURL(file);
+                this.audio.src = url;
+
+                if (!this.sourceNode) {
+                    this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+                    this.sourceNode.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+                }
+
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = false;
+
+                // Analyze musical structure
+                await this.analyzeMusicStructure();
+
+                this.updateStatus(`Loaded: ${file.name}`);
+                console.log('🎵 Audio loaded and analyzed');
+            }
+
+            async analyzeMusicStructure() {
+                // TODO: Implement proper structure detection
+                // For now, create estimated sections
+                const duration = this.audio.duration || 180;
+
+                this.musicStructure.sections = [
+                    { time: 0, type: 'intro', energy: 0.3, duration: 15 },
+                    { time: 15, type: 'verse', energy: 0.5, duration: 30 },
+                    { time: 45, type: 'chorus', energy: 0.9, duration: 20 },
+                    { time: 65, type: 'verse', energy: 0.5, duration: 25 },
+                    { time: 90, type: 'chorus', energy: 0.95, duration: 20 },
+                    { time: 110, type: 'bridge', energy: 0.7, duration: 20 },
+                    { time: 130, type: 'chorus', energy: 1.0, duration: 30 }
+                ];
+
+                console.log('🎼 Musical structure analyzed:', this.musicStructure.sections.length, 'sections');
+            }
+
+            play() {
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                this.audio.play();
+                this.isPlaying = true;
+                this.startOrchestration();
+                this.updateStatus('Playing - Advanced Orchestration Active');
+            }
+
+            pause() {
+                this.audio.pause();
+                this.isPlaying = false;
+                this.updateStatus('Paused');
+            }
+
+            stop() {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.isPlaying = false;
+                this.updateStatus('Stopped');
+            }
+
+            startOrchestration() {
+                const render = () => {
+                    if (!this.isPlaying) return;
+
+                    // Get audio analysis
+                    this.analyser.getByteFrequencyData(this.dataArray);
+                    const audioData = this.processAudioData();
+
+                    // Detect musical elements
+                    this.detectBeats(audioData);
+                    this.detectSection();
+
+                    // Apply patterns
+                    this.applyPatterns(audioData);
+
+                    // Apply modular mappings
+                    this.applyMappings(audioData);
+
+                    // Update info
+                    this.updateInfo(audioData);
+
+                    requestAnimationFrame(render);
+                };
+                render();
+            }
+
+            processAudioData() {
+                const bass = this.getAverage(this.dataArray, 0, 100) / 255;
+                const mid = this.getAverage(this.dataArray, 100, 400) / 255;
+                const high = this.getAverage(this.dataArray, 400, 1024) / 255;
+                const energy = (bass + mid + high) / 3;
+
+                // Spectral analysis
+                const spectralCentroid = this.calculateSpectralCentroid();
+                const spectralFlux = this.calculateSpectralFlux();
+
+                return { bass, mid, high, energy, spectralCentroid, spectralFlux, time: this.audio.currentTime };
+            }
+
+            getAverage(array, start, end) {
+                let sum = 0;
+                for (let i = start; i < end; i++) {
+                    sum += array[i];
+                }
+                return sum / (end - start);
+            }
+
+            calculateSpectralCentroid() {
+                let weightedSum = 0;
+                let sum = 0;
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    weightedSum += this.dataArray[i] * i;
+                    sum += this.dataArray[i];
+                }
+                return sum > 0 ? weightedSum / sum : 0;
+            }
+
+            calculateSpectralFlux() {
+                if (!this.lastSpectrum) {
+                    this.lastSpectrum = new Uint8Array(this.dataArray);
+                    return 0;
+                }
+
+                let flux = 0;
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    const diff = this.dataArray[i] - this.lastSpectrum[i];
+                    if (diff > 0) flux += diff;
+                }
+
+                this.lastSpectrum = new Uint8Array(this.dataArray);
+                return flux / this.dataArray.length / 255;
+            }
+
+            detectBeats(audioData) {
+                const now = Date.now();
+
+                // Kick detection
+                if (audioData.bass > this.beatDetection.kick.threshold &&
+                    audioData.spectralFlux > 0.3 &&
+                    now - this.beatDetection.kick.lastTime > this.beatDetection.kick.minInterval) {
+                    this.beatDetection.kick.lastTime = now;
+                    this.beatDetection.kick.history.push(now);
+                    this.onKick(audioData);
+
+                    // BPM calculation
+                    if (this.beatDetection.kick.history.length > 4) {
+                        const intervals = [];
+                        for (let i = 1; i < Math.min(this.beatDetection.kick.history.length, 9); i++) {
+                            intervals.push(this.beatDetection.kick.history[i] - this.beatDetection.kick.history[i - 1]);
+                        }
+                        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                        this.musicStructure.detectedBPM = Math.round(60000 / avgInterval);
+                    }
+                }
+
+                // Snare detection
+                if (audioData.mid > this.beatDetection.snare.threshold &&
+                    audioData.spectralCentroid > 300 &&
+                    now - this.beatDetection.snare.lastTime > this.beatDetection.snare.minInterval) {
+                    this.beatDetection.snare.lastTime = now;
+                    this.onSnare(audioData);
+                }
+
+                // HiHat detection
+                if (audioData.high > this.beatDetection.hihat.threshold &&
+                    now - this.beatDetection.hihat.lastTime > this.beatDetection.hihat.minInterval) {
+                    this.beatDetection.hihat.lastTime = now;
+                    this.onHiHat(audioData);
+                }
+            }
+
+            onKick(audioData) {
+                // Geometry changes on kicks
+                const currentEngine = this.systems[this.currentSystem].engine;
+                if (currentEngine) {
+                    const geomIndex = Math.floor(Math.random() * 8);
+                    this.setParameter('geometry', geomIndex);
+                }
+
+                // Heavy kicks switch systems
+                if (audioData.bass > 0.85) {
+                    const systems = ['faceted', 'quantum', 'holographic'];
+                    const currentIndex = systems.indexOf(this.currentSystem);
+                    const nextSystem = systems[(currentIndex + 1) % systems.length];
+                    this.switchSystem(nextSystem);
+                }
+            }
+
+            onSnare(audioData) {
+                // 4D rotation burst on snares
+                const intensity = audioData.mid * Math.PI * 2;
+                this.setParameter('rot4dXW', Math.sin(audioData.time * 2) * intensity);
+                this.setParameter('rot4dYW', Math.cos(audioData.time * 1.5) * intensity);
+                this.setParameter('rot4dZW', Math.sin(audioData.time * 3) * intensity * 0.5);
+            }
+
+            onHiHat(audioData) {
+                // Chaos and density boost on hi-hats
+                this.setParameter('chaos', 0.2 + audioData.high * 0.7);
+            }
+
+            detectSection() {
+                const currentTime = this.audio.currentTime;
+                const section = this.musicStructure.sections.find(s =>
+                    currentTime >= s.time && currentTime < s.time + s.duration
+                );
+
+                if (section && section !== this.musicStructure.currentSection) {
+                    this.musicStructure.currentSection = section;
+                    this.onSectionChange(section);
+                }
+            }
+
+            onSectionChange(section) {
+                console.log(`🎼 Section change: ${section.type} at ${section.time}s`);
+                document.getElementById('section-info').textContent = `Section: ${section.type.toUpperCase()}`;
+
+                // Auto-switch systems based on section
+                if (section.type === 'chorus') {
+                    this.switchSystem('quantum');
+                } else if (section.type === 'bridge') {
+                    this.switchSystem('holographic');
+                } else if (section.type === 'intro' || section.type === 'verse') {
+                    this.switchSystem('faceted');
+                }
+            }
+
+            definePatternLibrary() {
+                // Define reusable patterns
+                this.patterns.library.set('+3-2+3-2', {
+                    name: 'Alternating 3-2 Boost',
+                    sequence: [3, -2, 3, -2],
+                    beatDivision: 1 // every beat
+                });
+
+                this.patterns.library.set('+4-3+4-3', {
+                    name: 'Heavy 4-3 Pattern',
+                    sequence: [4, -3, 4, -3],
+                    beatDivision: 1
+                });
+
+                this.patterns.library.set('inverse', {
+                    name: 'Inverse Drop',
+                    type: 'inverse',
+                    duration: 4 // beats
+                });
+            }
+
+            createPattern(patternName, targetParam) {
+                const pattern = this.patterns.library.get(patternName);
+                if (!pattern) {
+                    console.error('Unknown pattern:', patternName);
+                    return;
+                }
+
+                this.patterns.active.set(targetParam, {
+                    definition: pattern,
+                    startTime: this.audio.currentTime,
+                    beatIndex: 0
+                });
+
+                console.log(`📊 Pattern '${patternName}' activated for ${targetParam}`);
+                document.getElementById('pattern-display').textContent = `${targetParam}: ${pattern.name}`;
+            }
+
+            applyPatterns(audioData) {
+                const bpm = this.musicStructure.detectedBPM || 120;
+                const beatDuration = 60 / bpm;
+                const currentBeat = Math.floor((audioData.time % 60) / beatDuration);
+
+                this.patterns.active.forEach((patternState, targetParam) => {
+                    const pattern = patternState.definition;
+
+                    if (pattern.type === 'inverse') {
+                        // Inverse drop pattern
+                        const elapsed = audioData.time - patternState.startTime;
+                        const progress = Math.min(elapsed / (pattern.duration * beatDuration), 1);
+                        const inverseValue = 1 - progress;
+
+                        // Apply inverse to parameter
+                        if (targetParam === 'hue') {
+                            this.setParameter(targetParam, 360 * inverseValue);
+                        } else {
+                            const currentValue = this.getParameterValue(targetParam);
+                            this.setParameter(targetParam, currentValue * inverseValue);
+                        }
+
+                        // Remove pattern when complete
+                        if (progress >= 1) {
+                            this.patterns.active.delete(targetParam);
+                        }
+                    } else {
+                        // Sequence pattern (like +3-2+3-2)
+                        const seqIndex = Math.floor((audioData.time - patternState.startTime) / beatDuration) % pattern.sequence.length;
+                        const modifier = pattern.sequence[seqIndex];
+
+                        // Apply modifier to base value
+                        const baseValue = this.getParameterValue(targetParam);
+                        this.setParameter(targetParam, baseValue + modifier);
+                    }
+                });
+            }
+
+            applyMappings(audioData) {
+                this.audioMappings.forEach(mapping => {
+                    if (!mapping.enabled) return;
+
+                    const sourceValue = audioData[mapping.source];
+                    if (sourceValue === undefined) return;
+
+                    let value;
+                    switch (mapping.type) {
+                        case 'add':
+                            value = mapping.offset + sourceValue * mapping.strength;
+                            break;
+                        case 'multiply':
+                            value = mapping.offset * (1 + sourceValue * mapping.strength);
+                            break;
+                        case 'trig':
+                            const func = mapping.func === 'sin' ? Math.sin : Math.cos;
+                            value = func(audioData.time * 0.5 + sourceValue * mapping.strength) * Math.PI;
+                            break;
+                        default:
+                            value = sourceValue;
+                    }
+
+                    this.setParameter(mapping.target, value);
+                });
+            }
+
+            setParameter(param, value) {
+                Object.values(this.systems).forEach(sys => {
+                    if (!sys.engine) return;
+
+                    if (sys.engine.parameterManager) {
+                        sys.engine.parameterManager.setParameter(param, value);
+                    } else if (sys.engine.updateParameter) {
+                        sys.engine.updateParameter(param, value);
+                    }
+                });
+
+                // Store in custom parameters
+                this.customParameters.set(param, value);
+            }
+
+            getParameterValue(param) {
+                return this.customParameters.get(param) || 0;
+            }
+
+            renderMappingsUI() {
+                const list = document.getElementById('mappings-list');
+                list.innerHTML = this.audioMappings.map(m => `
+                    <div class="mapping-item">
+                        <label>
+                            <input type="checkbox" ${m.enabled ? 'checked' : ''}
+                                   onchange="orchestrator.toggleMapping(${m.id})">
+                            ${m.source} → ${m.target}
+                        </label>
+                        <input type="range" min="0" max="2" step="0.1" value="${m.strength}"
+                               oninput="orchestrator.updateMappingStrength(${m.id}, this.value)"
+                               style="width: 100%; margin-top: 4px;">
+                        <div style="font-size: 8px; color: #666;">Strength: ${m.strength.toFixed(1)}</div>
+                    </div>
+                `).join('');
+            }
+
+            toggleMapping(id) {
+                const mapping = this.audioMappings.find(m => m.id === id);
+                if (mapping) {
+                    mapping.enabled = !mapping.enabled;
+                    console.log(`🎛️ Mapping ${id} ${mapping.enabled ? 'enabled' : 'disabled'}`);
+                }
+            }
+
+            updateMappingStrength(id, value) {
+                const mapping = this.audioMappings.find(m => m.id === id);
+                if (mapping) {
+                    mapping.strength = parseFloat(value);
+                }
+            }
+
+            addCustomMapping() {
+                const source = prompt('Source (bass/mid/high/energy):');
+                const target = prompt('Target parameter (e.g., gridDensity, chaos):');
+                const strength = parseFloat(prompt('Strength (0-2):') || '1.0');
+
+                if (source && target) {
+                    this.audioMappings.push({
+                        id: this.nextMappingId++,
+                        enabled: true,
+                        source,
+                        target,
+                        strength,
+                        offset: 0,
+                        type: 'add'
+                    });
+                    this.renderMappingsUI();
+                    console.log(`✅ Added mapping: ${source} → ${target}`);
+                }
+            }
+
+            updateTimeline() {
+                const progress = (this.audio.currentTime / this.audio.duration) * 100;
+                document.getElementById('timeline-progress').style.width = progress + '%';
+            }
+
+            updateInfo(audioData) {
+                document.getElementById('bpm-info').textContent = `BPM: ${this.musicStructure.detectedBPM || '--'}`;
+                document.getElementById('energy-info').textContent = `Energy: ${(audioData.energy * 100).toFixed(0)}%`;
+
+                const activePatterns = Array.from(this.patterns.active.keys()).join(', ');
+                document.getElementById('pattern-info').textContent = `Patterns: ${activePatterns || 'None'}`;
+            }
+
+            updateStatus(message) {
+                document.getElementById('status').textContent = message;
+            }
+
+            exportState() {
+                const state = {
+                    mappings: this.audioMappings,
+                    patterns: Array.from(this.patterns.library.entries()),
+                    sections: this.musicStructure.sections
+                };
+
+                const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'orchestration-state.json';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                console.log('💾 Exported orchestration state');
+            }
+        }
+
+        // Initialize
+        const orchestrator = new AdvancedOrchestrator();
+        window.orchestrator = orchestrator;
+    </script>
+
+    <!-- Paul Phillips Signature -->
+    <div style="position: fixed; bottom: 5px; left: 50%; transform: translateX(-50%); font-size: 8px; color: rgba(0, 255, 255, 0.3); z-index: 2000; text-align: center;">
+        🌟 A Paul Phillips Manifestation | Paul@clearseassolutions.com
+    </div>
+</body>
+</html>
+
+<!--
+🌟 A Paul Phillips Manifestation
+Send Love, Hate, or Opportunity: Paul@clearseassolutions.com
+Join The Exoditical Moral Architecture Movement: Parserator.com
+"The Revolution Will Not be in a Structured Format"
+
+© 2025 Paul Phillips - Clear Seas Solutions LLC
+All Rights Reserved - Proprietary Technology
+-->
