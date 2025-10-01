@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Music Video Choreographer - Dual Mode</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .holographic-layers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .holographic-layers canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #mode-selector {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #0ff;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 400px;
+        }
+
+        #mode-selector h2 {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            padding: 20px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .mode-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px #0ff;
+        }
+
+        .mode-btn .emoji {
+            font-size: 32px;
+        }
+
+        .mode-btn .subtitle {
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 600px;
+            transition: all 0.3s ease;
+        }
+
+        #controls.active {
+            display: flex;
+        }
+
+        #controls.collapsed {
+            min-height: auto;
+        }
+
+        #controls.collapsed .control-content {
+            display: none;
+        }
+
+        .collapse-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 5px 10px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+
+        .collapse-toggle:hover {
+            background: rgba(0, 255, 255, 0.4);
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            padding: 12px 24px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .file-input-label {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .file-input-label:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #f0f;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        #timeline {
+            width: 100%;
+            height: 8px;
+            background: #111;
+            border-radius: 4px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        #timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        #status {
+            text-align: center;
+            font-size: 12px;
+            color: #0ff;
+        }
+
+        .system-selector {
+            display: flex;
+            gap: 10px;
+        }
+
+        .system-btn {
+            flex: 1;
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .system-btn.active {
+            background: linear-gradient(135deg, #0ff, #00ff88);
+            box-shadow: 0 0 15px #0ff;
+        }
+
+        #info-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1000;
+            max-width: 300px;
+            display: none;
+        }
+
+        #info-panel.active {
+            display: block;
+        }
+
+        #info-panel h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #0ff;
+        }
+
+        #info-panel p {
+            font-size: 11px;
+            line-height: 1.5;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+
+        .beat-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            border: 3px solid #0ff;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.1s;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        .beat-indicator.active {
+            opacity: 0.8;
+            animation: beatPulse 0.3s ease-out;
+        }
+
+        @keyframes beatPulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.5); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* Timeline Editor Mode */
+        #timeline-editor {
+            position: fixed;
+            left: 20px;
+            top: 120px;
+            bottom: 20px;
+            width: 350px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #f0f;
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1500;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+
+        #timeline-editor.active {
+            display: flex;
+        }
+
+        #timeline-editor.collapsed {
+            width: 60px;
+            overflow: hidden;
+        }
+
+        #timeline-editor.collapsed .timeline-content {
+            display: none;
+        }
+
+        #timeline-editor.collapsed h3 {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            margin: 0;
+            padding: 10px 0;
+        }
+
+        #timeline-editor h3 {
+            color: #f0f;
+            margin-bottom: 10px;
+        }
+
+        .sequence-item {
+            background: rgba(255, 0, 255, 0.1);
+            border: 1px solid #f0f;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .sequence-item h4 {
+            color: #f0f;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .sequence-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            font-size: 10px;
+        }
+
+        .sequence-controls label {
+            color: #aaa;
+        }
+
+        .sequence-controls input,
+        .sequence-controls select {
+            width: 100%;
+            background: #111;
+            border: 1px solid #333;
+            color: #0ff;
+            padding: 5px;
+            border-radius: 3px;
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+        }
+
+        .add-sequence-btn {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+            margin-top: 10px;
+        }
+
+        .mode-toggle {
+            background: linear-gradient(135deg, #68520a, #ff0);
+            color: #000;
+        }
+
+        @media (max-width: 768px) {
+            #mode-selector {
+                min-width: 90%;
+                padding: 15px;
+            }
+
+            .mode-buttons {
+                flex-direction: column;
+            }
+
+            #controls {
+                min-width: 90%;
+                max-width: 90%;
+            }
+
+            #timeline-editor {
+                width: 90%;
+                left: 5%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mode Selection Screen -->
+    <div id="mode-selector">
+        <h2>🎵 VIB34D MUSIC VIDEO CHOREOGRAPHER</h2>
+        <p style="text-align: center; font-size: 11px; color: #aaa; margin-bottom: 10px;">
+            Choose your mode: Let AI choreograph, or design your own sequences
+        </p>
+        <div class="mode-buttons">
+            <button class="mode-btn" onclick="selectMode('reactive')">
+                <span class="emoji">🎧</span>
+                <span>REACTIVE MODE</span>
+                <span class="subtitle">Real-time audio reactivity<br>Let the system respond to music</span>
+            </button>
+            <button class="mode-btn" onclick="selectMode('choreographed')">
+                <span class="emoji">🎬</span>
+                <span>HYBRID MODE</span>
+                <span class="subtitle">Choreographed sequences<br>+ Audio reactivity + System switching</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="visualizer-container">
+        <div class="holographic-layers" id="vib34dLayers"></div>
+    </div>
+
+    <div class="beat-indicator" id="beatIndicator"></div>
+
+    <div id="info-panel">
+        <h3 id="mode-title">🎧 REACTIVE MODE</h3>
+        <p id="mode-description">Real-time audio analysis with automatic parameter mapping</p>
+        <p id="beat-info">BPM: -- | Beat: --</p>
+        <p id="energy-info">Energy: -- | Bass: --</p>
+    </div>
+
+    <!-- Timeline Editor for Choreography Mode -->
+    <div id="timeline-editor">
+        <button class="collapse-toggle" onclick="toggleTimeline()">◀</button>
+        <h3>📝 Sequence Timeline</h3>
+        <div class="timeline-content">
+            <button class="add-sequence-btn" onclick="addSequence()">+ Add Sequence</button>
+            <div id="sequence-list"></div>
+            <button onclick="saveChoreography()">💾 Save Choreography</button>
+            <button onclick="loadChoreography()">📂 Load Choreography</button>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button class="collapse-toggle" onclick="toggleControls()">▼</button>
+        <div class="control-content">
+            <div class="control-row">
+                <label for="audio-file" class="file-input-label">
+                    📁 Load Audio File
+                </label>
+                <input type="file" id="audio-file" accept="audio/*">
+                <button id="play-btn" disabled>▶ Play</button>
+                <button id="pause-btn" disabled>⏸ Pause</button>
+                <button id="stop-btn" disabled>⏹ Stop</button>
+                <button class="mode-toggle" onclick="toggleMode()">🔄 Switch Mode</button>
+            </div>
+
+            <div id="timeline">
+                <div id="timeline-progress"></div>
+            </div>
+
+            <div class="system-selector">
+                <button class="system-btn active" data-system="faceted">🔷 FACETED</button>
+                <button class="system-btn" data-system="quantum">🌌 QUANTUM</button>
+                <button class="system-btn" data-system="holographic">✨ HOLOGRAPHIC</button>
+            </div>
+
+            <div class="control-row">
+                <button onclick="exportVideo()">🎥 Export Video</button>
+            </div>
+
+            <div id="status">Select a mode to begin</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        let choreographer = null;
+        let currentMode = null;
+        let canvasManager = null;
+
+        window.selectMode = function(mode) {
+            currentMode = mode;
+            document.getElementById('mode-selector').style.display = 'none';
+            document.getElementById('controls').classList.add('active');
+            document.getElementById('info-panel').classList.add('active');
+
+            if (mode === 'choreographed') {
+                document.getElementById('timeline-editor').classList.add('active');
+                document.getElementById('mode-title').textContent = '🎬 HYBRID MODE';
+                document.getElementById('mode-description').textContent = 'Choreographed sequences + Full audio reactivity + System switching';
+            } else {
+                document.getElementById('mode-title').textContent = '🎧 REACTIVE MODE';
+                document.getElementById('mode-description').textContent = 'Real-time audio analysis with automatic parameter mapping';
+            }
+
+            // Initialize choreographer with selected mode
+            initChoreographer(mode);
+
+            // Initialize CanvasManager for smart switching
+            canvasManager = new CanvasManager('vib34dLayers');
+        };
+
+        window.toggleMode = function() {
+            const newMode = currentMode === 'reactive' ? 'choreographed' : 'reactive';
+            selectMode(newMode);
+        };
+
+        // Collapse/expand functions
+        window.toggleControls = function() {
+            const controls = document.getElementById('controls');
+            const toggle = controls.querySelector('.collapse-toggle');
+            controls.classList.toggle('collapsed');
+            toggle.textContent = controls.classList.contains('collapsed') ? '▲' : '▼';
+        };
+
+        window.toggleTimeline = function() {
+            const timeline = document.getElementById('timeline-editor');
+            const toggle = timeline.querySelector('.collapse-toggle');
+            timeline.classList.toggle('collapsed');
+            toggle.textContent = timeline.classList.contains('collapsed') ? '▶' : '◀';
+        };
+
+        // Video export function
+        window.exportVideo = async function() {
+            if (!choreographer || !choreographer.audioElement) {
+                alert('Please load an audio file first');
+                return;
+            }
+
+            const status = document.getElementById('status');
+            status.textContent = 'Preparing export...';
+
+            // Hide UI elements during export
+            document.getElementById('controls').style.display = 'none';
+            document.getElementById('timeline-editor').style.display = 'none';
+            document.getElementById('info-panel').style.display = 'none';
+
+            try {
+                const canvas = document.querySelector('#vib34dLayers canvas');
+                const stream = canvas.captureStream(60); // 60 FPS
+
+                // Add audio track
+                const audioContext = new AudioContext();
+                const source = audioContext.createMediaElementSource(choreographer.audioElement);
+                const destination = audioContext.createMediaStreamDestination();
+                source.connect(destination);
+                source.connect(audioContext.destination);
+
+                stream.addTrack(destination.stream.getAudioTracks()[0]);
+
+                // Set up MediaRecorder
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 5000000
+                });
+
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `vib34d-export-${Date.now()}.webm`;
+                    a.click();
+
+                    // Restore UI
+                    document.getElementById('controls').style.display = 'flex';
+                    if (currentMode === 'choreographed') {
+                        document.getElementById('timeline-editor').style.display = 'flex';
+                    }
+                    document.getElementById('info-panel').style.display = 'block';
+                    status.textContent = 'Export complete!';
+                };
+
+                // Start recording and playback
+                recorder.start();
+                choreographer.audioElement.currentTime = 0;
+                await choreographer.audioElement.play();
+
+                status.textContent = 'Recording...';
+
+                // Stop when audio ends
+                choreographer.audioElement.onended = () => {
+                    recorder.stop();
+                    audioContext.close();
+                };
+
+            } catch (error) {
+                console.error('Export failed:', error);
+                status.textContent = 'Export failed: ' + error.message;
+
+                // Restore UI on error
+                document.getElementById('controls').style.display = 'flex';
+                if (currentMode === 'choreographed') {
+                    document.getElementById('timeline-editor').style.display = 'flex';
+                }
+                document.getElementById('info-panel').style.display = 'block';
+            }
+        };
+
+        async function initChoreographer(mode) {
+            const { MusicVideoChoreographer } = await import('./music-choreographer-engine.js');
+            choreographer = new MusicVideoChoreographer(mode);
+            window.choreographer = choreographer;
+        }
+
+        // Global functions for timeline editor
+        window.addSequence = function() {
+            if (!choreographer) return;
+            choreographer.addSequenceToTimeline({
+                time: 0,
+                duration: 10,
+                effects: {
+                    geometry: 'hold',
+                    rotation: 'smooth',
+                    chaos: 0.5,
+                    speed: 1.0,
+                    colorShift: 'medium'
+                }
+            });
+        };
+
+        window.saveChoreography = function() {
+            if (!choreographer) return;
+            choreographer.exportChoreography();
+        };
+
+        window.loadChoreography = function() {
+            if (!choreographer) return;
+            choreographer.importChoreography();
+        };
+    </script>
+</body>
+</html>
