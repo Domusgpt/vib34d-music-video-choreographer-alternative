@@ -470,43 +470,63 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [{
-                                text: `Create MASTER choreography for ${dur.toFixed(0)}s song: "${prompt}"
+                                text: `You are a MASTER music visualization choreographer. Create an INSANE ${dur.toFixed(0)}s visual journey for: "${prompt}"
 
-ENHANCED FEATURES TO USE:
-1. MID-SEQUENCE SYSTEM SWITCHING - rhythmic changes
-2. BEAT-SYNCED COLOR PULSING - orange↔blue, etc
-3. COLOR DROPS on snare (saturation→0 then restore)
-4. DENSITY/CHAOS/MORPH/INTENSITY beat modulation
-5. EXPANDED COLOR RANGE (-360 to 720 for extreme shifts)
+🔥 YOUR CREATIVE FREEDOM - GO WILD:
 
-Each sequence needs:
-- time, dur, sys (faceted/quantum/holographic)
-- geometry (0-7), rot4dXW/YW/ZW (-6.28 to 6.28)
-- gridDensity (5-100), morphFactor (0-2), chaos (0-1), speed (0.1-3)
-- hue (-360 to 720 for wild shifts), intensity (0-2), saturation (0-2)
-- pattern (density_pulse/rotation_spin/color_shift/chaos_build/morph_wave)
+PARAMETERS (use FULL ranges - don't be shy!):
+- geometry: 0-7 (0=tetrahedron, 1=hypercube, 2=sphere, 3=torus, 4=klein, 5=fractal, 6=wave, 7=crystal)
+- rot4dXW/YW/ZW: -6.28 to 6.28 (FULL rotations - use extremes!)
+- gridDensity: 5-100 (5=minimal, 100=INSANE detail)
+- morphFactor: 0-2 (2=MAXIMUM morphing)
+- chaos: 0-1 (1=PURE chaos)
+- speed: 0.1-3 (3=HYPER speed)
+- hue: -360 to 720 (negative=reverse spectrum, >360=multi-wraps)
+- intensity: 0-2 (2=BLINDING brightness)
+- saturation: 0-2 (0=grayscale, 2=HYPER saturated)
 
-NEW FIELDS:
-- sysSwitch: [{"at":5, "to":"quantum"}, {"at":10, "to":"holographic"}] (mid-sequence switches)
-- colorPulse: [30, 210] (orange-blue pulse on each beat)
-- colorDrop: 2 or 4 (drop color every 2nd or 4th beat)
-- densityMod: 40 (add to density on beat)
-- chaosMod: 0.3 (add to chaos on beat)
-- morphMod: 0.5 (add to morph on beat)
-- intensityMod: 0.6 (add to intensity on beat)
+SYSTEMS (switch freely, layer by layer):
+- faceted: Clean geometric, great for builds
+- quantum: Complex 3D lattice, perfect for drops
+- holographic: Pink/magenta audio-reactive, ethereal breakdowns
 
-Structure for ${dur.toFixed(0)}s:
-INTRO (0-15s): Minimal, colorPulse: [200, 220]
-BUILD (15-45s): densityMod: 20, colorPulse: [180, 200, 220]
-DROP (45-60s): OOMF! colorPulse: [30, 210], densityMod: 50, chaosMod: 0.5, sysSwitch at beat 4/8/12
-VERSE (60-90s): Groove, colorDrop: 4, morphMod: 0.4
-BUILD2 (90-110s): intensityMod: 0.6, colorPulse: [0, 120, 240]
-DROP2 (110-130s): BIGGER! colorPulse: [0, 180], sysSwitch rapid, all mods maxed
-BREAKDOWN (130-150s): Ethereal, colorDrop: 2, slow hue journey
-BUILD3 (150-165s): Final tension, rotation_spin pattern
-FINAL (165-180s): ULTIMATE! Everything maxed, rainbow colorPulse
+BEAT-SYNCED MAGIC:
+- colorPulse: Array of hues that cycle on EVERY beat [30, 210, 120] = orange→blue→green
+- colorDrop: 2 or 4 = saturation→0 every 2nd/4th beat (snare drops)
+- densityMod: Add to density on beat (try 20-80 for insane pulses)
+- chaosMod: Add to chaos on beat (0.1-0.8 for rhythmic disruption)
+- morphMod: Add to morph on beat (0.3-1.5 for shape-shifting)
+- intensityMod: Add to intensity on beat (0.3-1.0 for flash strobes)
+- sysSwitch: [{"at":5, "to":"quantum"}, {"at":10, "to":"holographic"}] = mid-sequence switches
 
-Return ONLY JSON array with 12-15 sequences.`
+PATTERNS (algorithmic overlays):
+- density_pulse: Breathing sine wave
+- rotation_spin: Accelerating 4D spins
+- color_shift: Spectrum journey
+- chaos_build: Progressive entropy
+- morph_wave: Oscillating shapes
+
+🎵 CREATE 15-25 SEQUENCES with MAXIMUM DYNAMICS:
+
+LAYER-BY-LAYER THINKING:
+- DON'T just set parameters - COMBINE them!
+- Use sysSwitch WITHIN sequences for rhythmic changes
+- Stack colorPulse + colorDrop + densityMod for multi-layered beats
+- Go from minimal (density:5) to MAXIMAL (density:100)
+- Use negative hues (-200), super-hues (500), intensity:2, saturation:2
+- Change geometry OFTEN (every 10-20s)
+- Combine patterns with beat mods
+- Use ALL 3 systems throughout the song
+- Build tension with chaos:0.1→0.9, then DROP with chaos:1 + all mods maxed
+
+MUSICAL STRUCTURE EXAMPLES (adapt to vibe):
+- INTRO: density:8, intensity:0.3, slow rotation, subtle colorPulse
+- BUILD: density:20→60, chaos:0.2→0.7, speed:1→2.5, intensityMod:0.4
+- DROP: density:100, chaos:1, ALL mods maxed, colorPulse:[0,180], sysSwitch rapid
+- BREAKDOWN: density:5, saturation:0.2, ethereal hues (200-250), slow morph
+- FINAL DROP: EVERYTHING maxed, rainbow colorPulse, geometry changes every 2s
+
+Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
                             }]
                         }]
                     })
@@ -529,82 +549,129 @@ Return ONLY JSON array with 12-15 sequences.`
         window.exportVid = function() {
             if (!aud.src) return alert('Load audio first');
 
-            stat('Starting export...');
+            stat('Preparing export...');
 
             // Get the first visible canvas
             const canvas = document.querySelector('canvas');
             if (!canvas) return alert('No canvas found');
 
-            // Create video stream from canvas
-            const videoStream = canvas.captureStream(60);
-
-            // Create audio destination from existing context (don't create new source - audio is already connected)
-            const audioDestination = ctx.createMediaStreamDestination();
-
-            // Connect analyser to destination (analyser is already connected to audio element)
-            anl.connect(audioDestination);
-
-            // Combine video + audio streams
-            const combinedStream = new MediaStream([
-                ...videoStream.getVideoTracks(),
-                ...audioDestination.stream.getAudioTracks()
-            ]);
-
-            // Create MediaRecorder
-            const recorder = new MediaRecorder(combinedStream, {
-                mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 8000000
-            });
-
-            const chunks = [];
-
-            recorder.ondataavailable = e => {
-                if (e.data && e.data.size > 0) chunks.push(e.data);
-            };
-
-            recorder.onstop = () => {
-                // Disconnect audio destination to clean up
-                anl.disconnect(audioDestination);
-
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `vib34d-master-${Date.now()}.webm`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                stat('Export complete!');
-            };
-
-            recorder.onerror = e => {
-                console.error('Recorder error:', e);
-                stat('Export failed!');
-                anl.disconnect(audioDestination);
-            };
-
-            // Start recording
-            recorder.start(100); // Collect data every 100ms
-
-            // Reset and play audio
-            aud.currentTime = 0;
-            beatCount = 0;
-            aud.play().then(() => {
-                stat('Recording...');
-            }).catch(err => {
-                console.error('Play error:', err);
-                stat('Playback failed!');
-                recorder.stop();
-            });
-
-            // Stop recording when audio ends
-            aud.onended = () => {
-                if (recorder.state === 'recording') {
-                    recorder.stop();
+            // Try different MediaRecorder mimeTypes for compatibility
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/webm;codecs=vp8';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm';
                 }
-            };
+            }
+
+            try {
+                // Create video stream from canvas
+                const videoStream = canvas.captureStream(60);
+
+                // Create a second AudioContext for export to avoid conflicts
+                const exportCtx = new AudioContext();
+                const exportDest = exportCtx.createMediaStreamDestination();
+
+                // Create a gain node to tap the audio without disrupting playback
+                const gainNode = ctx.createGain();
+                gainNode.gain.value = 1.0;
+
+                // Insert gain node into audio chain: source -> analyser -> gain -> destination
+                // We'll connect gain to export destination
+                const srcNode = ctx.createMediaStreamSource(exportDest.stream);
+
+                // Alternative: Use MediaElementAudioSourceNode if audio isn't playing
+                // Create audio element clone for export
+                const exportAudio = new Audio(aud.src);
+                exportAudio.currentTime = 0;
+
+                const exportAudioSource = exportCtx.createMediaElementSource(exportAudio);
+                exportAudioSource.connect(exportDest);
+                exportAudioSource.connect(exportCtx.destination);
+
+                // Combine video + audio streams
+                const combinedStream = new MediaStream([
+                    ...videoStream.getVideoTracks(),
+                    ...exportDest.stream.getAudioTracks()
+                ]);
+
+                // Create MediaRecorder
+                const recorder = new MediaRecorder(combinedStream, {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 8000000
+                });
+
+                const chunks = [];
+
+                recorder.ondataavailable = e => {
+                    if (e.data && e.data.size > 0) {
+                        chunks.push(e.data);
+                        stat(`Recording... ${chunks.length} chunks`);
+                    }
+                };
+
+                recorder.onstop = () => {
+                    console.log('Recorder stopped, chunks:', chunks.length);
+
+                    exportCtx.close();
+                    exportAudio.pause();
+
+                    if (chunks.length === 0) {
+                        stat('Export failed: No data recorded');
+                        return;
+                    }
+
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    console.log('Blob size:', blob.size);
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `vib34d-master-${Date.now()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    stat('Export complete! Downloaded');
+                };
+
+                recorder.onerror = e => {
+                    console.error('Recorder error:', e);
+                    stat('Export failed: ' + e.error);
+                    exportCtx.close();
+                    exportAudio.pause();
+                };
+
+                // Start recording
+                console.log('Starting recorder with mimeType:', mimeType);
+                recorder.start(100); // Collect data every 100ms
+
+                // Play both audios in sync
+                aud.currentTime = 0;
+                exportAudio.currentTime = 0;
+                beatCount = 0;
+
+                Promise.all([aud.play(), exportAudio.play()]).then(() => {
+                    stat('Recording... 0 chunks');
+                }).catch(err => {
+                    console.error('Play error:', err);
+                    stat('Playback failed: ' + err.message);
+                    recorder.stop();
+                });
+
+                // Stop recording when audio ends
+                exportAudio.onended = () => {
+                    console.log('Audio ended, stopping recorder');
+                    if (recorder.state === 'recording') {
+                        recorder.stop();
+                    }
+                };
+
+            } catch (err) {
+                console.error('Export setup error:', err);
+                stat('Export failed: ' + err.message);
+            }
         };
     </script>
 </body>
