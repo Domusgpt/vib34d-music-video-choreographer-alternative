@@ -47,21 +47,24 @@ The `LLMParameterInterface.js` provides AI-driven control:
 
 ## 🔧 Quick Start
 
-### Option 1: Use the Enhanced Version (Recommended)
-Open `index-enhanced.html` in your browser for the full AI-powered experience:
-
-```bash
-# Local server
-python3 -m http.server 8080
-# Then open: http://localhost:8080/index-enhanced.html
-```
+### Option 1: Use the Live Demo (Recommended)
+**Direct Link:** https://domusgpt.github.io/vib34d-music-video-choreographer-alternative/index-enhanced.html
 
 ### Option 2: Test Locally
 ```bash
 cd vib34d-music-video-choreographer-alternative
-npx serve -p 8080
-# Open: http://localhost:8080/index-enhanced.html
+python3 -m http.server 8080
+# Then open: http://localhost:8080/index-enhanced.html
 ```
+
+### What You Get
+✅ **Full control panel** with all parameter sliders
+✅ **Timeline choreographer** for sequence editing
+✅ **AI Parameter Control** panel (click 🤖 button)
+✅ **AI Song Analysis** (generates choreography from audio)
+✅ **Video export** with 1-click recording
+✅ **Audio reactivity** controls with strength adjustment
+✅ **Pattern library** for quick effects
 
 ---
 
@@ -140,12 +143,13 @@ LLMParameterInterface.generateParameters()
 
 ## 🎯 Visualization Systems
 
-All 4 systems work with smart canvas management:
+All 3 working systems with smart canvas management:
 
 1. **🔷 FACETED** - Minimal 2D patterns
 2. **🌌 QUANTUM** - Complex 3D lattice effects
 3. **✨ HOLOGRAPHIC** - Audio-reactive holographic layers
-4. **🔮 POLYCHORA** - True 4D polytope mathematics
+
+*(Polychora has been removed as it was an unfinished placeholder)*
 
 ---
 
