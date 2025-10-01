@@ -11,7 +11,7 @@ This is an **enhanced alternative version** of the VIB34D Music Video Choreograp
 - **Memory-efficient** by destroying old canvases before creating new ones
 
 ### 2. 🤖 AI-Powered LLM Integration
-- **Natural language parameter control** using Gemini Flash 1.5
+- **Natural language parameter control** using Gemini 2.0 Flash
 - **Pre-configured API key** included for instant use
 - **Describe visuals in plain English** and let AI generate mathematical parameters
 - **Synesthetic AI** that translates human emotions into 4D geometric visualizations
@@ -280,7 +280,7 @@ To add more LLM features:
 
 **Enhanced by:** Claude Code
 **Base System:** VIB34D Holographic Engine
-**AI Integration:** Gemini Flash 1.5 by Google
+**AI Integration:** Gemini 2.0 Flash by Google
 **Original Architecture:** Paul Phillips / Clear Seas Solutions
 
 ---
