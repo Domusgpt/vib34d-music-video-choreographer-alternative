@@ -396,21 +396,96 @@
         @media (max-width: 768px) {
             #mode-selector {
                 min-width: 90%;
+                max-width: 90%;
                 padding: 15px;
+                top: 10px;
+            }
+
+            #mode-selector h2 {
+                font-size: 16px;
             }
 
             .mode-buttons {
                 flex-direction: column;
             }
 
+            .mode-btn {
+                padding: 15px;
+                font-size: 12px;
+            }
+
+            .mode-btn .emoji {
+                font-size: 24px;
+            }
+
             #controls {
                 min-width: 90%;
                 max-width: 90%;
+                bottom: 10px;
+                padding: 15px 10px;
+            }
+
+            .control-row {
+                flex-wrap: wrap;
+            }
+
+            .control-row button,
+            .file-input-label {
+                flex: 1 1 45%;
+                font-size: 11px;
+                padding: 8px 12px;
+            }
+
+            .system-btn {
+                font-size: 10px;
+                padding: 8px;
             }
 
             #timeline-editor {
                 width: 90%;
+                max-width: 90%;
                 left: 5%;
+                top: 80px;
+                bottom: auto;
+                max-height: 60vh;
+            }
+
+            #timeline-editor h3 {
+                font-size: 14px;
+            }
+
+            .sequence-item {
+                padding: 8px;
+                font-size: 10px;
+            }
+
+            .sequence-item h4 {
+                font-size: 11px;
+            }
+
+            .collapse-toggle {
+                font-size: 14px;
+                padding: 3px 8px;
+            }
+
+            #info-panel {
+                max-width: 90%;
+                right: 5%;
+                top: 10px;
+                font-size: 10px;
+                padding: 10px;
+            }
+
+            #info-panel h3 {
+                font-size: 12px;
+            }
+
+            #info-panel p {
+                font-size: 9px;
+            }
+
+            #status {
+                font-size: 10px;
             }
         }
     </style>
@@ -438,6 +513,8 @@
 
     <div id="visualizer-container">
         <div class="holographic-layers" id="vib34dLayers"></div>
+        <div class="holographic-layers" id="quantumLayers" style="display: none;"></div>
+        <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
     </div>
 
     <div class="beat-indicator" id="beatIndicator"></div>
@@ -499,11 +576,36 @@
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
         import { CanvasManager } from './src/core/CanvasManager.js';
 
-        let choreographer = null;
-        let currentMode = null;
         let canvasManager = null;
+        let currentMode = null;
+        let currentEngine = null;
+        let currentSystem = 'faceted';
 
-        window.selectMode = function(mode) {
+        // Audio system
+        let audioElement = null;
+        let audioContext = null;
+        let analyser = null;
+        let sourceNode = null;
+        let dataArray = null;
+        let isPlaying = false;
+        let animationId = null;
+
+        // Engine classes for CanvasManager
+        const engineClasses = {
+            VIB34DIntegratedEngine,
+            QuantumEngine,
+            RealHolographicSystem
+        };
+
+        // Beat detection
+        let beatThreshold = 0.7;
+        let lastBeatTime = 0;
+        let detectedBPM = 0;
+
+        // Choreography sequences
+        let sequences = [];
+
+        window.selectMode = async function(mode) {
             currentMode = mode;
             document.getElementById('mode-selector').style.display = 'none';
             document.getElementById('controls').classList.add('active');
@@ -513,24 +615,329 @@
                 document.getElementById('timeline-editor').classList.add('active');
                 document.getElementById('mode-title').textContent = '🎬 HYBRID MODE';
                 document.getElementById('mode-description').textContent = 'Choreographed sequences + Full audio reactivity + System switching';
+                await generateDefaultChoreography();
             } else {
                 document.getElementById('mode-title').textContent = '🎧 REACTIVE MODE';
                 document.getElementById('mode-description').textContent = 'Real-time audio analysis with automatic parameter mapping';
             }
 
-            // Initialize choreographer with selected mode
-            initChoreographer(mode);
+            // Initialize CanvasManager
+            canvasManager = new CanvasManager();
 
-            // Initialize CanvasManager for smart switching
-            canvasManager = new CanvasManager('vib34dLayers');
+            // Initialize audio system
+            audioElement = new Audio();
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            // Setup event listeners
+            setupEventListeners();
+
+            // Initialize faceted system
+            await switchSystem('faceted');
+
+            console.log(`✅ ${mode.toUpperCase()} mode initialized`);
         };
+
+        function setupEventListeners() {
+            // File input
+            document.getElementById('audio-file').addEventListener('change', (e) => {
+                loadAudioFile(e.target.files[0]);
+            });
+
+            // Playback controls
+            document.getElementById('play-btn').addEventListener('click', () => play());
+            document.getElementById('pause-btn').addEventListener('click', () => pause());
+            document.getElementById('stop-btn').addEventListener('click', () => stop());
+
+            // Timeline seeking
+            document.getElementById('timeline').addEventListener('click', (e) => {
+                if (!audioElement.src) return;
+                const rect = e.target.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                audioElement.currentTime = pos * audioElement.duration;
+            });
+
+            // System switching
+            document.querySelectorAll('.system-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchSystem(btn.dataset.system);
+                });
+            });
+
+            // Audio events
+            audioElement.addEventListener('ended', () => stop());
+            audioElement.addEventListener('timeupdate', () => updateTimeline());
+        }
+
+        async function loadAudioFile(file) {
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            audioElement.src = url;
+
+            // Connect audio to analyser
+            if (!sourceNode) {
+                sourceNode = audioContext.createMediaElementSource(audioElement);
+                sourceNode.connect(analyser);
+                analyser.connect(audioContext.destination);
+            }
+
+            // Enable controls
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('pause-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = false;
+
+            document.getElementById('status').textContent = `Loaded: ${file.name}`;
+            console.log('🎵 Audio file loaded:', file.name);
+        }
+
+        async function switchSystem(systemName) {
+            console.log(`🔄 Switching to ${systemName}`);
+
+            // Use CanvasManager to switch
+            currentEngine = await canvasManager.switchToSystem(systemName, engineClasses);
+            currentSystem = systemName;
+
+            // Update UI
+            document.querySelectorAll('.system-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.system === systemName);
+            });
+
+            console.log(`✅ Switched to ${systemName}`);
+        }
+
+        function play() {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            audioElement.play();
+            isPlaying = true;
+            startVisualization();
+            document.getElementById('status').textContent = 'Playing...';
+        }
+
+        function pause() {
+            audioElement.pause();
+            isPlaying = false;
+            document.getElementById('status').textContent = 'Paused';
+        }
+
+        function stop() {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            isPlaying = false;
+            document.getElementById('status').textContent = 'Stopped';
+        }
+
+        function startVisualization() {
+            const render = () => {
+                if (!isPlaying) return;
+
+                // Get audio data
+                analyser.getByteFrequencyData(dataArray);
+                const audioData = processAudioData(dataArray);
+
+                // Detect beats
+                detectBeat(audioData);
+
+                // Apply mode-specific logic
+                if (currentMode === 'reactive') {
+                    applyReactiveMode(audioData);
+                } else if (currentMode === 'choreographed') {
+                    applyChoreography(audioData);
+                }
+
+                // Update info panel
+                updateInfoPanel(audioData);
+
+                animationId = requestAnimationFrame(render);
+            };
+            render();
+        }
+
+        function processAudioData(dataArray) {
+            const bass = getAverage(dataArray, 0, 100) / 255;
+            const mid = getAverage(dataArray, 100, 400) / 255;
+            const high = getAverage(dataArray, 400, 1024) / 255;
+            const energy = (bass + mid + high) / 3;
+
+            return { bass, mid, high, energy };
+        }
+
+        function getAverage(array, start, end) {
+            let sum = 0;
+            for (let i = start; i < end; i++) {
+                sum += array[i];
+            }
+            return sum / (end - start);
+        }
+
+        function detectBeat(audioData) {
+            const now = Date.now();
+            if (audioData.bass > beatThreshold && now - lastBeatTime > 500) {
+                lastBeatTime = now;
+                onBeat();
+                detectedBPM = Math.round(60000 / 500);
+            }
+        }
+
+        function onBeat() {
+            const indicator = document.getElementById('beatIndicator');
+            indicator.classList.add('active');
+            setTimeout(() => indicator.classList.remove('active'), 300);
+
+            if (currentEngine && currentEngine.triggerClick) {
+                currentEngine.triggerClick(1.0);
+            }
+        }
+
+        function applyReactiveMode(audioData) {
+            const setParam = (param, value) => {
+                if (currentEngine.parameterManager) {
+                    currentEngine.parameterManager.setParameter(param, value);
+                } else if (currentEngine.updateParameter) {
+                    currentEngine.updateParameter(param, value);
+                } else if (currentEngine.updateParameters) {
+                    currentEngine.updateParameters({ [param]: value });
+                }
+            };
+
+            const densityBase = 15 + audioData.bass * 30;
+            setParam('gridDensity', Math.floor(densityBase));
+
+            const morphBase = 1.0 + audioData.mid * 0.5;
+            setParam('morphFactor', morphBase);
+
+            const chaosValue = 0.2 + audioData.high * 0.6;
+            setParam('chaos', chaosValue);
+
+            const speedValue = 1.0 + audioData.energy * 0.5;
+            setParam('speed', speedValue);
+
+            const intensityValue = 0.5 + audioData.energy * 0.5;
+            setParam('intensity', intensityValue);
+
+            const saturationValue = 0.7 + audioData.bass * 0.3;
+            setParam('saturation', saturationValue);
+
+            const currentTime = audioElement.currentTime;
+            const hueShift = (audioData.mid * 60 + audioData.high * 30) % 360;
+            setParam('hue', (currentTime * 5 + hueShift) % 360);
+
+            setParam('rot4dXW', Math.sin(currentTime * 0.5 + audioData.bass * Math.PI) * Math.PI);
+            setParam('rot4dYW', Math.cos(currentTime * 0.3 + audioData.mid * Math.PI) * Math.PI);
+            setParam('rot4dZW', Math.sin(currentTime * 0.7 + audioData.high * Math.PI) * Math.PI);
+        }
+
+        async function applyChoreography(audioData) {
+            const currentTime = audioElement.currentTime;
+
+            const activeSequence = sequences.find(seq =>
+                currentTime >= seq.time && currentTime < seq.time + seq.duration
+            );
+
+            if (!activeSequence) return;
+
+            const effects = activeSequence.effects;
+
+            // System switching
+            if (effects.system && effects.system !== currentSystem) {
+                console.log(`🎬 Switching to ${effects.system} at ${currentTime.toFixed(1)}s`);
+                await switchSystem(effects.system);
+            }
+
+            const setParam = (param, value) => {
+                if (currentEngine.parameterManager) {
+                    currentEngine.parameterManager.setParameter(param, value);
+                } else if (currentEngine.updateParameter) {
+                    currentEngine.updateParameter(param, value);
+                } else if (currentEngine.updateParameters) {
+                    currentEngine.updateParameters({ [param]: value });
+                }
+            };
+
+            // Apply choreographed parameters with audio reactivity
+            const chaosBase = effects.chaos || 0.5;
+            setParam('chaos', chaosBase + audioData.energy * 0.4);
+
+            const speedBase = effects.speed || 1.0;
+            setParam('speed', speedBase * (1 + audioData.energy * 0.6));
+
+            const densityBase = 15;
+            setParam('gridDensity', Math.floor(densityBase + audioData.bass * 35));
+
+            let hueValue = 0;
+            if (effects.colorShift === 'rainbow') {
+                hueValue = (currentTime * 60 + audioData.energy * 60) % 360;
+            } else if (effects.colorShift === 'fast') {
+                hueValue = (currentTime * 30 + audioData.bass * 120) % 360;
+            } else if (effects.colorShift === 'medium') {
+                hueValue = (currentTime * 10 + audioData.mid * 60) % 360;
+            } else {
+                hueValue = (currentTime * 5 + audioData.high * 30) % 360;
+            }
+            setParam('hue', hueValue % 360);
+
+            setParam('intensity', 0.5 + audioData.energy * 0.5);
+            setParam('saturation', 0.7 + audioData.bass * 0.3);
+        }
+
+        async function generateDefaultChoreography() {
+            sequences = [
+                { time: 0, duration: 15, effects: { system: 'faceted', chaos: 0.1, speed: 0.5, colorShift: 'slow' } },
+                { time: 15, duration: 15, effects: { system: 'faceted', chaos: 0.3, speed: 1.0, colorShift: 'medium' } },
+                { time: 30, duration: 20, effects: { system: 'quantum', chaos: 0.8, speed: 2.0, colorShift: 'fast' } },
+                { time: 50, duration: 10, effects: { system: 'holographic', chaos: 0.9, speed: 2.5, colorShift: 'rainbow' } },
+                { time: 60, duration: 15, effects: { system: 'faceted', chaos: 0.05, speed: 0.3, colorShift: 'slow' } },
+                { time: 75, duration: 999, effects: { system: 'quantum', chaos: 1.0, speed: 3.0, colorShift: 'rainbow' } }
+            ];
+            renderSequenceList();
+        }
+
+        function renderSequenceList() {
+            const list = document.getElementById('sequence-list');
+            if (!list) return;
+
+            list.innerHTML = sequences.map((seq, index) => `
+                <div class="sequence-item">
+                    <h4>Sequence ${index + 1} (${seq.time}s - ${seq.time + seq.duration}s)</h4>
+                    <div class="sequence-controls">
+                        <label>System</label>
+                        <select onchange="window.updateSequence(${index}, 'system', this.value)" style="grid-column: span 2;">
+                            <option value="faceted" ${seq.effects.system === 'faceted' ? 'selected' : ''}>🔷 Faceted</option>
+                            <option value="quantum" ${seq.effects.system === 'quantum' ? 'selected' : ''}>🌌 Quantum</option>
+                            <option value="holographic" ${seq.effects.system === 'holographic' ? 'selected' : ''}>✨ Holographic</option>
+                        </select>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.updateSequence = function(index, property, value) {
+            if (sequences[index]) {
+                sequences[index].effects[property] = value;
+            }
+        };
+
+        function updateTimeline() {
+            if (!audioElement.duration) return;
+            const progress = (audioElement.currentTime / audioElement.duration) * 100;
+            document.getElementById('timeline-progress').style.width = progress + '%';
+        }
+
+        function updateInfoPanel(audioData) {
+            document.getElementById('beat-info').textContent = `BPM: ${detectedBPM} | Energy: ${(audioData.energy * 100).toFixed(0)}%`;
+            document.getElementById('energy-info').textContent = `Bass: ${(audioData.bass * 100).toFixed(0)}% | Mid: ${(audioData.mid * 100).toFixed(0)}%`;
+        }
 
         window.toggleMode = function() {
             const newMode = currentMode === 'reactive' ? 'choreographed' : 'reactive';
             selectMode(newMode);
         };
 
-        // Collapse/expand functions
         window.toggleControls = function() {
             const controls = document.getElementById('controls');
             const toggle = controls.querySelector('.collapse-toggle');
@@ -545,9 +952,8 @@
             toggle.textContent = timeline.classList.contains('collapsed') ? '▶' : '◀';
         };
 
-        // Video export function
         window.exportVideo = async function() {
-            if (!choreographer || !choreographer.audioElement) {
+            if (!audioElement || !audioElement.src) {
                 alert('Please load an audio file first');
                 return;
             }
@@ -555,25 +961,24 @@
             const status = document.getElementById('status');
             status.textContent = 'Preparing export...';
 
-            // Hide UI elements during export
             document.getElementById('controls').style.display = 'none';
             document.getElementById('timeline-editor').style.display = 'none';
             document.getElementById('info-panel').style.display = 'none';
 
             try {
-                const canvas = document.querySelector('#vib34dLayers canvas');
-                const stream = canvas.captureStream(60); // 60 FPS
+                const canvas = document.querySelector('canvas');
+                if (!canvas) throw new Error('No canvas found');
 
-                // Add audio track
-                const audioContext = new AudioContext();
-                const source = audioContext.createMediaElementSource(choreographer.audioElement);
-                const destination = audioContext.createMediaStreamDestination();
-                source.connect(destination);
-                source.connect(audioContext.destination);
+                const stream = canvas.captureStream(60);
 
-                stream.addTrack(destination.stream.getAudioTracks()[0]);
+                const audioCtx = new AudioContext();
+                const source = audioCtx.createMediaElementSource(audioElement);
+                const dest = audioCtx.createMediaStreamDestination();
+                source.connect(dest);
+                source.connect(audioCtx.destination);
 
-                // Set up MediaRecorder
+                stream.addTrack(dest.stream.getAudioTracks()[0]);
+
                 const recorder = new MediaRecorder(stream, {
                     mimeType: 'video/webm;codecs=vp9',
                     videoBitsPerSecond: 5000000
@@ -590,7 +995,6 @@
                     a.download = `vib34d-export-${Date.now()}.webm`;
                     a.click();
 
-                    // Restore UI
                     document.getElementById('controls').style.display = 'flex';
                     if (currentMode === 'choreographed') {
                         document.getElementById('timeline-editor').style.display = 'flex';
@@ -599,24 +1003,21 @@
                     status.textContent = 'Export complete!';
                 };
 
-                // Start recording and playback
                 recorder.start();
-                choreographer.audioElement.currentTime = 0;
-                await choreographer.audioElement.play();
+                audioElement.currentTime = 0;
+                await audioElement.play();
 
                 status.textContent = 'Recording...';
 
-                // Stop when audio ends
-                choreographer.audioElement.onended = () => {
+                audioElement.onended = () => {
                     recorder.stop();
-                    audioContext.close();
+                    audioCtx.close();
                 };
 
             } catch (error) {
                 console.error('Export failed:', error);
                 status.textContent = 'Export failed: ' + error.message;
 
-                // Restore UI on error
                 document.getElementById('controls').style.display = 'flex';
                 if (currentMode === 'choreographed') {
                     document.getElementById('timeline-editor').style.display = 'flex';
@@ -625,36 +1026,45 @@
             }
         };
 
-        async function initChoreographer(mode) {
-            const { MusicVideoChoreographer } = await import('./music-choreographer-engine.js');
-            choreographer = new MusicVideoChoreographer(mode);
-            window.choreographer = choreographer;
-        }
-
-        // Global functions for timeline editor
         window.addSequence = function() {
-            if (!choreographer) return;
-            choreographer.addSequenceToTimeline({
-                time: 0,
+            const newSeq = {
+                time: audioElement.currentTime || 0,
                 duration: 10,
-                effects: {
-                    geometry: 'hold',
-                    rotation: 'smooth',
-                    chaos: 0.5,
-                    speed: 1.0,
-                    colorShift: 'medium'
-                }
-            });
+                effects: { system: currentSystem, chaos: 0.5, speed: 1.0, colorShift: 'medium' }
+            };
+            sequences.push(newSeq);
+            sequences.sort((a, b) => a.time - b.time);
+            renderSequenceList();
         };
 
         window.saveChoreography = function() {
-            if (!choreographer) return;
-            choreographer.exportChoreography();
+            const data = JSON.stringify(sequences, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'choreography.json';
+            a.click();
         };
 
         window.loadChoreography = function() {
-            if (!choreographer) return;
-            choreographer.importChoreography();
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        sequences = JSON.parse(event.target.result);
+                        renderSequenceList();
+                    } catch (error) {
+                        console.error('Failed to import:', error);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
         };
     </script>
 </body>
