@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Music Video Choreographer - Enhanced with LLM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        /* SMART CANVAS MANAGEMENT: Only one system canvas visible at a time */
+        #stage-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .system-canvases {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        .system-canvases.active {
+            display: block;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Mode Selection */
+        #mode-selector {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #0ff;
+            border-radius: 15px;
+            padding: 40px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 500px;
+        }
+
+        #mode-selector h2 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 20px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            padding: 30px 20px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .mode-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px #0ff;
+        }
+
+        .mode-btn .emoji {
+            font-size: 48px;
+        }
+
+        .mode-btn .subtitle {
+            font-size: 11px;
+            opacity: 0.8;
+            text-align: center;
+        }
+
+        /* Controls Panel */
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.92);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 700px;
+        }
+
+        #controls.active {
+            display: flex;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            padding: 12px 24px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .file-input-label {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+
+        .file-input-label:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #f0f;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        #timeline {
+            width: 100%;
+            height: 10px;
+            background: #111;
+            border-radius: 5px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        #timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* System Selector */
+        .system-selector {
+            display: flex;
+            gap: 10px;
+        }
+
+        .system-btn {
+            flex: 1;
+            padding: 12px 8px;
+            font-size: 11px;
+        }
+
+        .system-btn.active {
+            background: linear-gradient(135deg, #0ff, #00ff88);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        /* LLM Interface */
+        #llm-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #f0f;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 1500;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 350px;
+            max-width: 400px;
+        }
+
+        #llm-panel.active {
+            display: flex;
+        }
+
+        #llm-panel h3 {
+            color: #f0f;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        #llm-input {
+            width: 100%;
+            background: #111;
+            border: 1px solid #f0f;
+            color: #0ff;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        #llm-generate {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+        }
+
+        #llm-status {
+            font-size: 11px;
+            color: #aaa;
+            text-align: center;
+        }
+
+        .api-key-input {
+            width: 100%;
+            background: #111;
+            border: 1px solid #f0f;
+            color: #0ff;
+            padding: 8px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+        }
+
+        /* Info Panel */
+        #info-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1000;
+            max-width: 250px;
+            display: none;
+        }
+
+        #info-panel.active {
+            display: block;
+        }
+
+        #info-panel h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #0ff;
+        }
+
+        #info-panel p {
+            font-size: 11px;
+            line-height: 1.5;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+
+        #status {
+            text-align: center;
+            font-size: 12px;
+            color: #0ff;
+        }
+
+        @media (max-width: 768px) {
+            #mode-selector {
+                min-width: 90%;
+                padding: 20px;
+            }
+
+            .mode-buttons {
+                flex-direction: column;
+            }
+
+            #controls {
+                min-width: 90%;
+                max-width: 90%;
+            }
+
+            #llm-panel {
+                min-width: 90%;
+                max-width: 90%;
+                right: 5%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mode Selection Screen -->
+    <div id="mode-selector">
+        <h2>🎵 VIB34D MUSIC VIDEO CHOREOGRAPHER</h2>
+        <p style="text-align: center; font-size: 12px; color: #aaa; margin-bottom: 20px;">
+            Enhanced with AI-Powered Parameter Control & Smart Canvas Management
+        </p>
+        <div class="mode-buttons">
+            <button class="mode-btn" onclick="selectMode('reactive')">
+                <span class="emoji">🎧</span>
+                <span>REACTIVE MODE</span>
+                <span class="subtitle">Real-time audio analysis<br>Automatic parameter mapping</span>
+            </button>
+            <button class="mode-btn" onclick="selectMode('choreographed')">
+                <span class="emoji">🎬</span>
+                <span>HYBRID MODE</span>
+                <span class="subtitle">Choreographed sequences<br>+ Audio reactivity + AI control</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Canvas Containers with Smart Switching -->
+    <div id="stage-container">
+        <div class="system-canvases active" id="vib34dLayers"></div>
+        <div class="system-canvases" id="quantumLayers"></div>
+        <div class="system-canvases" id="holographicLayers"></div>
+        <div class="system-canvases" id="polychoraLayers"></div>
+    </div>
+
+    <!-- Info Panel -->
+    <div id="info-panel">
+        <h3 id="mode-title">🎧 REACTIVE MODE</h3>
+        <p id="mode-description">Real-time audio analysis</p>
+        <p id="current-system">System: FACETED 🔷</p>
+        <p id="beat-info">BPM: -- | Beat: --</p>
+        <p id="energy-info">Energy: -- | Bass: --</p>
+    </div>
+
+    <!-- LLM Control Panel -->
+    <div id="llm-panel">
+        <h3>🤖 AI Parameter Control</h3>
+        <textarea id="llm-input" placeholder="Describe the visual vibe you want...
+
+Examples:
+- 'cosmic loneliness with vast empty spaces'
+- 'aggressive metallic chaos with red hues'
+- 'peaceful flowing water meditation'
+- 'psychedelic rainbow explosions'"></textarea>
+        <button id="llm-generate" onclick="generateFromAI()">✨ Generate Parameters</button>
+        <div style="font-size: 10px; color: #666;">
+            <label>API Key (stored locally):</label>
+            <input type="password" class="api-key-input" id="api-key-input" placeholder="AIza..." value="AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI">
+        </div>
+        <div id="llm-status">Enter description and click Generate</div>
+    </div>
+
+    <!-- Main Controls -->
+    <div id="controls">
+        <div class="control-row">
+            <label for="audio-file" class="file-input-label">
+                📁 Load Audio
+            </label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="play-btn" disabled>▶ Play</button>
+            <button id="pause-btn" disabled>⏸ Pause</button>
+            <button id="stop-btn" disabled>⏹ Stop</button>
+            <button onclick="toggleLLMPanel()" style="background: linear-gradient(135deg, #4a0a68, #f0f);">🤖 AI Control</button>
+        </div>
+
+        <div id="timeline">
+            <div id="timeline-progress"></div>
+        </div>
+
+        <div class="system-selector">
+            <button class="system-btn active" onclick="switchSystem('faceted')">🔷 FACETED</button>
+            <button class="system-btn" onclick="switchSystem('quantum')">🌌 QUANTUM</button>
+            <button class="system-btn" onclick="switchSystem('holographic')">✨ HOLOGRAPHIC</button>
+            <button class="system-btn" onclick="switchSystem('polychora')">🔮 POLYCHORA</button>
+        </div>
+
+        <div id="status">Select a mode to begin</div>
+    </div>
+
+    <script type="module">
+        import { CanvasManager } from './src/core/CanvasManager.js';
+        import { LLMParameterInterface } from './src/llm/LLMParameterInterface.js';
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+
+        // Global State
+        let canvasManager = null;
+        let llmInterface = null;
+        let choreographer = null;
+        let currentMode = null;
+        let currentSystemName = 'faceted';
+        let currentEngine = null;
+
+        // Initialize Canvas Manager
+        canvasManager = new CanvasManager();
+        window.canvasManager = canvasManager;
+
+        // Initialize LLM Interface with provided API key
+        llmInterface = new LLMParameterInterface();
+        llmInterface.setApiKey('AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI');
+        window.llmInterface = llmInterface;
+
+        console.log('✅ Canvas Manager initialized');
+        console.log('✅ LLM Interface initialized with API key');
+
+        // Mode Selection
+        window.selectMode = function(mode) {
+            currentMode = mode;
+            document.getElementById('mode-selector').style.display = 'none';
+            document.getElementById('controls').classList.add('active');
+            document.getElementById('info-panel').classList.add('active');
+
+            if (mode === 'choreographed') {
+                document.getElementById('mode-title').textContent = '🎬 HYBRID MODE';
+                document.getElementById('mode-description').textContent = 'Choreographed + Audio + AI';
+            } else {
+                document.getElementById('mode-title').textContent = '🎧 REACTIVE MODE';
+                document.getElementById('mode-description').textContent = 'Real-time audio analysis';
+            }
+
+            // Initialize first system
+            initializeFirstSystem();
+            updateStatus('Mode selected. Load audio to begin.');
+        };
+
+        // Initialize First System
+        async function initializeFirstSystem() {
+            const engineClasses = {
+                VIB34DIntegratedEngine,
+                QuantumEngine,
+                RealHolographicSystem
+            };
+
+            currentEngine = await canvasManager.switchToSystem('faceted', engineClasses);
+            console.log('✅ First system initialized:', currentEngine);
+
+            if (currentEngine && currentEngine.setActive) {
+                currentEngine.setActive(true);
+            }
+        }
+
+        // System Switching with Smart Canvas Management
+        window.switchSystem = async function(systemName) {
+            console.log(`🔄 User requested switch to: ${systemName}`);
+
+            const engineClasses = {
+                VIB34DIntegratedEngine,
+                QuantumEngine,
+                RealHolographicSystem
+            };
+
+            try {
+                currentEngine = await canvasManager.switchToSystem(systemName, engineClasses);
+                currentSystemName = systemName;
+
+                // Update UI
+                document.querySelectorAll('.system-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.querySelector(`[onclick="switchSystem('${systemName}')"]`).classList.add('active');
+
+                const systemEmojis = {
+                    faceted: '🔷',
+                    quantum: '🌌',
+                    holographic: '✨',
+                    polychora: '🔮'
+                };
+
+                document.getElementById('current-system').textContent =
+                    `System: ${systemName.toUpperCase()} ${systemEmojis[systemName]}`;
+
+                console.log(`✅ Successfully switched to ${systemName}`);
+                updateStatus(`System: ${systemName.toUpperCase()}`);
+
+            } catch (error) {
+                console.error('💥 System switch error:', error);
+                updateStatus('System switch failed');
+            }
+        };
+
+        // LLM Panel Toggle
+        window.toggleLLMPanel = function() {
+            const panel = document.getElementById('llm-panel');
+            panel.classList.toggle('active');
+        };
+
+        // Generate Parameters from AI
+        window.generateFromAI = async function() {
+            const input = document.getElementById('llm-input').value.trim();
+            const apiKey = document.getElementById('api-key-input').value.trim();
+
+            if (!input) {
+                updateLLMStatus('❌ Please enter a description');
+                return;
+            }
+
+            if (apiKey) {
+                llmInterface.setApiKey(apiKey);
+            }
+
+            updateLLMStatus('🤖 Generating parameters from AI...');
+
+            try {
+                const parameters = await llmInterface.generateParameters(input);
+                console.log('🤖 AI Generated Parameters:', parameters);
+
+                // Apply parameters to current engine
+                if (currentEngine && parameters) {
+                    applyParametersToEngine(parameters);
+                    updateLLMStatus('✅ Parameters applied successfully!');
+                } else {
+                    updateLLMStatus('⚠️ Parameters generated but no active engine');
+                }
+
+            } catch (error) {
+                console.error('🤖 AI Generation error:', error);
+                updateLLMStatus('❌ ' + error.message);
+            }
+        };
+
+        // Apply AI parameters to current engine
+        function applyParametersToEngine(params) {
+            if (!currentEngine) {
+                console.error('No active engine to apply parameters');
+                return;
+            }
+
+            console.log('🎨 Applying AI parameters to engine:', params);
+
+            // Apply each parameter
+            Object.entries(params).forEach(([key, value]) => {
+                if (currentEngine.parameters && currentEngine.parameters[key] !== undefined) {
+                    currentEngine.parameters[key] = value;
+                    console.log(`  ✓ ${key}: ${value}`);
+                }
+            });
+
+            // Trigger visual update
+            if (currentEngine.updateVisualization) {
+                currentEngine.updateVisualization();
+            }
+        }
+
+        // Helper Functions
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function updateLLMStatus(message) {
+            document.getElementById('llm-status').textContent = message;
+        }
+
+        // Audio file handling
+        document.getElementById('audio-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                updateStatus(`Audio loaded: ${file.name}`);
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = false;
+            }
+        });
+
+        // Export globals for debugging
+        window.currentEngine = currentEngine;
+        window.currentSystemName = currentSystemName;
+
+        console.log('🚀 VIB34D Music Video Choreographer Enhanced - Ready!');
+        console.log('   - Smart Canvas Management: Active');
+        console.log('   - LLM Integration: Active');
+        console.log('   - API Key: Configured');
+    </script>
+</body>
+</html>
