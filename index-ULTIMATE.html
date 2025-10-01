@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D ULTIMATE Music Video Choreographer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Orbitron', monospace; background: #000; color: #0ff; overflow: hidden; }
+
+        /* Force hide legacy UI */
+        #variation-grid, .gallery-container, .trading-card-overlay, .variation-display,
+        #controls-container, .tab-system, .parameter-controls { display: none !important; }
+
+        #visualizer-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: #000; }
+        .holographic-layers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .holographic-layers canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        #controls { position: fixed; top: 20px; right: 20px; width: 420px; max-height: 90vh; background: rgba(0,0,0,0.95);
+            border: 3px solid #0ff; border-radius: 15px; padding: 20px; z-index: 3000; overflow-y: auto; backdrop-filter: blur(10px); }
+        #controls.mini { width: 60px; height: 60px; overflow: hidden; padding: 15px; }
+        #controls.mini > *:not(.toggle-mini) { display: none; }
+        .toggle-mini { position: absolute; top: 15px; right: 15px; background: rgba(0,255,255,0.2); border: 1px solid #0ff;
+            color: #0ff; padding: 5px 10px; font-size: 14px; border-radius: 4px; cursor: pointer; }
+
+        h2 { text-align: center; font-size: 16px; margin-bottom: 15px; background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .section { margin-bottom: 15px; padding: 12px; background: rgba(0,255,255,0.05); border: 1px solid #0ff; border-radius: 8px; }
+        .section h3 { font-size: 12px; color: #f0f; margin-bottom: 8px; text-transform: uppercase; }
+
+        .param { margin-bottom: 8px; }
+        .param label { display: block; font-size: 10px; color: #0ff; margin-bottom: 3px; }
+        .param-val { float: right; color: #f0f; font-weight: 700; }
+        input[type="range"] { width: 100%; height: 5px; background: #111; border-radius: 3px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px;
+            background: linear-gradient(135deg, #0ff, #f0f); border-radius: 50%; cursor: pointer; }
+
+        .pills { display: flex; gap: 6px; margin-bottom: 10px; }
+        .pill { flex: 1; padding: 8px; background: rgba(0,255,255,0.1); border: 2px solid #0ff; border-radius: 6px;
+            text-align: center; font-size: 9px; cursor: pointer; transition: all 0.2s; }
+        .pill:hover { background: rgba(0,255,255,0.2); }
+        .pill.active { background: linear-gradient(135deg, #0ff, #00ff88); border-color: #00ff88; box-shadow: 0 0 15px #0ff; }
+
+        .btn { width: 100%; padding: 10px; margin-bottom: 6px; background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none; color: #000; font-family: 'Orbitron', monospace; font-weight: 700; font-size: 11px;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 15px #0ff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.ai { background: linear-gradient(135deg, #4a0a68, #f0f); }
+
+        #timeline { position: fixed; bottom: 20px; left: 20px; right: 460px; background: rgba(0,0,0,0.95);
+            border: 2px solid #f0f; border-radius: 10px; padding: 15px; z-index: 2000; }
+        #timeline h3 { font-size: 12px; color: #f0f; margin-bottom: 10px; }
+        .audio-btns { display: flex; gap: 8px; margin-bottom: 10px; }
+        .audio-btns button { flex: 1; padding: 8px; background: linear-gradient(135deg, #4a0a68, #f0f); border: none;
+            color: #000; font-family: 'Orbitron', monospace; font-weight: 700; font-size: 10px; border-radius: 5px; cursor: pointer; }
+        .file-lbl { flex: 2; background: linear-gradient(135deg, #0a684a, #0f0); padding: 8px; border-radius: 5px;
+            cursor: pointer; text-align: center; font-size: 10px; font-weight: 700; }
+        input[type="file"] { display: none; }
+
+        .track { position: relative; height: 60px; background: #111; border-radius: 5px; margin-bottom: 10px; overflow: hidden; }
+        .playhead { position: absolute; top: 0; width: 2px; height: 100%; background: #ff0; z-index: 10; }
+        .seq-block { position: absolute; height: 100%; background: linear-gradient(135deg, rgba(0,255,255,0.3), rgba(255,0,255,0.3));
+            border: 2px solid #0ff; border-radius: 3px; padding: 4px; font-size: 8px; cursor: pointer; overflow: hidden; }
+        .seq-block:hover { background: linear-gradient(135deg, rgba(0,255,255,0.5), rgba(255,0,255,0.5)); }
+
+        #ai-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 600px; background: rgba(0,0,0,0.98); border: 3px solid #f0f; border-radius: 15px; padding: 25px; z-index: 5000; }
+        #ai-modal.active { display: block; }
+        #ai-modal textarea { width: 100%; height: 100px; background: #111; border: 1px solid #0ff; color: #0ff;
+            padding: 10px; font-family: 'Orbitron', monospace; font-size: 12px; border-radius: 5px; margin-bottom: 10px; }
+        #ai-modal input { width: 100%; background: #111; border: 1px solid #0ff; color: #0ff; padding: 8px;
+            font-family: 'Orbitron', monospace; font-size: 11px; border-radius: 5px; margin-bottom: 10px; }
+        .modal-btns { display: flex; gap: 10px; }
+
+        #status { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.9); border: 2px solid #0ff;
+            border-radius: 8px; padding: 10px 15px; font-size: 11px; z-index: 2500; max-width: 350px; }
+
+        @media (max-width: 768px) {
+            #controls { width: 95%; right: 2.5%; }
+            #timeline { right: 2.5%; left: 2.5%; }
+            #ai-modal { width: 90%; }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <div class="holographic-layers" id="vib34dLayers"></div>
+        <div class="holographic-layers" id="quantumLayers" style="display: none;"></div>
+        <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
+    </div>
+
+    <div id="status">🎵 VIB34D ULTIMATE Ready</div>
+
+    <div id="controls">
+        <button class="toggle-mini" onclick="window.toggleCtrl()">◀</button>
+        <h2>🎛️ ULTIMATE CONTROL</h2>
+
+        <div class="section">
+            <h3>🎨 System</h3>
+            <div class="pills">
+                <div class="pill active" data-sys="faceted" onclick="window.switchSys('faceted')">🔷<br>FACETED</div>
+                <div class="pill" data-sys="quantum" onclick="window.switchSys('quantum')">🌌<br>QUANTUM</div>
+                <div class="pill" data-sys="holographic" onclick="window.switchSys('holographic')">✨<br>HOLO</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔷 Geometry</h3>
+            <div class="param">
+                <label>Type <span class="param-val" id="v-geometry">0</span></label>
+                <input type="range" id="geometry" min="0" max="7" value="0" oninput="P('geometry', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🌀 4D Rotation</h3>
+            <div class="param">
+                <label>X-W <span class="param-val" id="v-rot4dXW">0.00</span></label>
+                <input type="range" id="rot4dXW" min="-6.28" max="6.28" step="0.01" value="0" oninput="P('rot4dXW', this.value)">
+            </div>
+            <div class="param">
+                <label>Y-W <span class="param-val" id="v-rot4dYW">0.00</span></label>
+                <input type="range" id="rot4dYW" min="-6.28" max="6.28" step="0.01" value="0" oninput="P('rot4dYW', this.value)">
+            </div>
+            <div class="param">
+                <label>Z-W <span class="param-val" id="v-rot4dZW">0.00</span></label>
+                <input type="range" id="rot4dZW" min="-6.28" max="6.28" step="0.01" value="0" oninput="P('rot4dZW', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Visuals</h3>
+            <div class="param">
+                <label>Density <span class="param-val" id="v-gridDensity">15</span></label>
+                <input type="range" id="gridDensity" min="5" max="100" value="15" oninput="P('gridDensity', this.value)">
+            </div>
+            <div class="param">
+                <label>Morph <span class="param-val" id="v-morphFactor">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="2" step="0.01" value="1.0" oninput="P('morphFactor', this.value)">
+            </div>
+            <div class="param">
+                <label>Chaos <span class="param-val" id="v-chaos">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="P('chaos', this.value)">
+            </div>
+            <div class="param">
+                <label>Speed <span class="param-val" id="v-speed">1.0</span></label>
+                <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1.0" oninput="P('speed', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Color</h3>
+            <div class="param">
+                <label>Hue <span class="param-val" id="v-hue">200°</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" oninput="P('hue', this.value)">
+            </div>
+            <div class="param">
+                <label>Intensity <span class="param-val" id="v-intensity">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="P('intensity', this.value)">
+            </div>
+            <div class="param">
+                <label>Saturation <span class="param-val" id="v-saturation">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="P('saturation', this.value)">
+            </div>
+        </div>
+
+        <button class="btn" onclick="window.randomize()">🎲 Randomize</button>
+        <button class="btn ai" onclick="window.openAI()">🤖 AI Full Song Choreography</button>
+        <button class="btn" id="export-btn" onclick="window.exportVid()" disabled>🎥 Export Video</button>
+    </div>
+
+    <div id="timeline">
+        <h3>📽️ TIMELINE</h3>
+        <div class="audio-btns">
+            <label for="audio-file" class="file-lbl">📁 LOAD</label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="play-btn" disabled onclick="window.play()">▶</button>
+            <button id="pause-btn" disabled onclick="window.pause()">⏸</button>
+            <button id="stop-btn" disabled onclick="window.stop()">⏹</button>
+        </div>
+        <div class="track" id="track">
+            <div class="playhead" id="playhead"></div>
+        </div>
+    </div>
+
+    <div id="ai-modal">
+        <h2>🤖 AI FULL SONG CHOREOGRAPHY</h2>
+        <p style="font-size: 10px; color: #aaa; margin-bottom: 10px;">
+            AI will analyze your song's duration and create a complete choreography with intro, builds, drops, breakdowns, and outro.
+            Each sequence will have dynamic 4D rotations, color journeys, geometry switching, and algorithmic density patterns.
+        </p>
+        <input type="text" id="api-key" placeholder="Gemini API Key (leave empty to use default)">
+        <textarea id="ai-prompt" placeholder="Describe the song's vibe... (e.g., 'epic progressive house track with dark industrial energy' or 'peaceful ambient meditation with cosmic feel')"></textarea>
+        <div class="modal-btns">
+            <button class="btn ai" onclick="window.genAI()">✨ Generate Full Choreography</button>
+            <button class="btn" onclick="window.closeAI()">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        let mgr = new CanvasManager();
+        let eng = null;
+        let sys = 'faceted';
+        let aud = new Audio();
+        let ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let anl = ctx.createAnalyser();
+        anl.fftSize = 2048;
+        let dat = new Uint8Array(anl.frequencyBinCount);
+        let src = null;
+        let play = false;
+        let par = { geometry: 0, rot4dXW: 0, rot4dYW: 0, rot4dZW: 0, gridDensity: 15, morphFactor: 1.0, chaos: 0.2, speed: 1.0, hue: 200, intensity: 0.5, saturation: 0.8 };
+        let seqs = [];
+        let recChunks = [];
+        let rec = null;
+
+        const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
+
+        (async function() {
+            eng = await mgr.switchToSystem('faceted', cls);
+            document.getElementById('audio-file').addEventListener('change', loadAud);
+            aud.addEventListener('timeupdate', upd);
+            aud.addEventListener('ended', () => window.stop());
+            loop();
+            stat('Ready');
+        })();
+
+        function stat(m) { document.getElementById('status').textContent = '🎵 ' + m; }
+
+        window.switchSys = async function(s) {
+            eng = await mgr.switchToSystem(s, cls);
+            sys = s;
+            document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.sys === s));
+            applyAll();
+            stat(`Switched to ${s.toUpperCase()}`);
+        };
+
+        window.P = function(p, v) {
+            par[p] = parseFloat(v);
+            document.getElementById('v-' + p).textContent = p === 'hue' ? v + '°' : (p === 'geometry' || p === 'gridDensity' ? parseInt(v) : parseFloat(v).toFixed(2));
+            apply(p, par[p]);
+        };
+
+        function apply(p, v) {
+            if (!eng) return;
+            if (eng.parameterManager) eng.parameterManager.setParameter(p, v);
+            else if (eng.updateParameter) eng.updateParameter(p, v);
+            else if (eng.updateParameters) eng.updateParameters({ [p]: v });
+        }
+
+        function applyAll() {
+            Object.entries(par).forEach(([p, v]) => apply(p, v));
+        }
+
+        window.randomize = function() {
+            par.geometry = Math.floor(Math.random() * 8);
+            par.rot4dXW = Math.random() * 12.56 - 6.28;
+            par.rot4dYW = Math.random() * 12.56 - 6.28;
+            par.rot4dZW = Math.random() * 12.56 - 6.28;
+            par.gridDensity = 5 + Math.random() * 95;
+            par.morphFactor = Math.random() * 2;
+            par.chaos = Math.random();
+            par.speed = 0.1 + Math.random() * 2.9;
+            par.hue = Math.random() * 360;
+            par.intensity = Math.random();
+            par.saturation = Math.random();
+            Object.entries(par).forEach(([p, v]) => { document.getElementById(p).value = v; window.P(p, v); });
+        };
+
+        function loadAud(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            aud.src = URL.createObjectURL(f);
+            if (!src) {
+                src = ctx.createMediaElementSource(aud);
+                src.connect(anl);
+                anl.connect(ctx.destination);
+            }
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('pause-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('export-btn').disabled = false;
+            stat('Loaded: ' + f.name);
+        }
+
+        window.play = function() {
+            if (ctx.state === 'suspended') ctx.resume();
+            aud.play();
+            play = true;
+            stat('Playing...');
+        };
+
+        window.pause = function() { aud.pause(); play = false; stat('Paused'); };
+        window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; stat('Stopped'); };
+
+        function loop() {
+            if (play) {
+                anl.getByteFrequencyData(dat);
+                const b = avg(0, 100) / 255;
+                const m = avg(100, 400) / 255;
+                const h = avg(400, 1024) / 255;
+                const e = (b + m + h) / 3;
+
+                // Advanced reactivity with algorithmic patterns
+                const t = aud.currentTime;
+                const pulse = Math.sin(t * 2) * 0.5 + 0.5; // Pulsing pattern
+                const breathe = Math.sin(t * 0.5) * 0.5 + 0.5; // Slow breathing
+
+                apply('gridDensity', par.gridDensity + b * 50 + pulse * 20);
+                apply('morphFactor', par.morphFactor + m * 0.8 + breathe * 0.4);
+                apply('chaos', par.chaos + h * 0.6 + pulse * 0.3);
+                apply('speed', par.speed + e * 1.2);
+                apply('intensity', par.intensity + e * 0.5);
+
+                // 4D rotation dynamics based on frequencies
+                apply('rot4dXW', Math.sin(t * 0.3 + b * Math.PI * 2) * 3.14);
+                apply('rot4dYW', Math.cos(t * 0.5 + m * Math.PI * 2) * 3.14);
+                apply('rot4dZW', Math.sin(t * 0.7 + h * Math.PI * 2) * 3.14);
+
+                // Dynamic color journey
+                apply('hue', (par.hue + t * 10 + e * 60) % 360);
+                apply('saturation', 0.7 + b * 0.3);
+
+                // Check sequences
+                const ac = seqs.find(s => t >= s.time && t < s.time + s.dur);
+                if (ac) {
+                    if (ac.sys && ac.sys !== sys) window.switchSys(ac.sys);
+                    if (ac.par) Object.entries(ac.par).forEach(([p, v]) => apply(p, v));
+                    if (ac.pattern) applyPattern(ac.pattern, t - ac.time, ac.dur);
+                }
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function applyPattern(pat, t, dur) {
+            const prog = t / dur;
+            if (pat === 'density_pulse') {
+                apply('gridDensity', par.gridDensity + Math.sin(prog * Math.PI * 4) * 30);
+            } else if (pat === 'rotation_spin') {
+                apply('rot4dXW', prog * Math.PI * 4);
+                apply('rot4dYW', prog * Math.PI * 3);
+                apply('rot4dZW', prog * Math.PI * 5);
+            } else if (pat === 'color_shift') {
+                apply('hue', (par.hue + prog * 180) % 360);
+            } else if (pat === 'chaos_build') {
+                apply('chaos', par.chaos + prog * 0.7);
+            } else if (pat === 'morph_wave') {
+                apply('morphFactor', par.morphFactor + Math.sin(prog * Math.PI * 2) * 0.8);
+            }
+        }
+
+        function avg(s, e) {
+            let sum = 0;
+            for (let i = s; i < e; i++) sum += dat[i];
+            return sum / (e - s);
+        }
+
+        function upd() {
+            if (!aud.duration) return;
+            document.getElementById('playhead').style.left = (aud.currentTime / aud.duration * 100) + '%';
+        }
+
+        function rend() {
+            const tr = document.getElementById('track');
+            const ph = document.getElementById('playhead');
+            tr.innerHTML = '';
+            tr.appendChild(ph);
+            seqs.forEach(s => {
+                const b = document.createElement('div');
+                b.className = 'seq-block';
+                b.style.left = (s.time / aud.duration * 100) + '%';
+                b.style.width = (s.dur / aud.duration * 100) + '%';
+                b.innerHTML = `${s.sys ? s.sys.toUpperCase() : 'SEQ'}<br>${s.time.toFixed(1)}s`;
+                b.onclick = () => {
+                    aud.currentTime = s.time;
+                    if (s.sys) window.switchSys(s.sys);
+                    if (s.par) Object.entries(s.par).forEach(([p, v]) => { par[p] = v; document.getElementById(p).value = v; window.P(p, v); });
+                };
+                tr.appendChild(b);
+            });
+        }
+
+        window.toggleCtrl = function() {
+            document.getElementById('controls').classList.toggle('mini');
+            document.querySelector('.toggle-mini').textContent = document.getElementById('controls').classList.contains('mini') ? '▶' : '◀';
+        };
+
+        window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
+        window.closeAI = function() { document.getElementById('ai-modal').classList.remove('active'); };
+
+        window.genAI = async function() {
+            const prompt = document.getElementById('ai-prompt').value;
+            if (!prompt) return alert('Enter description');
+
+            const key = document.getElementById('api-key').value || 'AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI';
+            const dur = aud.duration || 180; // Use actual duration or default 3min
+            stat('AI analyzing full song structure...');
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are a professional music video choreographer for a 4D holographic visualization system.
+
+Create a COMPLETE choreography for a ${dur.toFixed(0)}-second song with this vibe: "${prompt}"
+
+Musical Structure to Follow:
+- INTRO (0-15s): Minimal, building anticipation
+- BUILD 1 (15-45s): Gradual energy increase
+- DROP 1 (45-60s): HUGE OOMF MOMENT - maximum impact
+- VERSE (60-90s): Settle into groove, interesting visuals
+- BUILD 2 (90-110s): Tension building, color shifts
+- DROP 2 (110-130s): EVEN BIGGER OOMF - go wild
+- BREAKDOWN (130-150s): Calm, ethereal, color journey
+- BUILD 3 (150-165s): Final buildup with 4D rotation madness
+- FINAL DROP (165-180s): ULTIMATE OOMF - everything maxed
+
+For each sequence, create:
+- time: start time in seconds
+- dur: duration in seconds
+- sys: system type (faceted, quantum, or holographic)
+- geometry: 0-7 (switch at transitions for impact)
+- rot4dXW, rot4dYW, rot4dZW: -6.28 to 6.28 (use extreme values for drops)
+- gridDensity: 5-100 (pulse between low/high for oomf)
+- morphFactor: 0-2 (high for chaotic, low for clean)
+- chaos: 0-1 (max for drops, min for intros)
+- speed: 0.1-3 (faster for energy)
+- hue: 0-360 (create color journeys, complementary shifts)
+- intensity: 0-1 (brightness dynamics)
+- saturation: 0-1 (vivid for drops)
+- pattern: one of [density_pulse, rotation_spin, color_shift, chaos_build, morph_wave] (creates algorithmic motion)
+
+IMPORTANT:
+- Make drops UNFORGETTABLE with extreme parameter combinations
+- Use geometry switching at major transitions (0→5 for massive shift)
+- Create color journeys (hue: 0→180 for complementary shift)
+- Use 4D rotations aggressively (±6 for spinning madness)
+- Density pulses for rhythmic impact (5→100→5 oscillation)
+- Include pattern field for algorithmic dynamics
+
+Return ONLY valid JSON array with 10-15 sequences covering the full ${dur.toFixed(0)} seconds.`
+                            }]
+                        }]
+                    })
+                });
+
+                const data = await resp.json();
+                const txt = data.candidates[0].content.parts[0].text;
+                const json = txt.match(/\[[\s\S]*\]/)[0];
+                seqs = JSON.parse(json);
+                rend();
+                stat(`AI choreographed ${seqs.length} sequences - ${dur.toFixed(0)}s full song!`);
+                window.closeAI();
+            } catch (err) {
+                stat('AI failed: ' + err.message);
+                console.error(err);
+            }
+        };
+
+        window.exportVid = async function() {
+            if (!aud.src) return alert('Load audio first');
+
+            stat('Preparing export...');
+            const canv = document.querySelector('canvas');
+            const stream = canv.captureStream(60);
+
+            // Create new audio context for export to avoid "already connected" error
+            const expCtx = new AudioContext();
+            const expSrc = expCtx.createMediaElementSource(aud);
+            const expDest = expCtx.createMediaStreamDestination();
+            expSrc.connect(expDest);
+            expSrc.connect(expCtx.destination);
+
+            stream.addTrack(expDest.stream.getAudioTracks()[0]);
+
+            rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
+            recChunks = [];
+
+            rec.ondataavailable = e => recChunks.push(e.data);
+            rec.onstop = () => {
+                const blob = new Blob(recChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `vib34d-ultimate-${Date.now()}.webm`;
+                a.click();
+                expCtx.close();
+                stat('Export complete!');
+            };
+
+            rec.start();
+            aud.currentTime = 0;
+            await aud.play();
+            stat('Recording... (will auto-stop at end)');
+
+            aud.onended = () => {
+                if (rec && rec.state === 'recording') {
+                    rec.stop();
+                }
+            };
+        };
+    </script>
+</body>
+</html>
