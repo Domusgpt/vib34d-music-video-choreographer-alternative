@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D ULTRA Music Video Choreographer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .holographic-layers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .holographic-layers canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Ultra Control Panel */
+        #ultra-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 420px;
+            max-height: 90vh;
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #0ff;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 2000;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+        }
+
+        #ultra-controls h2 {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 15px;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid #0ff;
+            border-radius: 8px;
+        }
+
+        .control-section h3 {
+            font-size: 14px;
+            color: #f0f;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .param-group {
+            margin-bottom: 12px;
+        }
+
+        .param-group label {
+            display: block;
+            font-size: 11px;
+            color: #0ff;
+            margin-bottom: 4px;
+        }
+
+        .param-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: #111;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .param-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, #0ff, #f0f);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .param-value {
+            float: right;
+            color: #f0f;
+            font-weight: 700;
+        }
+
+        .system-pills {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .system-pill {
+            flex: 1;
+            padding: 8px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #0ff;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .system-pill:hover {
+            background: rgba(0, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .system-pill.active {
+            background: linear-gradient(135deg, #0ff, #00ff88);
+            border-color: #00ff88;
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .preset-btn {
+            padding: 10px;
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 9px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .preset-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px #0ff;
+        }
+
+        .action-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Timeline Sequencer */
+        #timeline-sequencer {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 460px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #f0f;
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1500;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        #timeline-sequencer h3 {
+            color: #f0f;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .sequence-track {
+            position: relative;
+            height: 60px;
+            background: #111;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .sequence-block {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(255, 0, 255, 0.3));
+            border: 2px solid #0ff;
+            border-radius: 4px;
+            padding: 5px;
+            font-size: 9px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .sequence-block:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.5), rgba(255, 0, 255, 0.5));
+            z-index: 10;
+        }
+
+        .sequence-block.active {
+            border-color: #ff0;
+            box-shadow: 0 0 10px #ff0;
+        }
+
+        .playhead {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #ff0;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        #audio-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .audio-btn {
+            flex: 1;
+            padding: 10px;
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+            border: none;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 11px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            flex: 2;
+            background: linear-gradient(135deg, #0a684a, #0f0);
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        /* Reactivity Strength Controls */
+        .reactivity-mixer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .reactivity-mixer .param-group {
+            margin-bottom: 8px;
+        }
+
+        /* Collapse button */
+        .collapse-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #ultra-controls.collapsed {
+            width: 60px;
+            height: 60px;
+            overflow: hidden;
+            padding: 10px;
+        }
+
+        #ultra-controls.collapsed > *:not(.collapse-btn) {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            #ultra-controls {
+                width: 95%;
+                right: 2.5%;
+                max-height: 50vh;
+            }
+
+            #timeline-sequencer {
+                right: 2.5%;
+                left: 2.5%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <div class="holographic-layers" id="vib34dLayers"></div>
+        <div class="holographic-layers" id="quantumLayers" style="display: none;"></div>
+        <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
+    </div>
+
+    <div id="ultra-controls">
+        <button class="collapse-btn" onclick="toggleControls()">◀</button>
+        <h2>🎛️ ULTRA CONTROL MATRIX</h2>
+
+        <!-- System Selection -->
+        <div class="control-section">
+            <h3>🎨 System Selection</h3>
+            <div class="system-pills">
+                <div class="system-pill active" data-system="faceted" onclick="switchSystem('faceted')">
+                    🔷<br>FACETED
+                </div>
+                <div class="system-pill" data-system="quantum" onclick="switchSystem('quantum')">
+                    🌌<br>QUANTUM
+                </div>
+                <div class="system-pill" data-system="holographic" onclick="switchSystem('holographic')">
+                    ✨<br>HOLO
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Presets -->
+        <div class="control-section">
+            <h3>⚡ Quick Presets</h3>
+            <div class="preset-grid">
+                <button class="preset-btn" onclick="applyPreset('calm')">🌊 Calm</button>
+                <button class="preset-btn" onclick="applyPreset('energetic')">⚡ Energy</button>
+                <button class="preset-btn" onclick="applyPreset('chaotic')">💥 Chaos</button>
+                <button class="preset-btn" onclick="applyPreset('ethereal')">✨ Ethereal</button>
+                <button class="preset-btn" onclick="applyPreset('industrial')">🔧 Industrial</button>
+                <button class="preset-btn" onclick="applyPreset('cosmic')">🌌 Cosmic</button>
+            </div>
+        </div>
+
+        <!-- Geometry Selection -->
+        <div class="control-section">
+            <h3>🔷 Geometry Type</h3>
+            <div class="param-group">
+                <label>Geometry <span class="param-value" id="geometry-value">0</span></label>
+                <input type="range" id="geometry" min="0" max="7" step="1" value="0" oninput="updateParam('geometry', this.value)">
+            </div>
+        </div>
+
+        <!-- 4D Rotation -->
+        <div class="control-section">
+            <h3>🌀 4D Rotation</h3>
+            <div class="param-group">
+                <label>X-W Rotation <span class="param-value" id="rot4dXW-value">0.00</span></label>
+                <input type="range" id="rot4dXW" min="-6.28" max="6.28" step="0.01" value="0" oninput="updateParam('rot4dXW', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Y-W Rotation <span class="param-value" id="rot4dYW-value">0.00</span></label>
+                <input type="range" id="rot4dYW" min="-6.28" max="6.28" step="0.01" value="0" oninput="updateParam('rot4dYW', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Z-W Rotation <span class="param-value" id="rot4dZW-value">0.00</span></label>
+                <input type="range" id="rot4dZW" min="-6.28" max="6.28" step="0.01" value="0" oninput="updateParam('rot4dZW', this.value)">
+            </div>
+        </div>
+
+        <!-- Visual Parameters -->
+        <div class="control-section">
+            <h3>🎨 Visual Parameters</h3>
+            <div class="param-group">
+                <label>Grid Density <span class="param-value" id="gridDensity-value">15</span></label>
+                <input type="range" id="gridDensity" min="5" max="100" step="1" value="15" oninput="updateParam('gridDensity', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Morph Factor <span class="param-value" id="morphFactor-value">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="2" step="0.01" value="1.0" oninput="updateParam('morphFactor', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Chaos <span class="param-value" id="chaos-value">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="updateParam('chaos', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Speed <span class="param-value" id="speed-value">1.0</span></label>
+                <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1.0" oninput="updateParam('speed', this.value)">
+            </div>
+        </div>
+
+        <!-- Color Parameters -->
+        <div class="control-section">
+            <h3>🎨 Color Control</h3>
+            <div class="param-group">
+                <label>Hue <span class="param-value" id="hue-value">200°</span></label>
+                <input type="range" id="hue" min="0" max="360" step="1" value="200" oninput="updateParam('hue', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Intensity <span class="param-value" id="intensity-value">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="updateParam('intensity', this.value)">
+            </div>
+            <div class="param-group">
+                <label>Saturation <span class="param-value" id="saturation-value">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="updateParam('saturation', this.value)">
+            </div>
+        </div>
+
+        <!-- Audio Reactivity Strength -->
+        <div class="control-section">
+            <h3>🎵 Audio Reactivity Mixer</h3>
+            <div class="reactivity-mixer">
+                <div class="param-group">
+                    <label>Bass → Density <span class="param-value" id="bassDensity-value">50</span></label>
+                    <input type="range" id="bassDensity" min="0" max="100" value="50" oninput="updateReactivity('bassDensity', this.value)">
+                </div>
+                <div class="param-group">
+                    <label>Mid → Morph <span class="param-value" id="midMorph-value">50</span></label>
+                    <input type="range" id="midMorph" min="0" max="100" value="50" oninput="updateReactivity('midMorph', this.value)">
+                </div>
+                <div class="param-group">
+                    <label>High → Chaos <span class="param-value" id="highChaos-value">60</span></label>
+                    <input type="range" id="highChaos" min="0" max="100" value="60" oninput="updateReactivity('highChaos', this.value)">
+                </div>
+                <div class="param-group">
+                    <label>Energy → Speed <span class="param-value" id="energySpeed-value">50</span></label>
+                    <input type="range" id="energySpeed" min="0" max="100" value="50" oninput="updateReactivity('energySpeed', this.value)">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <button class="action-btn" onclick="randomizeAll()">🎲 Randomize All</button>
+        <button class="action-btn" onclick="captureSnapshot()">📸 Capture Snapshot</button>
+        <button class="action-btn" id="export-btn" onclick="exportVideo()" disabled>🎥 Export Video</button>
+    </div>
+
+    <div id="timeline-sequencer">
+        <h3>📽️ TIMELINE SEQUENCER</h3>
+
+        <div id="audio-controls">
+            <label for="audio-file" class="file-input-label">📁 LOAD AUDIO</label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button class="audio-btn" id="play-btn" disabled onclick="play()">▶</button>
+            <button class="audio-btn" id="pause-btn" disabled onclick="pause()">⏸</button>
+            <button class="audio-btn" id="stop-btn" disabled onclick="stop()">⏹</button>
+            <button class="audio-btn" onclick="addSequence()">➕ Add</button>
+        </div>
+
+        <div class="sequence-track" id="sequence-track">
+            <div class="playhead" id="playhead" style="left: 0%"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        let canvasManager = null;
+        let currentEngine = null;
+        let currentSystem = 'faceted';
+
+        // Audio system
+        let audioElement = new Audio();
+        let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        let dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let sourceNode = null;
+        let isPlaying = false;
+
+        // Parameters
+        let params = {
+            geometry: 0, rot4dXW: 0, rot4dYW: 0, rot4dZW: 0,
+            gridDensity: 15, morphFactor: 1.0, chaos: 0.2, speed: 1.0,
+            hue: 200, intensity: 0.5, saturation: 0.8
+        };
+
+        // Audio reactivity strengths (0-100 scale)
+        let reactivity = {
+            bassDensity: 50, midMorph: 50, highChaos: 60, energySpeed: 50
+        };
+
+        // Sequences
+        let sequences = [];
+        let currentTime = 0;
+
+        const engineClasses = {
+            VIB34DIntegratedEngine,
+            QuantumEngine,
+            RealHolographicSystem
+        };
+
+        // Initialize
+        (async function init() {
+            canvasManager = new CanvasManager();
+            currentEngine = await canvasManager.switchToSystem('faceted', engineClasses);
+
+            document.getElementById('audio-file').addEventListener('change', loadAudio);
+            audioElement.addEventListener('timeupdate', updatePlayhead);
+            audioElement.addEventListener('ended', stop);
+
+            startVisualization();
+            console.log('✅ ULTRA System initialized');
+        })();
+
+        window.switchSystem = async function(system) {
+            currentEngine = await canvasManager.switchToSystem(system, engineClasses);
+            currentSystem = system;
+
+            document.querySelectorAll('.system-pill').forEach(pill => {
+                pill.classList.toggle('active', pill.dataset.system === system);
+            });
+
+            applyAllParams();
+        };
+
+        window.updateParam = function(param, value) {
+            params[param] = parseFloat(value);
+            document.getElementById(param + '-value').textContent =
+                param === 'hue' ? value + '°' : parseFloat(value).toFixed(param === 'gridDensity' || param === 'geometry' ? 0 : 2);
+
+            applyParam(param, params[param]);
+        };
+
+        window.updateReactivity = function(param, value) {
+            reactivity[param] = parseFloat(value);
+            document.getElementById(param + '-value').textContent = value;
+        };
+
+        function applyParam(param, value) {
+            if (!currentEngine) return;
+
+            if (currentEngine.parameterManager) {
+                currentEngine.parameterManager.setParameter(param, value);
+            } else if (currentEngine.updateParameter) {
+                currentEngine.updateParameter(param, value);
+            } else if (currentEngine.updateParameters) {
+                currentEngine.updateParameters({ [param]: value });
+            }
+        }
+
+        function applyAllParams() {
+            Object.entries(params).forEach(([param, value]) => applyParam(param, value));
+        }
+
+        window.applyPreset = function(presetName) {
+            const presets = {
+                calm: { chaos: 0.1, speed: 0.5, gridDensity: 10, morphFactor: 0.5, hue: 200, intensity: 0.3, saturation: 0.6 },
+                energetic: { chaos: 0.7, speed: 2.0, gridDensity: 40, morphFactor: 1.5, hue: 0, intensity: 0.9, saturation: 1.0 },
+                chaotic: { chaos: 1.0, speed: 2.5, gridDensity: 60, morphFactor: 2.0, hue: 300, intensity: 1.0, saturation: 1.0 },
+                ethereal: { chaos: 0.3, speed: 0.8, gridDensity: 15, morphFactor: 1.2, hue: 270, intensity: 0.6, saturation: 0.7 },
+                industrial: { chaos: 0.5, speed: 1.5, gridDensity: 50, morphFactor: 0.8, hue: 30, intensity: 0.8, saturation: 0.4 },
+                cosmic: { chaos: 0.6, speed: 1.2, gridDensity: 35, morphFactor: 1.3, hue: 240, intensity: 0.7, saturation: 0.9 }
+            };
+
+            const preset = presets[presetName];
+            if (preset) {
+                Object.entries(preset).forEach(([param, value]) => {
+                    params[param] = value;
+                    document.getElementById(param).value = value;
+                    window.updateParam(param, value);
+                });
+            }
+        };
+
+        window.randomizeAll = function() {
+            params.geometry = Math.floor(Math.random() * 8);
+            params.rot4dXW = Math.random() * 12.56 - 6.28;
+            params.rot4dYW = Math.random() * 12.56 - 6.28;
+            params.rot4dZW = Math.random() * 12.56 - 6.28;
+            params.gridDensity = 5 + Math.random() * 95;
+            params.morphFactor = Math.random() * 2;
+            params.chaos = Math.random();
+            params.speed = 0.1 + Math.random() * 2.9;
+            params.hue = Math.random() * 360;
+            params.intensity = Math.random();
+            params.saturation = Math.random();
+
+            Object.entries(params).forEach(([param, value]) => {
+                document.getElementById(param).value = value;
+                window.updateParam(param, value);
+            });
+        };
+
+        function loadAudio(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            audioElement.src = url;
+
+            if (!sourceNode) {
+                sourceNode = audioContext.createMediaElementSource(audioElement);
+                sourceNode.connect(analyser);
+                analyser.connect(audioContext.destination);
+            }
+
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('pause-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('export-btn').disabled = false;
+        }
+
+        window.play = function() {
+            if (audioContext.state === 'suspended') audioContext.resume();
+            audioElement.play();
+            isPlaying = true;
+        };
+
+        window.pause = function() {
+            audioElement.pause();
+            isPlaying = false;
+        };
+
+        window.stop = function() {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            isPlaying = false;
+        };
+
+        function startVisualization() {
+            function render() {
+                if (isPlaying) {
+                    analyser.getByteFrequencyData(dataArray);
+                    const bass = getAverage(0, 100) / 255;
+                    const mid = getAverage(100, 400) / 255;
+                    const high = getAverage(400, 1024) / 255;
+                    const energy = (bass + mid + high) / 3;
+
+                    // Apply audio reactivity with user-controlled strengths
+                    const densityReact = bass * (reactivity.bassDensity / 50);
+                    const morphReact = mid * (reactivity.midMorph / 50);
+                    const chaosReact = high * (reactivity.highChaos / 50);
+                    const speedReact = energy * (reactivity.energySpeed / 50);
+
+                    applyParam('gridDensity', params.gridDensity + densityReact * 40);
+                    applyParam('morphFactor', params.morphFactor + morphReact * 0.5);
+                    applyParam('chaos', params.chaos + chaosReact * 0.5);
+                    applyParam('speed', params.speed + speedReact * 0.8);
+                    applyParam('intensity', params.intensity + energy * 0.5);
+                    applyParam('saturation', params.saturation + bass * 0.2);
+
+                    // Check sequences
+                    const activeSeq = sequences.find(s =>
+                        audioElement.currentTime >= s.time &&
+                        audioElement.currentTime < s.time + s.duration
+                    );
+
+                    if (activeSeq && activeSeq.system !== currentSystem) {
+                        window.switchSystem(activeSeq.system);
+                    }
+                }
+
+                requestAnimationFrame(render);
+            }
+            render();
+        }
+
+        function getAverage(start, end) {
+            let sum = 0;
+            for (let i = start; i < end; i++) sum += dataArray[i];
+            return sum / (end - start);
+        }
+
+        function updatePlayhead() {
+            if (!audioElement.duration) return;
+            const percent = (audioElement.currentTime / audioElement.duration) * 100;
+            document.getElementById('playhead').style.left = percent + '%';
+        }
+
+        window.addSequence = function() {
+            const time = audioElement.currentTime || 0;
+            const seq = { time, duration: 10, system: currentSystem, params: { ...params } };
+            sequences.push(seq);
+            sequences.sort((a, b) => a.time - b.time);
+            renderSequences();
+        };
+
+        function renderSequences() {
+            const track = document.getElementById('sequence-track');
+            const playhead = document.getElementById('playhead');
+            track.innerHTML = '';
+            track.appendChild(playhead);
+
+            sequences.forEach((seq, i) => {
+                const block = document.createElement('div');
+                block.className = 'sequence-block';
+                const percent = (seq.time / audioElement.duration) * 100;
+                const width = (seq.duration / audioElement.duration) * 100;
+                block.style.left = percent + '%';
+                block.style.width = width + '%';
+                block.innerHTML = `${seq.system.toUpperCase()}<br>${seq.time.toFixed(1)}s`;
+                block.onclick = () => {
+                    audioElement.currentTime = seq.time;
+                    window.switchSystem(seq.system);
+                    Object.entries(seq.params).forEach(([param, value]) => {
+                        params[param] = value;
+                        document.getElementById(param).value = value;
+                        window.updateParam(param, value);
+                    });
+                };
+                track.appendChild(block);
+            });
+        }
+
+        window.toggleControls = function() {
+            document.getElementById('ultra-controls').classList.toggle('collapsed');
+            document.querySelector('.collapse-btn').textContent =
+                document.getElementById('ultra-controls').classList.contains('collapsed') ? '▶' : '◀';
+        };
+
+        window.captureSnapshot = function() {
+            const snapshot = {
+                system: currentSystem,
+                params: { ...params },
+                reactivity: { ...reactivity },
+                timestamp: new Date().toISOString()
+            };
+
+            const json = JSON.stringify(snapshot, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `vib34d-snapshot-${Date.now()}.json`;
+            a.click();
+        };
+
+        window.exportVideo = async function() {
+            if (!audioElement.src) {
+                alert('Load audio first');
+                return;
+            }
+
+            const canvas = document.querySelector('canvas');
+            const stream = canvas.captureStream(60);
+            const audioCtx = new AudioContext();
+            const source = audioCtx.createMediaElementSource(audioElement);
+            const dest = audioCtx.createMediaStreamDestination();
+            source.connect(dest);
+            source.connect(audioCtx.destination);
+            stream.addTrack(dest.stream.getAudioTracks()[0]);
+
+            const recorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 8000000
+            });
+
+            const chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `vib34d-ultra-${Date.now()}.webm`;
+                a.click();
+                audioCtx.close();
+            };
+
+            recorder.start();
+            audioElement.currentTime = 0;
+            await audioElement.play();
+            audioElement.onended = () => recorder.stop();
+        };
+    </script>
+</body>
+</html>
