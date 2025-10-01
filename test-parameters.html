@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VIB34D Parameter Test</title>
+    <style>
+        body { margin: 0; font-family: monospace; background: #000; color: #0ff; }
+        #test-container { display: flex; height: 100vh; }
+        #canvas-area { flex: 1; position: relative; }
+        #controls { width: 400px; padding: 20px; background: #111; overflow-y: auto; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .param { margin: 15px 0; }
+        .param label { display: block; margin-bottom: 5px; }
+        .param input { width: 100%; }
+        .param .value { color: #f0f; float: right; }
+        button { width: 100%; padding: 10px; margin: 5px 0; background: #0ff; color: #000; border: none; cursor: pointer; }
+        #log { margin-top: 20px; font-size: 11px; max-height: 200px; overflow-y: auto; background: #000; padding: 10px; }
+        .log-entry { margin: 2px 0; }
+    </style>
+</head>
+<body>
+    <div id="test-container">
+        <div id="canvas-area">
+            <div class="holographic-layers" id="vib34dLayers"></div>
+            <div class="holographic-layers" id="quantumLayers" style="display:none;"></div>
+            <div class="holographic-layers" id="holographicLayers" style="display:none;"></div>
+        </div>
+        <div id="controls">
+            <h2>PARAMETER TEST</h2>
+
+            <div class="param">
+                <label>System</label>
+                <button onclick="switchTo('faceted')">FACETED</button>
+                <button onclick="switchTo('quantum')">QUANTUM</button>
+                <button onclick="switchTo('holographic')">HOLOGRAPHIC</button>
+            </div>
+
+            <div class="param">
+                <label>Geometry <span class="value" id="v-geometry">0</span></label>
+                <input type="range" id="geometry" min="0" max="7" value="0" step="1" oninput="update('geometry', this.value)">
+            </div>
+
+            <div class="param">
+                <label>rot4dXW <span class="value" id="v-rot4dXW">0.00</span></label>
+                <input type="range" id="rot4dXW" min="-2" max="2" value="0" step="0.1" oninput="update('rot4dXW', this.value)">
+            </div>
+
+            <div class="param">
+                <label>rot4dYW <span class="value" id="v-rot4dYW">0.00</span></label>
+                <input type="range" id="rot4dYW" min="-2" max="2" value="0" step="0.1" oninput="update('rot4dYW', this.value)">
+            </div>
+
+            <div class="param">
+                <label>rot4dZW <span class="value" id="v-rot4dZW">0.00</span></label>
+                <input type="range" id="rot4dZW" min="-2" max="2" value="0" step="0.1" oninput="update('rot4dZW', this.value)">
+            </div>
+
+            <div class="param">
+                <label>gridDensity <span class="value" id="v-gridDensity">15</span></label>
+                <input type="range" id="gridDensity" min="4" max="100" value="15" step="1" oninput="update('gridDensity', this.value)">
+            </div>
+
+            <div class="param">
+                <label>morphFactor <span class="value" id="v-morphFactor">1.00</span></label>
+                <input type="range" id="morphFactor" min="0" max="2" value="1" step="0.1" oninput="update('morphFactor', this.value)">
+            </div>
+
+            <div class="param">
+                <label>chaos <span class="value" id="v-chaos">0.20</span></label>
+                <input type="range" id="chaos" min="0" max="1" value="0.2" step="0.1" oninput="update('chaos', this.value)">
+            </div>
+
+            <div class="param">
+                <label>speed <span class="value" id="v-speed">1.00</span></label>
+                <input type="range" id="speed" min="0.1" max="3" value="1" step="0.1" oninput="update('speed', this.value)">
+            </div>
+
+            <div class="param">
+                <label>hue <span class="value" id="v-hue">200°</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" step="10" oninput="update('hue', this.value)">
+            </div>
+
+            <div class="param">
+                <label>intensity <span class="value" id="v-intensity">0.50</span></label>
+                <input type="range" id="intensity" min="0" max="1" value="0.5" step="0.1" oninput="update('intensity', this.value)">
+            </div>
+
+            <div class="param">
+                <label>saturation <span class="value" id="v-saturation">0.80</span></label>
+                <input type="range" id="saturation" min="0" max="1" value="0.8" step="0.1" oninput="update('saturation', this.value)">
+            </div>
+
+            <button onclick="testRotations()">🔄 TEST ALL ROTATIONS</button>
+            <button onclick="testDensity()">📊 TEST DENSITY RANGE</button>
+            <button onclick="testGeometries()">🔷 TEST ALL GEOMETRIES</button>
+
+            <div id="log">
+                <div class="log-entry">Ready to test parameters...</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        let mgr = new CanvasManager();
+        let eng = null;
+        let currentSystem = 'faceted';
+
+        const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
+
+        (async function() {
+            eng = await mgr.switchToSystem('faceted', cls);
+            log('✅ Faceted system initialized');
+        })();
+
+        function log(msg) {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logDiv.insertBefore(entry, logDiv.firstChild);
+            if (logDiv.children.length > 20) logDiv.lastChild.remove();
+        }
+
+        window.switchTo = async function(system) {
+            log(`Switching to ${system}...`);
+            eng = await mgr.switchToSystem(system, cls);
+            currentSystem = system;
+            log(`✅ ${system} active`);
+        };
+
+        window.update = function(param, value) {
+            const val = parseFloat(value);
+            const display = param === 'hue' ? val + '°' :
+                          (param === 'geometry' || param === 'gridDensity' ? Math.round(val) : val.toFixed(2));
+            document.getElementById('v-' + param).textContent = display;
+
+            if (!eng) return;
+
+            try {
+                if (eng.parameterManager) {
+                    eng.parameterManager.setParameter(param, val);
+                } else if (eng.updateParameter) {
+                    eng.updateParameter(param, val);
+                } else if (eng.updateParameters) {
+                    eng.updateParameters({ [param]: val });
+                } else if (eng.parameters) {
+                    eng.parameters.setParameter(param, val);
+                }
+                log(`Set ${param} = ${display}`);
+            } catch (err) {
+                log(`❌ Error setting ${param}: ${err.message}`);
+            }
+        };
+
+        window.testRotations = async function() {
+            log('🔄 Testing all rotation parameters...');
+
+            const tests = [
+                { name: 'XW only', xw: 1.5, yw: 0, zw: 0 },
+                { name: 'YW only', xw: 0, yw: 1.5, zw: 0 },
+                { name: 'ZW only', xw: 0, yw: 0, zw: 1.5 },
+                { name: 'All planes', xw: 1.2, yw: 0.9, zw: 0.7 },
+                { name: 'Counter-rotation', xw: -1.0, yw: 0.5, zw: -0.3 }
+            ];
+
+            for (const test of tests) {
+                log(`Testing: ${test.name}`);
+                document.getElementById('rot4dXW').value = test.xw;
+                document.getElementById('rot4dYW').value = test.yw;
+                document.getElementById('rot4dZW').value = test.zw;
+                window.update('rot4dXW', test.xw);
+                window.update('rot4dYW', test.yw);
+                window.update('rot4dZW', test.zw);
+                await new Promise(r => setTimeout(r, 2000));
+            }
+
+            log('✅ Rotation test complete');
+        };
+
+        window.testDensity = async function() {
+            log('📊 Testing density range...');
+
+            for (let d = 10; d <= 100; d += 20) {
+                log(`Density: ${d}`);
+                document.getElementById('gridDensity').value = d;
+                window.update('gridDensity', d);
+                await new Promise(r => setTimeout(r, 1500));
+            }
+
+            log('✅ Density test complete');
+        };
+
+        window.testGeometries = async function() {
+            log('🔷 Testing all geometries...');
+
+            const names = ['Tetrahedron', 'Hypercube', 'Sphere', 'Torus', 'Klein', 'Fractal', 'Wave', 'Crystal'];
+
+            for (let g = 0; g < 8; g++) {
+                log(`Geometry ${g}: ${names[g]}`);
+                document.getElementById('geometry').value = g;
+                window.update('geometry', g);
+                await new Promise(r => setTimeout(r, 2000));
+            }
+
+            log('✅ Geometry test complete');
+        };
+    </script>
+</body>
+</html>
