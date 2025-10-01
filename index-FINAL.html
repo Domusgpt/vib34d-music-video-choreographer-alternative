@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Music Video Choreographer - FINAL</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: #000;
+            color: #0ff;
+            overflow: hidden;
+        }
+
+        /* Hide any legacy UI elements that engines might create */
+        #variation-grid,
+        .gallery-container,
+        .trading-card-overlay,
+        .variation-display,
+        #controls-container,
+        .tab-system,
+        .parameter-controls {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        #visualizer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background: #000; /* Solid black background */
+        }
+
+        .holographic-layers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+        }
+
+        .holographic-layers canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Control Panel */
+        #control-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 400px;
+            max-height: calc(100vh - 40px);
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #0ff;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 3000;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        #control-panel.collapsed {
+            width: 60px;
+            height: 60px;
+            overflow: hidden;
+            padding: 15px;
+        }
+
+        #control-panel.collapsed > *:not(.collapse-toggle) {
+            display: none;
+        }
+
+        .collapse-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 16px;
+            margin-bottom: 15px;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid #0ff;
+            border-radius: 8px;
+        }
+
+        .section h3 {
+            font-size: 12px;
+            color: #f0f;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .param-row {
+            margin-bottom: 8px;
+        }
+
+        .param-row label {
+            display: block;
+            font-size: 10px;
+            color: #0ff;
+            margin-bottom: 3px;
+        }
+
+        .param-value {
+            float: right;
+            color: #f0f;
+            font-weight: 700;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+            background: #111;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: linear-gradient(135deg, #0ff, #f0f);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .system-pills {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .system-pill {
+            flex: 1;
+            padding: 8px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #0ff;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 9px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .system-pill:hover {
+            background: rgba(0, 255, 255, 0.2);
+        }
+
+        .system-pill.active {
+            background: linear-gradient(135deg, #0ff, #00ff88);
+            border-color: #00ff88;
+            box-shadow: 0 0 15px #0ff;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 6px;
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 0 15px #0ff;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn.ai {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, #680a0a, #f00);
+        }
+
+        /* Timeline */
+        #timeline-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 440px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #f0f;
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 2000;
+        }
+
+        #timeline-panel h3 {
+            font-size: 12px;
+            color: #f0f;
+            margin-bottom: 10px;
+        }
+
+        .audio-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .audio-controls button {
+            flex: 1;
+            padding: 8px;
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+            border: none;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .file-label {
+            flex: 2;
+            background: linear-gradient(135deg, #0a684a, #0f0);
+            padding: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .timeline-track {
+            position: relative;
+            height: 50px;
+            background: #111;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .playhead {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #ff0;
+            z-index: 10;
+        }
+
+        .sequence-block {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(255, 0, 255, 0.3));
+            border: 2px solid #0ff;
+            border-radius: 3px;
+            padding: 4px;
+            font-size: 8px;
+            cursor: pointer;
+        }
+
+        .sequence-block:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.5), rgba(255, 0, 255, 0.5));
+        }
+
+        /* AI Modal */
+        #ai-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            background: rgba(0, 0, 0, 0.98);
+            border: 3px solid #f0f;
+            border-radius: 15px;
+            padding: 25px;
+            z-index: 5000;
+        }
+
+        #ai-modal.active {
+            display: block;
+        }
+
+        #ai-modal textarea {
+            width: 100%;
+            height: 100px;
+            background: #111;
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 10px;
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        #ai-modal input {
+            width: 100%;
+            background: #111;
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 8px;
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        #status-bar {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 11px;
+            z-index: 2500;
+            max-width: 300px;
+        }
+
+        @media (max-width: 768px) {
+            #control-panel {
+                width: 95%;
+                right: 2.5%;
+            }
+
+            #timeline-panel {
+                right: 2.5%;
+                left: 2.5%;
+            }
+
+            #ai-modal {
+                width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <div class="holographic-layers" id="vib34dLayers"></div>
+        <div class="holographic-layers" id="quantumLayers" style="display: none;"></div>
+        <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
+    </div>
+
+    <div id="status-bar">🎵 VIB34D Ready</div>
+
+    <div id="control-panel">
+        <button class="collapse-toggle" onclick="window.togglePanel()">◀</button>
+        <h2>🎛️ ULTRA CONTROL</h2>
+
+        <div class="section">
+            <h3>🎨 System</h3>
+            <div class="system-pills">
+                <div class="system-pill active" data-system="faceted" onclick="window.switchSystem('faceted')">
+                    🔷<br>FACETED
+                </div>
+                <div class="system-pill" data-system="quantum" onclick="window.switchSystem('quantum')">
+                    🌌<br>QUANTUM
+                </div>
+                <div class="system-pill" data-system="holographic" onclick="window.switchSystem('holographic')">
+                    ✨<br>HOLO
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔷 Geometry</h3>
+            <div class="param-row">
+                <label>Type <span class="param-value" id="v-geometry">0</span></label>
+                <input type="range" id="geometry" min="0" max="7" value="0" oninput="window.updateParam('geometry', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🌀 4D Rotation</h3>
+            <div class="param-row">
+                <label>X-W <span class="param-value" id="v-rot4dXW">0.00</span></label>
+                <input type="range" id="rot4dXW" min="-6.28" max="6.28" step="0.01" value="0" oninput="window.updateParam('rot4dXW', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Y-W <span class="param-value" id="v-rot4dYW">0.00</span></label>
+                <input type="range" id="rot4dYW" min="-6.28" max="6.28" step="0.01" value="0" oninput="window.updateParam('rot4dYW', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Z-W <span class="param-value" id="v-rot4dZW">0.00</span></label>
+                <input type="range" id="rot4dZW" min="-6.28" max="6.28" step="0.01" value="0" oninput="window.updateParam('rot4dZW', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Visuals</h3>
+            <div class="param-row">
+                <label>Density <span class="param-value" id="v-gridDensity">15</span></label>
+                <input type="range" id="gridDensity" min="5" max="100" value="15" oninput="window.updateParam('gridDensity', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Morph <span class="param-value" id="v-morphFactor">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="2" step="0.01" value="1.0" oninput="window.updateParam('morphFactor', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Chaos <span class="param-value" id="v-chaos">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="window.updateParam('chaos', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Speed <span class="param-value" id="v-speed">1.0</span></label>
+                <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1.0" oninput="window.updateParam('speed', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Color</h3>
+            <div class="param-row">
+                <label>Hue <span class="param-value" id="v-hue">200°</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" oninput="window.updateParam('hue', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Intensity <span class="param-value" id="v-intensity">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="window.updateParam('intensity', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Saturation <span class="param-value" id="v-saturation">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="window.updateParam('saturation', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎵 Audio Reactivity</h3>
+            <div class="param-row">
+                <label>Bass→Density <span class="param-value" id="v-bassDensity">50</span></label>
+                <input type="range" id="bassDensity" min="0" max="100" value="50" oninput="window.updateReactivity('bassDensity', this.value)">
+            </div>
+            <div class="param-row">
+                <label>Mid→Morph <span class="param-value" id="v-midMorph">50</span></label>
+                <input type="range" id="midMorph" min="0" max="100" value="50" oninput="window.updateReactivity('midMorph', this.value)">
+            </div>
+            <div class="param-row">
+                <label>High→Chaos <span class="param-value" id="v-highChaos">60</span></label>
+                <input type="range" id="highChaos" min="0" max="100" value="60" oninput="window.updateReactivity('highChaos', this.value)">
+            </div>
+        </div>
+
+        <button class="btn" onclick="window.randomize()">🎲 Randomize</button>
+        <button class="btn ai" onclick="window.openAIModal()">🤖 AI Choreography</button>
+        <button class="btn" id="export-btn" onclick="window.exportVideo()" disabled>🎥 Export Video</button>
+    </div>
+
+    <div id="timeline-panel">
+        <h3>📽️ TIMELINE</h3>
+        <div class="audio-controls">
+            <label for="audio-file" class="file-label">📁 LOAD AUDIO</label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="play-btn" disabled onclick="window.play()">▶</button>
+            <button id="pause-btn" disabled onclick="window.pause()">⏸</button>
+            <button id="stop-btn" disabled onclick="window.stop()">⏹</button>
+            <button onclick="window.addSequence()">➕</button>
+        </div>
+        <div class="timeline-track" id="timeline-track">
+            <div class="playhead" id="playhead"></div>
+        </div>
+    </div>
+
+    <div id="ai-modal">
+        <h2>🤖 AI CHOREOGRAPHY</h2>
+        <p style="font-size: 10px; color: #aaa; margin-bottom: 10px;">
+            Describe the vibe you want, and AI will create the perfect visual choreography
+        </p>
+        <input type="text" id="api-key" placeholder="Gemini API Key (optional - uses default if empty)">
+        <textarea id="ai-prompt" placeholder="Describe your vision... (e.g., 'aggressive industrial chaos with red hues' or 'peaceful cosmic meditation')"></textarea>
+        <div class="modal-buttons">
+            <button class="btn ai" onclick="window.generateAIChoreography()">✨ Generate</button>
+            <button class="btn" onclick="window.closeAIModal()">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        // System state
+        let canvasManager = new CanvasManager();
+        let currentEngine = null;
+        let currentSystem = 'faceted';
+
+        // Audio
+        let audio = new Audio();
+        let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        let dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let sourceNode = null;
+        let isPlaying = false;
+
+        // Parameters
+        let params = {
+            geometry: 0, rot4dXW: 0, rot4dYW: 0, rot4dZW: 0,
+            gridDensity: 15, morphFactor: 1.0, chaos: 0.2, speed: 1.0,
+            hue: 200, intensity: 0.5, saturation: 0.8
+        };
+
+        let reactivity = { bassDensity: 50, midMorph: 50, highChaos: 60 };
+        let sequences = [];
+
+        const engineClasses = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
+
+        // Initialize
+        (async function() {
+            currentEngine = await canvasManager.switchToSystem('faceted', engineClasses);
+            document.getElementById('audio-file').addEventListener('change', loadAudio);
+            audio.addEventListener('timeupdate', updatePlayhead);
+            audio.addEventListener('ended', () => window.stop());
+            startVisual();
+            setStatus('Ready');
+        })();
+
+        function setStatus(msg) {
+            document.getElementById('status-bar').textContent = '🎵 ' + msg;
+        }
+
+        window.switchSystem = async function(sys) {
+            currentEngine = await canvasManager.switchToSystem(sys, engineClasses);
+            currentSystem = sys;
+            document.querySelectorAll('.system-pill').forEach(p => p.classList.toggle('active', p.dataset.system === sys));
+            applyAllParams();
+            setStatus(`Switched to ${sys.toUpperCase()}`);
+        };
+
+        window.updateParam = function(param, val) {
+            params[param] = parseFloat(val);
+            document.getElementById('v-' + param).textContent = param === 'hue' ? val + '°' :
+                param === 'geometry' || param === 'gridDensity' ? parseInt(val) : parseFloat(val).toFixed(2);
+            applyParam(param, params[param]);
+        };
+
+        window.updateReactivity = function(param, val) {
+            reactivity[param] = parseFloat(val);
+            document.getElementById('v-' + param).textContent = val;
+        };
+
+        function applyParam(param, value) {
+            if (!currentEngine) return;
+            if (currentEngine.parameterManager) currentEngine.parameterManager.setParameter(param, value);
+            else if (currentEngine.updateParameter) currentEngine.updateParameter(param, value);
+            else if (currentEngine.updateParameters) currentEngine.updateParameters({ [param]: value });
+        }
+
+        function applyAllParams() {
+            Object.entries(params).forEach(([p, v]) => applyParam(p, v));
+        }
+
+        window.randomize = function() {
+            Object.keys(params).forEach(p => {
+                let val;
+                if (p === 'geometry') val = Math.floor(Math.random() * 8);
+                else if (p.startsWith('rot4d')) val = Math.random() * 12.56 - 6.28;
+                else if (p === 'gridDensity') val = 5 + Math.random() * 95;
+                else if (p === 'morphFactor') val = Math.random() * 2;
+                else if (p === 'chaos' || p === 'intensity' || p === 'saturation') val = Math.random();
+                else if (p === 'speed') val = 0.1 + Math.random() * 2.9;
+                else if (p === 'hue') val = Math.random() * 360;
+
+                document.getElementById(p).value = val;
+                window.updateParam(p, val);
+            });
+        };
+
+        function loadAudio(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            audio.src = url;
+            if (!sourceNode) {
+                sourceNode = audioCtx.createMediaElementSource(audio);
+                sourceNode.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('pause-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('export-btn').disabled = false;
+            setStatus('Audio loaded: ' + file.name);
+        }
+
+        window.play = function() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            audio.play();
+            isPlaying = true;
+            setStatus('Playing...');
+        };
+
+        window.pause = function() {
+            audio.pause();
+            isPlaying = false;
+            setStatus('Paused');
+        };
+
+        window.stop = function() {
+            audio.pause();
+            audio.currentTime = 0;
+            isPlaying = false;
+            setStatus('Stopped');
+        };
+
+        function startVisual() {
+            function loop() {
+                if (isPlaying) {
+                    analyser.getByteFrequencyData(dataArray);
+                    const bass = avg(0, 100) / 255;
+                    const mid = avg(100, 400) / 255;
+                    const high = avg(400, 1024) / 255;
+
+                    const dR = bass * (reactivity.bassDensity / 50);
+                    const mR = mid * (reactivity.midMorph / 50);
+                    const cR = high * (reactivity.highChaos / 50);
+
+                    applyParam('gridDensity', params.gridDensity + dR * 40);
+                    applyParam('morphFactor', params.morphFactor + mR * 0.5);
+                    applyParam('chaos', params.chaos + cR * 0.5);
+
+                    // Check sequences
+                    const active = sequences.find(s => audio.currentTime >= s.time && audio.currentTime < s.time + s.duration);
+                    if (active && active.system !== currentSystem) window.switchSystem(active.system);
+                    if (active && active.params) Object.entries(active.params).forEach(([p, v]) => applyParam(p, v));
+                }
+                requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        function avg(start, end) {
+            let sum = 0;
+            for (let i = start; i < end; i++) sum += dataArray[i];
+            return sum / (end - start);
+        }
+
+        function updatePlayhead() {
+            if (!audio.duration) return;
+            document.getElementById('playhead').style.left = (audio.currentTime / audio.duration * 100) + '%';
+        }
+
+        window.addSequence = function() {
+            const time = audio.currentTime || 0;
+            const seq = { time, duration: 10, system: currentSystem, params: { ...params } };
+            sequences.push(seq);
+            sequences.sort((a, b) => a.time - b.time);
+            renderSeqs();
+            setStatus('Sequence added at ' + time.toFixed(1) + 's');
+        };
+
+        function renderSeqs() {
+            const track = document.getElementById('timeline-track');
+            const playhead = document.getElementById('playhead');
+            track.innerHTML = '';
+            track.appendChild(playhead);
+
+            sequences.forEach((s, i) => {
+                const block = document.createElement('div');
+                block.className = 'sequence-block';
+                block.style.left = (s.time / audio.duration * 100) + '%';
+                block.style.width = (s.duration / audio.duration * 100) + '%';
+                block.textContent = s.system.toUpperCase();
+                block.onclick = () => {
+                    audio.currentTime = s.time;
+                    window.switchSystem(s.system);
+                    Object.entries(s.params).forEach(([p, v]) => {
+                        params[p] = v;
+                        document.getElementById(p).value = v;
+                        window.updateParam(p, v);
+                    });
+                };
+                track.appendChild(block);
+            });
+        }
+
+        window.togglePanel = function() {
+            document.getElementById('control-panel').classList.toggle('collapsed');
+            document.querySelector('.collapse-toggle').textContent =
+                document.getElementById('control-panel').classList.contains('collapsed') ? '▶' : '◀';
+        };
+
+        window.openAIModal = function() {
+            document.getElementById('ai-modal').classList.add('active');
+        };
+
+        window.closeAIModal = function() {
+            document.getElementById('ai-modal').classList.remove('active');
+        };
+
+        window.generateAIChoreography = async function() {
+            const prompt = document.getElementById('ai-prompt').value;
+            if (!prompt) {
+                alert('Enter a description first');
+                return;
+            }
+
+            const apiKey = document.getElementById('api-key').value || 'AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI';
+            setStatus('AI generating...');
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You control a 4D holographic music visualization system. Create a visual choreography for: "${prompt}"\n\nGenerate 3-5 sequences with these parameters:\n- time (seconds from start)\n- duration (seconds)\n- system (faceted, quantum, or holographic)\n- geometry (0-7)\n- rot4dXW, rot4dYW, rot4dZW (-6.28 to 6.28)\n- gridDensity (5-100), morphFactor (0-2), chaos (0-1), speed (0.1-3)\n- hue (0-360), intensity (0-1), saturation (0-1)\n\nReturn only valid JSON array.`
+                            }]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                const text = data.candidates[0].content.parts[0].text;
+                const json = text.match(/\[[\s\S]*\]/)[0];
+                sequences = JSON.parse(json);
+                renderSeqs();
+                setStatus('AI choreography loaded');
+                window.closeAIModal();
+            } catch (err) {
+                setStatus('AI failed: ' + err.message);
+                console.error(err);
+            }
+        };
+
+        window.exportVideo = async function() {
+            if (!audio.src) return alert('Load audio first');
+
+            const canvas = document.querySelector('canvas');
+            const stream = canvas.captureStream(60);
+            const ctx = new AudioContext();
+            const src = ctx.createMediaElementSource(audio);
+            const dest = ctx.createMediaStreamDestination();
+            src.connect(dest);
+            src.connect(ctx.destination);
+            stream.addTrack(dest.stream.getAudioTracks()[0]);
+
+            const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
+            const chunks = [];
+            rec.ondataavailable = e => chunks.push(e.data);
+            rec.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `vib34d-${Date.now()}.webm`;
+                a.click();
+                ctx.close();
+                setStatus('Export complete!');
+            };
+
+            rec.start();
+            audio.currentTime = 0;
+            await audio.play();
+            setStatus('Recording...');
+            audio.onended = () => rec.stop();
+        };
+    </script>
+</body>
+</html>
