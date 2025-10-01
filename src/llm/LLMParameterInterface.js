@@ -5,13 +5,13 @@
 
 export class LLMParameterInterface {
     constructor() {
-        // Try Firebase Function first, fallback to direct API
-        this.useFirebase = true;
+        // Disable Firebase Function (CORS issues), use direct API only
+        this.useFirebase = false;
         this.firebaseUrl = 'https://us-central1-vib34d-llm-engine.cloudfunctions.net/generateVIB34DParameters';
-        
-        // Fallback to direct API if Firebase not available
+
+        // Use direct Gemini API with v1beta and gemini-2.0-flash model
         this.apiKey = localStorage.getItem('vib34d-gemini-api-key') || null;
-        this.baseApiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+        this.baseApiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
         this.parameterCallback = null;
         
         // Comprehensive system prompt with emotional/visual understanding
