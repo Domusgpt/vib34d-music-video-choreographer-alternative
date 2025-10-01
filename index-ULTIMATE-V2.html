@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Ultimate Music Choreographer V2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Orbitron', monospace; background: #000; color: #0ff; overflow: hidden; }
+
+        /* Force hide legacy UI */
+        #variation-grid, .gallery-container, .trading-card-overlay, .variation-display,
+        #controls-container, .tab-system, .parameter-controls { display: none !important; }
+
+        #visualizer-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: #000; }
+        .holographic-layers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .holographic-layers canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        #controls { position: fixed; top: 20px; right: 20px; width: 420px; max-height: 90vh; background: rgba(0,0,0,0.95);
+            border: 3px solid #0ff; border-radius: 15px; padding: 20px; z-index: 3000; overflow-y: auto; backdrop-filter: blur(10px); }
+        #controls.mini { width: 60px; height: 60px; overflow: hidden; padding: 15px; }
+        #controls.mini > *:not(.toggle-mini) { display: none; }
+        .toggle-mini { position: absolute; top: 15px; right: 15px; background: rgba(0,255,255,0.2); border: 1px solid #0ff;
+            color: #0ff; padding: 5px 10px; font-size: 14px; border-radius: 4px; cursor: pointer; z-index: 10; }
+
+        h2 { text-align: center; font-size: 16px; margin-bottom: 15px; background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .section { margin-bottom: 15px; padding: 12px; background: rgba(0,255,255,0.05); border: 1px solid #0ff; border-radius: 8px; }
+        .section h3 { font-size: 12px; color: #f0f; margin-bottom: 8px; text-transform: uppercase; }
+
+        .param { margin-bottom: 8px; }
+        .param label { display: block; font-size: 10px; color: #0ff; margin-bottom: 3px; }
+        .param-val { float: right; color: #f0f; font-weight: 700; }
+        input[type="range"] { width: 100%; height: 5px; background: #111; border-radius: 3px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px;
+            background: linear-gradient(135deg, #0ff, #f0f); border-radius: 50%; cursor: pointer; }
+
+        .pills { display: flex; gap: 6px; margin-bottom: 10px; }
+        .pill { flex: 1; padding: 8px; background: rgba(0,255,255,0.1); border: 2px solid #0ff; border-radius: 6px;
+            text-align: center; font-size: 9px; cursor: pointer; transition: all 0.2s; }
+        .pill:hover { background: rgba(0,255,255,0.2); }
+        .pill.active { background: linear-gradient(135deg, #0ff, #00ff88); border-color: #00ff88; box-shadow: 0 0 15px #0ff; }
+
+        .btn { width: 100%; padding: 10px; margin-bottom: 6px; background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none; color: #000; font-family: 'Orbitron', monospace; font-weight: 700; font-size: 11px;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 15px #0ff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.ai { background: linear-gradient(135deg, #4a0a68, #f0f); }
+
+        #timeline { position: fixed; bottom: 20px; left: 20px; right: 460px; background: rgba(0,0,0,0.95);
+            border: 2px solid #f0f; border-radius: 10px; padding: 15px; z-index: 2000; }
+        #timeline h3 { font-size: 12px; color: #f0f; margin-bottom: 10px; }
+        .audio-btns { display: flex; gap: 8px; margin-bottom: 10px; }
+        .audio-btns button { flex: 1; padding: 8px; background: linear-gradient(135deg, #4a0a68, #f0f); border: none;
+            color: #000; font-family: 'Orbitron', monospace; font-weight: 700; font-size: 10px; border-radius: 5px; cursor: pointer; }
+        .file-lbl { flex: 2; background: linear-gradient(135deg, #0a684a, #0f0); padding: 8px; border-radius: 5px;
+            cursor: pointer; text-align: center; font-size: 10px; font-weight: 700; }
+        input[type="file"] { display: none; }
+
+        .track { position: relative; height: 60px; background: #111; border-radius: 5px; margin-bottom: 10px; overflow: hidden; }
+        .playhead { position: absolute; top: 0; width: 2px; height: 100%; background: #ff0; z-index: 10; }
+        .seq-block { position: absolute; height: 100%; background: linear-gradient(135deg, rgba(0,255,255,0.3), rgba(255,0,255,0.3));
+            border: 2px solid #0ff; border-radius: 3px; padding: 4px; font-size: 8px; cursor: pointer; overflow: hidden; }
+        .seq-block:hover { background: linear-gradient(135deg, rgba(0,255,255,0.5), rgba(255,0,255,0.5)); }
+
+        #status { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.9); border: 2px solid #0ff;
+            border-radius: 8px; padding: 10px 15px; font-size: 11px; z-index: 2500; max-width: 350px; }
+
+        #ai-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 600px; background: rgba(0,0,0,0.98); border: 3px solid #f0f; border-radius: 15px; padding: 25px; z-index: 5000; }
+        #ai-modal.active { display: block; }
+        #ai-modal textarea { width: 100%; height: 100px; background: #111; border: 1px solid #0ff; color: #0ff;
+            padding: 10px; font-family: 'Orbitron', monospace; font-size: 12px; border-radius: 5px; margin-bottom: 10px; }
+        #ai-modal input { width: 100%; background: #111; border: 1px solid #0ff; color: #0ff; padding: 8px;
+            font-family: 'Orbitron', monospace; font-size: 11px; border-radius: 5px; margin-bottom: 10px; }
+        .modal-btns { display: flex; gap: 10px; }
+
+        @media (max-width: 768px) {
+            #controls { width: 95%; right: 2.5%; }
+            #timeline { right: 2.5%; left: 2.5%; }
+            #ai-modal { width: 90%; }
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer-container">
+        <div class="holographic-layers" id="vib34dLayers"></div>
+        <div class="holographic-layers" id="quantumLayers" style="display: none;"></div>
+        <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
+    </div>
+
+    <div id="status">🎵 Ready</div>
+
+    <div id="controls">
+        <button class="toggle-mini" onclick="window.toggleCtrl()">◀</button>
+
+        <h2>🎛️ VIB34D ULTIMATE V2</h2>
+
+        <div class="section">
+            <h3>🎨 Visualization System</h3>
+            <div class="pills">
+                <div class="pill active" data-sys="faceted" onclick="window.switchSys('faceted')">🔷<br>FACETED</div>
+                <div class="pill" data-sys="quantum" onclick="window.switchSys('quantum')">🌌<br>QUANTUM</div>
+                <div class="pill" data-sys="holographic" onclick="window.switchSys('holographic')">✨<br>HOLO</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔷 Geometry</h3>
+            <div class="param">
+                <label>Type <span class="param-val" id="v-geometry">0</span></label>
+                <input type="range" id="geometry" min="0" max="7" value="0" oninput="P('geometry', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🌀 4D Rotation (SLOW)</h3>
+            <div class="param">
+                <label>X-W <span class="param-val" id="v-rot4dXW">0.00</span></label>
+                <input type="range" id="rot4dXW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dXW', this.value)">
+            </div>
+            <div class="param">
+                <label>Y-W <span class="param-val" id="v-rot4dYW">0.00</span></label>
+                <input type="range" id="rot4dYW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dYW', this.value)">
+            </div>
+            <div class="param">
+                <label>Z-W <span class="param-val" id="v-rot4dZW">0.00</span></label>
+                <input type="range" id="rot4dZW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dZW', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Visuals</h3>
+            <div class="param">
+                <label>Density <span class="param-val" id="v-gridDensity">15</span></label>
+                <input type="range" id="gridDensity" min="4" max="100" value="15" oninput="P('gridDensity', this.value)">
+            </div>
+            <div class="param">
+                <label>Morph <span class="param-val" id="v-morphFactor">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="2" step="0.01" value="1.0" oninput="P('morphFactor', this.value)">
+            </div>
+            <div class="param">
+                <label>Chaos <span class="param-val" id="v-chaos">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="P('chaos', this.value)">
+            </div>
+            <div class="param">
+                <label>Speed <span class="param-val" id="v-speed">0.5</span></label>
+                <input type="range" id="speed" min="0.1" max="2" step="0.01" value="0.5" oninput="P('speed', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Color</h3>
+            <div class="param">
+                <label>Hue <span class="param-val" id="v-hue">200°</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" oninput="P('hue', this.value)">
+            </div>
+            <div class="param">
+                <label>Intensity <span class="param-val" id="v-intensity">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="P('intensity', this.value)">
+            </div>
+            <div class="param">
+                <label>Saturation <span class="param-val" id="v-saturation">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="P('saturation', this.value)">
+            </div>
+        </div>
+
+        <button class="btn" onclick="window.randomize()">🎲 Randomize</button>
+        <button class="btn ai" onclick="window.openAI()">🤖 AI Musical Choreography</button>
+        <button class="btn" id="export-btn" onclick="window.exportVid()" disabled>🎥 Export Video</button>
+    </div>
+
+    <div id="timeline">
+        <h3>🎵 TIMELINE</h3>
+        <div class="audio-btns">
+            <label class="file-lbl" for="audio-file">📁 Load Audio File</label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="play-btn" disabled onclick="window.play()">▶ Play</button>
+            <button id="pause-btn" disabled onclick="window.pause()">⏸ Pause</button>
+            <button id="stop-btn" disabled onclick="window.stop()">⏹ Stop</button>
+        </div>
+        <div class="track" id="track">
+            <div class="playhead" id="playhead"></div>
+        </div>
+    </div>
+
+    <div id="ai-modal">
+        <h2>🤖 AI MUSICAL CHOREOGRAPHY V2</h2>
+        <p style="font-size: 10px; color: #aaa; margin-bottom: 10px;">
+            AI analyzes your song structure and creates sequences with proper musical timing:
+            half-time, double-time, repeated elements, and rhythmic perception.
+        </p>
+        <input type="text" id="api-key" placeholder="Gemini API Key (leave empty for default)">
+        <textarea id="ai-prompt" placeholder="Song description... (e.g., 'progressive house with 128 BPM, builds every 16 bars, drops at 1:00 and 2:30')"></textarea>
+        <div class="modal-btns">
+            <button class="btn ai" onclick="window.genAI()">✨ Generate</button>
+            <button class="btn" onclick="window.closeAI()">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
+        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        let mgr = new CanvasManager();
+        let eng = null;
+        let sys = 'faceted';
+        let aud = new Audio();
+        let ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let anl = ctx.createAnalyser();
+        anl.fftSize = 2048;
+        let dat = new Uint8Array(anl.frequencyBinCount);
+        let src = null;
+        let play = false;
+
+        // BASE parameters - slower and more musical
+        let par = {
+            geometry: 0,
+            rot4dXW: 0, rot4dYW: 0, rot4dZW: 0,
+            gridDensity: 15,
+            morphFactor: 1.0,
+            chaos: 0.2,
+            speed: 0.5,  // SLOWER base speed for rhythm
+            hue: 200,
+            intensity: 0.5,
+            saturation: 0.8
+        };
+
+        let seqs = [];
+        let currentSeq = null;
+
+        const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
+
+        (async function() {
+            eng = await mgr.switchToSystem('faceted', cls);
+            document.getElementById('audio-file').addEventListener('change', loadAud);
+            aud.addEventListener('timeupdate', upd);
+            aud.addEventListener('ended', () => window.stop());
+            loop();
+            stat('Ready - Load audio and click AI Choreography');
+        })();
+
+        function stat(m) { document.getElementById('status').textContent = '🎵 ' + m; }
+
+        window.switchSys = async function(s) {
+            eng = await mgr.switchToSystem(s, cls);
+            sys = s;
+            document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.sys === s));
+            applyAll();
+            stat(`Switched to ${s.toUpperCase()}`);
+        };
+
+        window.P = function(p, v) {
+            par[p] = parseFloat(v);
+            const val = p === 'hue' ? v + '°' : (p === 'geometry' || p === 'gridDensity' ? parseInt(v) : parseFloat(v).toFixed(2));
+            document.getElementById('v-' + p).textContent = val;
+            apply(p, par[p]);
+        };
+
+        function apply(p, v) {
+            if (!eng) return;
+            if (eng.parameterManager) eng.parameterManager.setParameter(p, v);
+            else if (eng.updateParameter) eng.updateParameter(p, v);
+            else if (eng.updateParameters) eng.updateParameters({ [p]: v });
+        }
+
+        function applyAll() {
+            Object.entries(par).forEach(([p, v]) => apply(p, v));
+        }
+
+        window.randomize = function() {
+            par.geometry = Math.floor(Math.random() * 8);
+            par.rot4dXW = Math.random() * 4 - 2;
+            par.rot4dYW = Math.random() * 4 - 2;
+            par.rot4dZW = Math.random() * 4 - 2;
+            par.gridDensity = 4 + Math.random() * 96;
+            par.morphFactor = Math.random() * 2;
+            par.chaos = Math.random();
+            par.speed = 0.1 + Math.random() * 1.9;
+            par.hue = Math.random() * 360;
+            par.intensity = Math.random();
+            par.saturation = Math.random();
+            Object.entries(par).forEach(([p, v]) => { document.getElementById(p).value = v; window.P(p, v); });
+        };
+
+        function loadAud(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            aud.src = URL.createObjectURL(f);
+            if (!src) {
+                src = ctx.createMediaElementSource(aud);
+                src.connect(anl);
+                anl.connect(ctx.destination);
+            }
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('pause-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('export-btn').disabled = false;
+            stat('Loaded: ' + f.name);
+        }
+
+        window.play = function() {
+            if (ctx.state === 'suspended') ctx.resume();
+            aud.play();
+            play = true;
+            stat('Playing...');
+        };
+
+        window.pause = function() { aud.pause(); play = false; stat('Paused'); };
+        window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; stat('Stopped'); };
+
+        function loop() {
+            if (play && seqs.length > 0) {
+                anl.getByteFrequencyData(dat);
+                const b = avg(0, 100) / 255;  // Bass
+                const m = avg(100, 400) / 255; // Mids
+                const h = avg(400, 1024) / 255; // Highs
+                const t = aud.currentTime;
+
+                // Find current sequence
+                const ac = seqs.find(s => t >= s.time && t < s.time + s.dur);
+
+                if (ac && ac !== currentSeq) {
+                    currentSeq = ac;
+
+                    // Apply sequence base parameters
+                    if (ac.sys && ac.sys !== sys) window.switchSys(ac.sys);
+                    if (ac.par) {
+                        Object.entries(ac.par).forEach(([p, v]) => {
+                            par[p] = v;
+                            apply(p, v);
+                            document.getElementById(p).value = v;
+                            window.P(p, v);
+                        });
+                    }
+
+                    stat(`SEQ: ${ac.name || 'Untitled'} (${ac.time}s-${ac.time+ac.dur}s)`);
+                }
+
+                if (ac) {
+                    const seqTime = t - ac.time;
+                    const progress = seqTime / ac.dur;
+
+                    // Apply audio reactivity multipliers from sequence
+                    const densityReact = (ac.densityReact || 0) * b;
+                    const morphReact = (ac.morphReact || 0) * m;
+                    const chaosReact = (ac.chaosReact || 0) * h;
+                    const intensityReact = (ac.intensityReact || 0) * (b + m + h) / 3;
+
+                    apply('gridDensity', par.gridDensity + densityReact);
+                    apply('morphFactor', par.morphFactor + morphReact);
+                    apply('chaos', Math.min(1, par.chaos + chaosReact));
+                    apply('intensity', Math.min(1, par.intensity + intensityReact));
+
+                    // Apply parameter sweeps (gradual changes over sequence)
+                    if (ac.sweeps) {
+                        Object.entries(ac.sweeps).forEach(([param, [start, end]]) => {
+                            const val = start + (end - start) * progress;
+                            apply(param, val);
+                        });
+                    }
+
+                    // Apply rotation dynamics
+                    if (ac.rotDynamics) {
+                        const { xw, yw, zw } = ac.rotDynamics;
+                        if (xw) apply('rot4dXW', xw.base + Math.sin(seqTime * xw.freq) * xw.amp);
+                        if (yw) apply('rot4dYW', yw.base + Math.cos(seqTime * yw.freq) * yw.amp);
+                        if (zw) apply('rot4dZW', zw.base + Math.sin(seqTime * zw.freq + Math.PI/2) * zw.amp);
+                    }
+                }
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function avg(s, e) {
+            let sum = 0;
+            for (let i = s; i < e; i++) sum += dat[i];
+            return sum / (e - s);
+        }
+
+        function upd() {
+            if (!aud.duration) return;
+            document.getElementById('playhead').style.left = (aud.currentTime / aud.duration * 100) + '%';
+        }
+
+        function rend() {
+            const tr = document.getElementById('track');
+            const ph = document.getElementById('playhead');
+            tr.innerHTML = '';
+            tr.appendChild(ph);
+            seqs.forEach(s => {
+                const b = document.createElement('div');
+                b.className = 'seq-block';
+                b.style.left = (s.time / aud.duration * 100) + '%';
+                b.style.width = (s.dur / aud.duration * 100) + '%';
+                b.innerHTML = `${s.name || s.sys?.toUpperCase() || 'SEQ'}<br>${s.time.toFixed(1)}s`;
+                b.onclick = () => {
+                    aud.currentTime = s.time;
+                    if (s.sys) window.switchSys(s.sys);
+                };
+                tr.appendChild(b);
+            });
+        }
+
+        window.toggleCtrl = function() {
+            document.getElementById('controls').classList.toggle('mini');
+            document.querySelector('.toggle-mini').textContent = document.getElementById('controls').classList.contains('mini') ? '▶' : '◀';
+        };
+
+        window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
+        window.closeAI = function() { document.getElementById('ai-modal').classList.remove('active'); };
+
+        window.genAI = async function() {
+            const prompt = document.getElementById('ai-prompt').value;
+            if (!prompt) return alert('Enter song description');
+
+            const key = document.getElementById('api-key').value || 'AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI';
+            const dur = aud.duration || 180;
+            stat('AI analyzing musical structure...');
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are a MUSIC CHOREOGRAPHY EXPERT. Create visual choreography for a ${dur.toFixed(0)}s song: "${prompt}"
+
+🎵 MUSICAL STRUCTURE ANALYSIS:
+1. Identify song sections (intro, verse, chorus, build, drop, breakdown, bridge, outro)
+2. Use HALF-TIME for drops (slower, heavier visuals)
+3. Use DOUBLE-TIME for builds (faster rotation, more energy)
+4. Repeat visual motifs when musical elements repeat
+5. Match geometry changes to song structure changes
+6. Slower base speed (0.3-0.8) for rhythmic perception
+
+🎨 SYSTEM USAGE:
+- faceted: Clean geometric patterns (good for verses, intros)
+- quantum: Complex 3D lattice (good for drops, intense moments)
+- holographic: Pink/magenta ethereal (good for breakdowns, buildups)
+
+📊 PARAMETERS - ACTUAL ENGINE BEHAVIOR:
+geometry: 0-7 (0=tetra, 1=cube, 2=sphere, 3=torus, 4=klein, 5=fractal, 6=wave, 7=crystal)
+rot4dXW/YW/ZW: -2 to 2 (4D rotation, keep SLOW for rhythm perception)
+gridDensity: 4-100 (vertex count, affects detail)
+morphFactor: 0-2 (shape transformation)
+chaos: 0-1 (randomization)
+speed: 0.1-2 (animation speed - keep LOW 0.3-0.8 base, only go high for climaxes)
+hue: 0-360
+intensity: 0-1
+saturation: 0-1
+
+🎼 SEQUENCE FORMAT:
+{
+  "name": "Intro",
+  "time": 0,
+  "dur": 16,
+  "sys": "faceted",
+  "par": {
+    "geometry": 0,
+    "speed": 0.4,
+    "gridDensity": 12,
+    "morphFactor": 0.5,
+    "chaos": 0.1,
+    "hue": 200,
+    "intensity": 0.3,
+    "saturation": 0.6
+  },
+  "densityReact": 20,    // Add to density per bass level
+  "morphReact": 0.3,     // Add to morph per mid level
+  "chaosReact": 0.2,     // Add to chaos per high level
+  "intensityReact": 0.4, // Add to intensity per overall level
+  "sweeps": {            // Gradual parameter changes
+    "hue": [200, 240],   // Sweep from 200 to 240 over duration
+    "speed": [0.4, 0.6]
+  },
+  "rotDynamics": {       // Oscillating rotations
+    "xw": {"base": 0, "freq": 0.5, "amp": 0.3},
+    "yw": {"base": 0, "freq": 0.3, "amp": 0.2}
+  }
+}
+
+🎵 MUSICAL TIMING EXAMPLES:
+VERSE (Normal time): speed: 0.5, steady rotation, moderate density
+BUILD (Double-time feel): speed: 0.7→1.2, density sweep 20→60, increasing chaos
+DROP (Half-time feel): speed: 0.3, HIGH density (80-100), high chaos (0.7-1.0)
+BREAKDOWN: speed: 0.2-0.4, LOW density (8-15), ethereal hues (180-250)
+
+🔁 REPETITION & FLOW:
+- Verse 1 and Verse 2 should use SIMILAR geometry and colors
+- Each chorus should be SIMILAR but slightly more intense
+- Build sections should INCREASE parameters progressively
+- Use geometry changes ONLY at major structural changes
+
+Create ${Math.ceil(dur/15)} to ${Math.ceil(dur/10)} sequences with MUSICAL CONTINUITY.
+Return ONLY the JSON array.`
+                            }]
+                        }]
+                    })
+                });
+
+                const data = await resp.json();
+                const txt = data.candidates[0].content.parts[0].text;
+                const json = txt.match(/\[[\s\S]*\]/)[0];
+                seqs = JSON.parse(json);
+                rend();
+                stat(`AI: ${seqs.length} musical sequences loaded!`);
+                window.closeAI();
+            } catch (err) {
+                stat('AI failed: ' + err.message);
+                console.error(err);
+            }
+        };
+
+        window.exportVid = function() {
+            stat('Video export not yet implemented in V2');
+            // TODO: Implement working export
+        };
+    </script>
+</body>
+</html>
