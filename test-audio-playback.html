@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Audio Playback Test</title>
+</head>
+<body>
+    <h1>Testing Audio Playback</h1>
+    <button id="testBtn">Load and Play Test Audio</button>
+    <div id="status"></div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const status = document.getElementById('status');
+            status.innerHTML = 'Loading audio...';
+
+            try {
+                // Create audio element
+                const audio = new Audio('test-audio.mp3');
+
+                audio.addEventListener('loadedmetadata', () => {
+                    status.innerHTML += '<br>✅ Audio loaded! Duration: ' + audio.duration.toFixed(2) + 's';
+                });
+
+                audio.addEventListener('canplay', () => {
+                    status.innerHTML += '<br>✅ Audio ready to play';
+                });
+
+                audio.addEventListener('error', (e) => {
+                    status.innerHTML += '<br>❌ Audio error: ' + e.message;
+                });
+
+                // Try to play
+                await audio.play();
+                status.innerHTML += '<br>✅ Audio playing!';
+
+            } catch (error) {
+                status.innerHTML += '<br>❌ Error: ' + error.message;
+                console.error('Full error:', error);
+            }
+        });
+    </script>
+</body>
+</html>

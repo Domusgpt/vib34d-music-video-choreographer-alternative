@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Diagnostic Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #0ff;
+            padding: 20px;
+        }
+        h1 { color: #f0f; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #0ff; }
+        .pass { color: #0f0; }
+        .fail { color: #f00; }
+        button {
+            background: #0ff;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        pre {
+            background: #111;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 VIB34D DIAGNOSTIC TEST</h1>
+
+    <div class="test">
+        <h2>Test 1: Check for Polychora</h2>
+        <div id="polychora-test"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 2: Audio File Loading</h2>
+        <input type="file" id="audio-file" accept="audio/*">
+        <div id="audio-test"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 3: System Pills Check</h2>
+        <div id="systems-test"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 4: LLM Integration</h2>
+        <button onclick="testLLM()">Test LLM Import</button>
+        <div id="llm-test"></div>
+    </div>
+
+    <script type="module">
+        // Test 1: Check for Polychora
+        const polychoraTest = document.getElementById('polychora-test');
+
+        fetch('index-enhanced.html')
+            .then(r => r.text())
+            .then(html => {
+                const hasPolychora = html.toLowerCase().includes('polychora');
+                if (hasPolychora) {
+                    polychoraTest.innerHTML = '<span class="fail">❌ FAIL: Polychora found in index-enhanced.html</span>';
+                } else {
+                    polychoraTest.innerHTML = '<span class="pass">✅ PASS: No polychora found</span>';
+                }
+            });
+
+        // Test 2: Audio Loading
+        document.getElementById('audio-file').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            const testDiv = document.getElementById('audio-test');
+
+            if (!file) {
+                testDiv.innerHTML = '<span class="fail">No file selected</span>';
+                return;
+            }
+
+            testDiv.innerHTML = 'Testing audio loading...';
+
+            try {
+                const url = URL.createObjectURL(file);
+                const audio = new Audio(url);
+
+                audio.addEventListener('loadedmetadata', () => {
+                    testDiv.innerHTML += '<br><span class="pass">✅ Audio metadata loaded</span>';
+                    testDiv.innerHTML += `<br>Duration: ${audio.duration.toFixed(2)}s`;
+                });
+
+                audio.addEventListener('canplay', async () => {
+                    testDiv.innerHTML += '<br><span class="pass">✅ Audio can play</span>';
+
+                    try {
+                        await audio.play();
+                        testDiv.innerHTML += '<br><span class="pass">✅ Audio playing!</span>';
+                        setTimeout(() => audio.pause(), 2000);
+                    } catch (err) {
+                        testDiv.innerHTML += `<br><span class="fail">❌ Play failed: ${err.message}</span>`;
+                    }
+                });
+
+                audio.addEventListener('error', (e) => {
+                    testDiv.innerHTML += `<br><span class="fail">❌ Audio error: ${e.message}</span>`;
+                });
+
+            } catch (error) {
+                testDiv.innerHTML = `<span class="fail">❌ Error: ${error.message}</span>`;
+            }
+        });
+
+        // Test 3: System Pills
+        fetch('index-enhanced.html')
+            .then(r => r.text())
+            .then(html => {
+                const systemsTest = document.getElementById('systems-test');
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const pills = doc.querySelectorAll('.system-pill');
+
+                systemsTest.innerHTML = '<strong>Found systems:</strong><br>';
+                pills.forEach(pill => {
+                    const system = pill.getAttribute('data-system') || pill.textContent;
+                    systemsTest.innerHTML += `- ${system}<br>`;
+                });
+
+                const hasPolychoraPill = Array.from(pills).some(p =>
+                    p.textContent.toLowerCase().includes('polychora') ||
+                    (p.getAttribute('data-system') || '').toLowerCase().includes('polychora')
+                );
+
+                if (hasPolychoraPill) {
+                    systemsTest.innerHTML += '<br><span class="fail">❌ FAIL: Polychora pill found!</span>';
+                } else {
+                    systemsTest.innerHTML += '<br><span class="pass">✅ PASS: No polychora pill</span>';
+                }
+            });
+
+        // Test 4: LLM
+        window.testLLM = async function() {
+            const llmTest = document.getElementById('llm-test');
+            llmTest.innerHTML = 'Testing LLM import...';
+
+            try {
+                const { LLMParameterInterface } = await import('./src/llm/LLMParameterInterface.js');
+                llmTest.innerHTML = '<span class="pass">✅ LLM module loaded successfully</span>';
+
+                const llm = new LLMParameterInterface();
+                llmTest.innerHTML += '<br><span class="pass">✅ LLM instance created</span>';
+                llmTest.innerHTML += `<br>Base API URL: ${llm.baseApiUrl}`;
+
+            } catch (error) {
+                llmTest.innerHTML = `<span class="fail">❌ LLM import failed: ${error.message}</span>`;
+            }
+        };
+    </script>
+</body>
+</html>
