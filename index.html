@@ -724,7 +724,7 @@ Duration: ${dur.toFixed(0)}s
 
 ## BEAT MODS - MUST USE ALL:
 
-```json
+EXAMPLE:
 {
   "densityPulse": [20, 40, 60, 80, 60, 40],  // 6-beat cycle
   "colorPulse": [0, 60, 120, 180, 240, 300],  // Rainbow every 6 beats
@@ -735,7 +735,6 @@ Duration: ${dur.toFixed(0)}s
   "saturationSnap": [1.5, 0.2, 1.5, 0.2],  // Saturation snap on/off every 2 beats
   "geometryMeasures": [1, 5, 2, 7, 3, 6, 4, 0]  // Geometry rotation every 4 measures
 }
-```
 
 ## PARAMETERS - PROPER USAGE:
 
@@ -781,13 +780,12 @@ Duration: ${dur.toFixed(0)}s
 **holographic:** Audio-reactive, BEST for organic flow
 
 Use sysSwitch for RHYTHMIC system changes:
-```json
+EXAMPLE:
 "sysSwitch": [
   {"at": 4, "to": "quantum"},   // Switch at 4s into sequence
   {"at": 8, "to": "faceted"},   // Switch back at 8s
   {"at": 12, "to": "quantum"}   // Final switch at 12s
 ]
-```
 
 ## PATTERNS - USE THESE:
 
