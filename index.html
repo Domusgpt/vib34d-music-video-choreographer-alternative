@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VIB34D Ultimate Music Choreographer V2</title>
+    <title>VIB34D MASTER Music Video Choreographer</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -65,8 +65,15 @@
             border: 2px solid #0ff; border-radius: 3px; padding: 4px; font-size: 8px; cursor: pointer; overflow: hidden; }
         .seq-block:hover { background: linear-gradient(135deg, rgba(0,255,255,0.5), rgba(255,0,255,0.5)); }
 
-        #status { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.9); border: 2px solid #0ff;
-            border-radius: 8px; padding: 10px 15px; font-size: 11px; z-index: 2500; max-width: 350px; }
+        .beat-flash { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 150px; height: 150px; border: 4px solid #0ff; border-radius: 50%; opacity: 0;
+            pointer-events: none; z-index: 2500; transition: opacity 0.1s; }
+        .beat-flash.hit { opacity: 0.7; animation: beatPulse 0.3s ease-out; }
+        @keyframes beatPulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.7; }
+            50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.5; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
 
         #ai-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 600px; background: rgba(0,0,0,0.98); border: 3px solid #f0f; border-radius: 15px; padding: 25px; z-index: 5000; }
@@ -76,6 +83,9 @@
         #ai-modal input { width: 100%; background: #111; border: 1px solid #0ff; color: #0ff; padding: 8px;
             font-family: 'Orbitron', monospace; font-size: 11px; border-radius: 5px; margin-bottom: 10px; }
         .modal-btns { display: flex; gap: 10px; }
+
+        #status { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.9); border: 2px solid #0ff;
+            border-radius: 8px; padding: 10px 15px; font-size: 11px; z-index: 2500; max-width: 350px; }
 
         @media (max-width: 768px) {
             #controls { width: 95%; right: 2.5%; }
@@ -91,15 +101,15 @@
         <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
     </div>
 
-    <div id="status">🎵 Ready</div>
+    <div class="beat-flash" id="beatFlash"></div>
+    <div id="status">🎵 VIB34D MASTER Ready</div>
 
     <div id="controls">
         <button class="toggle-mini" onclick="window.toggleCtrl()">◀</button>
-
-        <h2>🎛️ VIB34D ULTIMATE V2</h2>
+        <h2>🎛️ MASTER CONTROL</h2>
 
         <div class="section">
-            <h3>🎨 Visualization System</h3>
+            <h3>🎨 System</h3>
             <div class="pills">
                 <div class="pill active" data-sys="faceted" onclick="window.switchSys('faceted')">🔷<br>FACETED</div>
                 <div class="pill" data-sys="quantum" onclick="window.switchSys('quantum')">🌌<br>QUANTUM</div>
@@ -116,18 +126,18 @@
         </div>
 
         <div class="section">
-            <h3>🌀 4D Rotation (SLOW)</h3>
+            <h3>🌀 4D Rotation</h3>
             <div class="param">
                 <label>X-W <span class="param-val" id="v-rot4dXW">0.00</span></label>
-                <input type="range" id="rot4dXW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dXW', this.value)">
+                <input type="range" id="rot4dXW" min="-6.28" max="6.28" step="0.01" value="0" oninput="P('rot4dXW', this.value)">
             </div>
             <div class="param">
                 <label>Y-W <span class="param-val" id="v-rot4dYW">0.00</span></label>
-                <input type="range" id="rot4dYW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dYW', this.value)">
+                <input type="range" id="rot4dYW" min="-6.28" max="6.28" step="0.01" value="0" oninput="P('rot4dYW', this.value)">
             </div>
             <div class="param">
                 <label>Z-W <span class="param-val" id="v-rot4dZW">0.00</span></label>
-                <input type="range" id="rot4dZW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dZW', this.value)">
+                <input type="range" id="rot4dZW" min="-6.28" max="6.28" step="0.01" value="0" oninput="P('rot4dZW', this.value)">
             </div>
         </div>
 
@@ -135,7 +145,7 @@
             <h3>🎨 Visuals</h3>
             <div class="param">
                 <label>Density <span class="param-val" id="v-gridDensity">15</span></label>
-                <input type="range" id="gridDensity" min="4" max="100" value="15" oninput="P('gridDensity', this.value)">
+                <input type="range" id="gridDensity" min="5" max="100" value="15" oninput="P('gridDensity', this.value)">
             </div>
             <div class="param">
                 <label>Morph <span class="param-val" id="v-morphFactor">1.0</span></label>
@@ -146,8 +156,8 @@
                 <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="P('chaos', this.value)">
             </div>
             <div class="param">
-                <label>Speed <span class="param-val" id="v-speed">0.5</span></label>
-                <input type="range" id="speed" min="0.1" max="2" step="0.01" value="0.5" oninput="P('speed', this.value)">
+                <label>Speed <span class="param-val" id="v-speed">1.0</span></label>
+                <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1.0" oninput="P('speed', this.value)">
             </div>
         </div>
 
@@ -155,33 +165,32 @@
             <h3>🎨 Color</h3>
             <div class="param">
                 <label>Hue <span class="param-val" id="v-hue">200°</span></label>
-                <input type="range" id="hue" min="0" max="360" value="200" oninput="P('hue', this.value)">
+                <input type="range" id="hue" min="-360" max="720" value="200" oninput="P('hue', this.value)">
             </div>
             <div class="param">
                 <label>Intensity <span class="param-val" id="v-intensity">0.5</span></label>
-                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="P('intensity', this.value)">
+                <input type="range" id="intensity" min="0" max="2" step="0.01" value="0.5" oninput="P('intensity', this.value)">
             </div>
             <div class="param">
                 <label>Saturation <span class="param-val" id="v-saturation">0.8</span></label>
-                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="P('saturation', this.value)">
+                <input type="range" id="saturation" min="0" max="2" step="0.01" value="0.8" oninput="P('saturation', this.value)">
             </div>
         </div>
 
-        <button class="btn" id="reactivity-btn" onclick="window.toggleReact()">🎵 AUDIO REACT: <span id="react-status">ON</span></button>
         <button class="btn" onclick="window.randomize()">🎲 Randomize</button>
-        <button class="btn ai" onclick="window.openAI()">🤖 AI Musical Choreography</button>
+        <button class="btn ai" onclick="window.openAI()">🤖 AI Full Song Choreography</button>
         <button class="btn" id="export-btn" onclick="window.exportVid()" disabled>🎥 Export Video</button>
     </div>
 
     <div id="timeline">
-        <h3>🎵 TIMELINE</h3>
+        <h3>📽️ TIMELINE</h3>
         <div class="audio-btns">
-            <label class="file-lbl" for="audio-file">📁 Load Audio File</label>
+            <label for="audio-file" class="file-lbl">📁 LOAD</label>
             <input type="file" id="audio-file" accept="audio/*">
-            <button id="play-btn" disabled onclick="window.play()">▶ Play</button>
-            <button id="pause-btn" disabled onclick="window.pause()">⏸ Pause</button>
-            <button id="stop-btn" disabled onclick="window.stop()">⏹ Stop</button>
-            <button onclick="window.addSeq()">➕ Add Sequence</button>
+            <button id="play-btn" disabled onclick="window.play()">▶</button>
+            <button id="pause-btn" disabled onclick="window.pause()">⏸</button>
+            <button id="stop-btn" disabled onclick="window.stop()">⏹</button>
+            <button onclick="window.addSeq()">➕</button>
         </div>
         <div class="track" id="track">
             <div class="playhead" id="playhead"></div>
@@ -189,13 +198,13 @@
     </div>
 
     <div id="ai-modal">
-        <h2>🤖 AI MUSICAL CHOREOGRAPHY V2</h2>
+        <h2>🤖 AI FULL SONG CHOREOGRAPHY</h2>
         <p style="font-size: 10px; color: #aaa; margin-bottom: 10px;">
-            AI analyzes your song structure and creates sequences with proper musical timing:
-            half-time, double-time, repeated elements, and rhythmic perception.
+            AI analyzes your song and creates: beat-synced color pulsing, rhythmic system switching,
+            density/chaos/morph/intensity modulation, color drops on snare hits, and mid-sequence transitions.
         </p>
         <input type="text" id="api-key" placeholder="Gemini API Key (leave empty for default)">
-        <textarea id="ai-prompt" placeholder="Song description... (e.g., 'progressive house with 128 BPM, builds every 16 bars, drops at 1:00 and 2:30')"></textarea>
+        <textarea id="ai-prompt" placeholder="Song vibe... (e.g., 'dark techno with heavy snares' or 'dreamy trance with euphoric builds')"></textarea>
         <div class="modal-btns">
             <button class="btn ai" onclick="window.genAI()">✨ Generate</button>
             <button class="btn" onclick="window.closeAI()">Cancel</button>
@@ -218,23 +227,13 @@
         let dat = new Uint8Array(anl.frequencyBinCount);
         let src = null;
         let play = false;
-
-        // BASE parameters - slower and more musical
-        let par = {
-            geometry: 0,
-            rot4dXW: 0, rot4dYW: 0, rot4dZW: 0,
-            gridDensity: 15,
-            morphFactor: 1.0,
-            chaos: 0.2,
-            speed: 0.5,  // SLOWER base speed for rhythm
-            hue: 200,
-            intensity: 0.5,
-            saturation: 0.8
-        };
-
+        let par = { geometry: 0, rot4dXW: 0, rot4dYW: 0, rot4dZW: 0, gridDensity: 15, morphFactor: 1.0, chaos: 0.2, speed: 1.0, hue: 200, intensity: 0.5, saturation: 0.8 };
         let seqs = [];
-        let currentSeq = null;
-        let audioReactEnabled = true; // Real-time audio reactivity
+
+        // Beat detection
+        let lastBeatTime = 0;
+        let beatThreshold = 0.75;
+        let beatCount = 0;
 
         const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
 
@@ -244,7 +243,7 @@
             aud.addEventListener('timeupdate', upd);
             aud.addEventListener('ended', () => window.stop());
             loop();
-            stat('Ready - Load audio and click AI Choreography');
+            stat('Ready');
         })();
 
         function stat(m) { document.getElementById('status').textContent = '🎵 ' + m; }
@@ -266,6 +265,8 @@
 
         function apply(p, v) {
             if (!eng) return;
+            // Clamp hue to 0-360 when applying
+            if (p === 'hue') v = ((v % 360) + 360) % 360;
             if (eng.parameterManager) eng.parameterManager.setParameter(p, v);
             else if (eng.updateParameter) eng.updateParameter(p, v);
             else if (eng.updateParameters) eng.updateParameters({ [p]: v });
@@ -277,16 +278,16 @@
 
         window.randomize = function() {
             par.geometry = Math.floor(Math.random() * 8);
-            par.rot4dXW = Math.random() * 4 - 2;
-            par.rot4dYW = Math.random() * 4 - 2;
-            par.rot4dZW = Math.random() * 4 - 2;
-            par.gridDensity = 4 + Math.random() * 96;
+            par.rot4dXW = Math.random() * 12.56 - 6.28;
+            par.rot4dYW = Math.random() * 12.56 - 6.28;
+            par.rot4dZW = Math.random() * 12.56 - 6.28;
+            par.gridDensity = 5 + Math.random() * 95;
             par.morphFactor = Math.random() * 2;
             par.chaos = Math.random();
-            par.speed = 0.1 + Math.random() * 1.9;
+            par.speed = 0.1 + Math.random() * 2.9;
             par.hue = Math.random() * 360;
-            par.intensity = Math.random();
-            par.saturation = Math.random();
+            par.intensity = Math.random() * 2;
+            par.saturation = Math.random() * 2;
             Object.entries(par).forEach(([p, v]) => { document.getElementById(p).value = v; window.P(p, v); });
         };
 
@@ -314,87 +315,104 @@
         };
 
         window.pause = function() { aud.pause(); play = false; stat('Paused'); };
-        window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; stat('Stopped'); };
+        window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; beatCount = 0; stat('Stopped'); };
 
-        window.toggleReact = function() {
-            audioReactEnabled = !audioReactEnabled;
-            document.getElementById('react-status').textContent = audioReactEnabled ? 'ON' : 'OFF';
-            stat(audioReactEnabled ? 'Audio reactivity ENABLED' : 'Audio reactivity DISABLED');
-        };
+        function detectBeat(bass) {
+            const now = Date.now();
+            if (bass > beatThreshold && now - lastBeatTime > 250) {
+                lastBeatTime = now;
+                beatCount++;
+
+                // Visual beat flash
+                const flash = document.getElementById('beatFlash');
+                flash.classList.remove('hit');
+                setTimeout(() => flash.classList.add('hit'), 10);
+
+                return true;
+            }
+            return false;
+        }
 
         function loop() {
             if (play) {
                 anl.getByteFrequencyData(dat);
-                const b = avg(0, 100) / 255;  // Bass
-                const m = avg(100, 400) / 255; // Mids
-                const h = avg(400, 1024) / 255; // Highs
+                const b = avg(0, 100) / 255;
+                const m = avg(100, 400) / 255;
+                const h = avg(400, 1024) / 255;
+                const e = (b + m + h) / 3;
+
                 const t = aud.currentTime;
+                const beat = detectBeat(b);
 
-                // REAL-TIME AUDIO REACTIVITY (when enabled and no sequences)
-                if (audioReactEnabled && seqs.length === 0) {
-                    // No sequences - use continuous audio reactivity
-                    apply('rot4dXW', par.rot4dXW + b * 0.5);
-                    apply('rot4dYW', par.rot4dYW + m * 0.5);
-                    apply('rot4dZW', par.rot4dZW + h * 0.5);
-                    apply('gridDensity', par.gridDensity + b * 30);
-                    apply('morphFactor', par.morphFactor + m * 0.5);
-                    apply('chaos', Math.min(1, par.chaos + h * 0.3));
-                    apply('intensity', Math.min(1, par.intensity + (b + m + h) / 3 * 0.4));
-                }
+                // Algorithmic patterns
+                const pulse = Math.sin(t * 2) * 0.5 + 0.5;
+                const breathe = Math.sin(t * 0.5) * 0.5 + 0.5;
 
-                // Find current sequence
+                // Apply reactivity
+                apply('gridDensity', par.gridDensity + b * 60 + pulse * 25);
+                apply('morphFactor', par.morphFactor + m * 0.9 + breathe * 0.5);
+                apply('chaos', par.chaos + h * 0.7 + pulse * 0.4);
+                apply('speed', par.speed + e * 1.4);
+                apply('intensity', par.intensity + e * 0.8 + (beat ? 0.5 : 0));
+                apply('saturation', par.saturation + b * 0.5 + (beat ? 0.3 : 0));
+
+                // 4D rotation dynamics
+                apply('rot4dXW', Math.sin(t * 0.3 + b * Math.PI * 2) * 3.14);
+                apply('rot4dYW', Math.cos(t * 0.5 + m * Math.PI * 2) * 3.14);
+                apply('rot4dZW', Math.sin(t * 0.7 + h * Math.PI * 2) * 3.14);
+
+                // Check sequence
                 const ac = seqs.find(s => t >= s.time && t < s.time + s.dur);
-
-                if (ac && ac !== currentSeq) {
-                    currentSeq = ac;
-
-                    // Apply sequence base parameters
-                    if (ac.sys && ac.sys !== sys) window.switchSys(ac.sys);
-                    if (ac.par) {
-                        Object.entries(ac.par).forEach(([p, v]) => {
-                            par[p] = v;
-                            apply(p, v);
-                            document.getElementById(p).value = v;
-                            window.P(p, v);
-                        });
-                    }
-
-                    stat(`SEQ: ${ac.name || 'Untitled'} (${ac.time}s-${ac.time+ac.dur}s)`);
-                }
-
                 if (ac) {
-                    const seqTime = t - ac.time;
-                    const progress = seqTime / ac.dur;
-
-                    // Apply audio reactivity multipliers from sequence
-                    const densityReact = (ac.densityReact || 0) * b;
-                    const morphReact = (ac.morphReact || 0) * m;
-                    const chaosReact = (ac.chaosReact || 0) * h;
-                    const intensityReact = (ac.intensityReact || 0) * (b + m + h) / 3;
-
-                    apply('gridDensity', par.gridDensity + densityReact);
-                    apply('morphFactor', par.morphFactor + morphReact);
-                    apply('chaos', Math.min(1, par.chaos + chaosReact));
-                    apply('intensity', Math.min(1, par.intensity + intensityReact));
-
-                    // Apply parameter sweeps (gradual changes over sequence)
-                    if (ac.sweeps) {
-                        Object.entries(ac.sweeps).forEach(([param, [start, end]]) => {
-                            const val = start + (end - start) * progress;
-                            apply(param, val);
-                        });
+                    // Mid-sequence system switching
+                    if (ac.sysSwitch) {
+                        const switches = ac.sysSwitch;
+                        for (let sw of switches) {
+                            if (t >= ac.time + sw.at && t < ac.time + sw.at + 0.5) {
+                                if (sys !== sw.to) window.switchSys(sw.to);
+                            }
+                        }
                     }
 
-                    // Apply rotation dynamics
-                    if (ac.rotDynamics) {
-                        const { xw, yw, zw } = ac.rotDynamics;
-                        if (xw) apply('rot4dXW', xw.base + Math.sin(seqTime * xw.freq) * xw.amp);
-                        if (yw) apply('rot4dYW', yw.base + Math.cos(seqTime * yw.freq) * yw.amp);
-                        if (zw) apply('rot4dZW', zw.base + Math.sin(seqTime * zw.freq + Math.PI/2) * zw.amp);
+                    if (ac.sys && ac.sys !== sys && !ac.sysSwitch) window.switchSys(ac.sys);
+                    if (ac.par) Object.entries(ac.par).forEach(([p, v]) => apply(p, v));
+
+                    // Beat-synced color pulsing
+                    if (ac.colorPulse && beat) {
+                        const colors = ac.colorPulse;
+                        const idx = beatCount % colors.length;
+                        apply('hue', colors[idx]);
                     }
+
+                    // Color drop on snare (every 2nd or 4th beat)
+                    if (ac.colorDrop && beat && beatCount % ac.colorDrop === 0) {
+                        apply('saturation', 0); // Drop color
+                        setTimeout(() => apply('saturation', par.saturation), 100); // Restore
+                    }
+
+                    // Parameter modulation
+                    if (ac.densityMod && beat) apply('gridDensity', par.gridDensity + ac.densityMod);
+                    if (ac.chaosMod && beat) apply('chaos', Math.min(1, par.chaos + ac.chaosMod));
+                    if (ac.morphMod && beat) apply('morphFactor', Math.min(2, par.morphFactor + ac.morphMod));
+                    if (ac.intensityMod && beat) apply('intensity', Math.min(2, par.intensity + ac.intensityMod));
+
+                    // Patterns
+                    if (ac.pattern) applyPat(ac.pattern, t - ac.time, ac.dur);
                 }
             }
             requestAnimationFrame(loop);
+        }
+
+        function applyPat(pat, t, dur) {
+            const prog = t / dur;
+            if (pat === 'density_pulse') apply('gridDensity', par.gridDensity + Math.sin(prog * Math.PI * 4) * 40);
+            else if (pat === 'rotation_spin') {
+                apply('rot4dXW', prog * Math.PI * 4);
+                apply('rot4dYW', prog * Math.PI * 3);
+                apply('rot4dZW', prog * Math.PI * 5);
+            } else if (pat === 'color_shift') apply('hue', (par.hue + prog * 180) % 360);
+            else if (pat === 'chaos_build') apply('chaos', Math.min(1, par.chaos + prog * 0.8));
+            else if (pat === 'morph_wave') apply('morphFactor', par.morphFactor + Math.sin(prog * Math.PI * 2) * 0.9);
         }
 
         function avg(s, e) {
@@ -418,10 +436,12 @@
                 b.className = 'seq-block';
                 b.style.left = (s.time / aud.duration * 100) + '%';
                 b.style.width = (s.dur / aud.duration * 100) + '%';
-                b.innerHTML = `${s.name || s.sys?.toUpperCase() || 'SEQ'}<br>${s.time.toFixed(1)}s`;
+                b.innerHTML = `${s.sys ? s.sys.toUpperCase() : 'SEQ'}<br>${s.time.toFixed(1)}s`;
                 b.onclick = () => {
                     aud.currentTime = s.time;
+                    beatCount = 0;
                     if (s.sys) window.switchSys(s.sys);
+                    if (s.par) Object.entries(s.par).forEach(([p, v]) => { par[p] = v; document.getElementById(p).value = v; window.P(p, v); });
                 };
                 tr.appendChild(b);
             });
@@ -432,215 +452,10 @@
             document.querySelector('.toggle-mini').textContent = document.getElementById('controls').classList.contains('mini') ? '▶' : '◀';
         };
 
-        window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
-        window.closeAI = function() { document.getElementById('ai-modal').classList.remove('active'); };
-
-        window.genAI = async function() {
-            const prompt = document.getElementById('ai-prompt').value;
-            if (!prompt) return alert('Enter song description');
-
-            const key = document.getElementById('api-key').value;
-            if (!key) {
-                alert('Please enter your Gemini API key');
-                return;
-            }
-            const dur = aud.duration || 180;
-            stat('AI analyzing musical structure...');
-
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-                const resp = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `You are a 4D VISUALIZATION CHOREOGRAPHY MASTER. Create a ${dur.toFixed(0)}s journey for: "${prompt}"
-
-🌀 CRITICAL: 4D ROTATIONS ARE THE STAR OF THIS SHOW!
-
-The shader rotates 4D space (x,y,z,w) using THREE rotation planes:
-- rot4dXW: Rotates X-W plane (horizontal spin through 4th dimension)
-- rot4dYW: Rotates Y-W plane (vertical spin through 4th dimension)
-- rot4dZW: Rotates Z-W plane (depth spin through 4th dimension)
-
-When these rotate, 3D projections create IMPOSSIBLE GEOMETRY that morphs and transforms!
-
-🔥 USE 4D ROTATIONS MASSIVELY:
-
-VERSE: Slow single-plane rotation
-  rot4dXW: 0.3 (slow X-W spin)
-  rot4dYW: 0, rot4dZW: 0
-
-BUILD: Add second plane, speed up
-  rot4dXW: 0.6, rot4dYW: 0.4, rot4dZW: 0
-
-DROP: FULL 3-PLANE ROTATION + HIGH DENSITY
-  rot4dXW: 1.2, rot4dYW: 0.8, rot4dZW: 0.6
-  gridDensity: 90 (creates fractal detail)
-
-BREAKDOWN: Slow counter-rotation
-  rot4dXW: -0.2, rot4dYW: 0.3, rot4dZW: -0.1 (negative = reverse)
-
-🎯 ROT DYNAMICS - OSCILLATING ROTATIONS:
-
-Instead of fixed rotation, make them PULSE with music:
-
-"rotDynamics": {
-  "xw": {
-    "base": 0.5,    // Center rotation value
-    "freq": 0.5,    // Oscillation Hz (0.5 = 2 seconds per cycle, matches 120 BPM)
-    "amp": 0.8      // How much it swings (0.5 ± 0.8 = -0.3 to 1.3)
-  },
-  "yw": {"base": 0.3, "freq": 0.33, "amp": 0.5},  // Different rhythm (3:2 polyrhythm)
-  "zw": {"base": -0.2, "freq": 0.25, "amp": 0.6}  // Even slower (4 sec cycle)
-}
-
-This creates POLYRHYTHMIC 4D rotation where each plane pulses at different rates!
-
-📊 GRID DENSITY = FRACTAL DETAIL:
-
-The shader multiplies position by gridDensity before calculating geometry.
-Higher density = MORE REPETITIONS of the pattern = fractal detail!
-
-sparse: 8-15 (wide spacing, clean)
-moderate: 20-40 (balanced)
-intense: 50-80 (detailed fractals)
-INSANE: 85-100 (maximum detail for drops)
-
-💥 DROPS NEED:
-- gridDensity: 90-100 (fractal explosion)
-- rot4dXW/YW/ZW: ALL high (1.0-1.5 range, full 4D spin)
-- chaos: 0.7-0.9 (controlled chaos)
-- speed: 0.3-0.5 (SLOW to see the rotation)
-- morphFactor: 1.5-2.0 (maximum shape warping)
-
-🎨 GEOMETRY CHANGES CREATE DIFFERENT FRACTALS:
-
-0=tetrahedron (triangular lattice)
-1=hypercube (cubic lattice - best for 4D rotation visibility)
-2=sphere (concentric shells)
-3=torus (donut fractals)
-4=klein bottle (impossible topology)
-5=fractal (recursive patterns - INSANE with high density)
-6=wave (interference patterns)
-7=crystal (sharp prismatic)
-
-Change geometry at MAJOR section changes (chorus→verse→drop).
-Use fractal (5) or hypercube (1) for drops.
-
-🎵 SEQUENCE TEMPLATE:
-
-{
-  "name": "DROP 1 - 4D Fractal Explosion",
-  "time": 60,
-  "dur": 16,
-  "sys": "faceted",
-  "par": {
-    "geometry": 5,           // Fractal
-    "rot4dXW": 1.2,          // Fast X-W spin
-    "rot4dYW": 0.9,          // Fast Y-W spin
-    "rot4dZW": 0.7,          // Fast Z-W spin
-    "gridDensity": 95,       // MAXIMUM fractal detail
-    "morphFactor": 1.8,      // Heavy morphing
-    "chaos": 0.8,            // Controlled chaos
-    "speed": 0.4,            // SLOW to see rotation
-    "hue": 280,              // Purple
-    "intensity": 0.7,
-    "saturation": 0.9
-  },
-  "densityReact": 5,         // Small react (already at 95)
-  "morphReact": 0.2,
-  "chaosReact": 0.15,
-  "intensityReact": 0.25,
-  "rotDynamics": {           // Polyrhythmic 4D oscillation
-    "xw": {"base": 1.2, "freq": 0.5, "amp": 0.4},
-    "yw": {"base": 0.9, "freq": 0.33, "amp": 0.5},
-    "zw": {"base": 0.7, "freq": 0.4, "amp": 0.3}
-  },
-  "sweeps": {                // Gradual changes
-    "hue": [280, 320],       // Purple → Pink
-    "chaos": [0.7, 0.9]      // Chaos builds
-  }
-}
-
-🎼 MUSICAL STRUCTURE:
-
-INTRO (0-16s):
-  - geometry: 0 (tetra)
-  - rot4dXW: 0.2, others: 0
-  - gridDensity: 10
-  - speed: 0.4
-
-VERSE 1 (16-48s):
-  - geometry: 1 (cube)
-  - rot4dXW: 0.4, rot4dYW: 0.2
-  - gridDensity: 25
-  - speed: 0.5
-
-BUILD 1 (48-64s):
-  - sweeps: rot4dXW [0.4→1.0], rot4dYW [0.2→0.7], gridDensity [25→60], chaos [0.2→0.6]
-  - speed: 0.6→1.0
-
-DROP 1 (64-96s): **4D ROTATION SHOWCASE**
-  - geometry: 5 or 1 (fractal/cube)
-  - rot4dXW: 1.2, rot4dYW: 0.9, rot4dZW: 0.7 (FULL 3-PLANE)
-  - gridDensity: 90-100 (fractal detail)
-  - rotDynamics with polyrhythm
-  - speed: 0.3-0.4 (SLOW)
-
-BREAKDOWN (96-112s):
-  - geometry: 2 (sphere)
-  - rot4dXW: -0.1, rot4dYW: 0.2, rot4dZW: -0.05 (gentle counter-rotation)
-  - gridDensity: 12 (sparse)
-  - speed: 0.25
-
-BUILD 2 (112-128s):
-  - Add rot4dZW into mix
-  - Sweep all three rotations upward
-  - gridDensity: 30→75
-
-FINAL DROP (128-160s): **EVEN MORE 4D**
-  - rot4dXW: 1.5, rot4dYW: 1.2, rot4dZW: 1.0 (MAXIMUM)
-  - gridDensity: 100
-  - geometry: 5 (fractal)
-  - rotDynamics with FASTER freq (0.66 Hz = double-time feel)
-
-🔁 CRITICAL RULES:
-
-1. USE ALL THREE ROT4D PLANES - don't leave them at 0!
-2. DROP = HIGH rot4d values (0.8-1.5) + HIGH gridDensity (85-100)
-3. Slow speed (0.3-0.5) during complex rotation so you can SEE it
-4. rotDynamics creates polyrhythmic movement
-5. Sweeps for gradual transitions
-6. Change geometry at major sections only
-7. Fractal (5) or Hypercube (1) for drops
-8. Negative rotations for counter-spin effects
-
-Create ${Math.ceil(dur/12)} sequences that SHOWCASE 4D ROTATION MATHEMATICS.
-Return ONLY JSON array.`
-                            }]
-                        }]
-                    })
-                });
-
-                const data = await resp.json();
-                const txt = data.candidates[0].content.parts[0].text;
-                const json = txt.match(/\[[\s\S]*\]/)[0];
-                seqs = JSON.parse(json);
-                rend();
-                stat(`AI: ${seqs.length} musical sequences loaded!`);
-                window.closeAI();
-            } catch (err) {
-                stat('AI failed: ' + err.message);
-                console.error(err);
-            }
-        };
-
         window.addSeq = function() {
             const t = aud.currentTime || 0;
             const seq = {
-                name: `Sequence ${seqs.length + 1}`,
+                name: `Manual ${seqs.length + 1}`,
                 time: t,
                 dur: 10,
                 sys: sys,
@@ -652,60 +467,227 @@ Return ONLY JSON array.`
             stat(`Added sequence at ${t.toFixed(1)}s`);
         };
 
-        window.exportVid = async function() {
-            if (!aud.src) {
-                alert('Load audio first');
-                return;
-            }
+        window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
+        window.closeAI = function() { document.getElementById('ai-modal').classList.remove('active'); };
 
+        window.genAI = async function() {
+            const prompt = document.getElementById('ai-prompt').value;
+            if (!prompt) return alert('Enter description');
+
+            const key = document.getElementById('api-key').value || 'YOUR_GEMINI_API_KEY_HERE';
+            const dur = aud.duration || 180;
+            stat('AI generating with beat sync...');
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are a MASTER music visualization choreographer. Create an INSANE ${dur.toFixed(0)}s visual journey for: "${prompt}"
+
+🔥 YOUR CREATIVE FREEDOM - GO WILD:
+
+PARAMETERS (use FULL ranges - don't be shy!):
+- geometry: 0-7 (0=tetrahedron, 1=hypercube, 2=sphere, 3=torus, 4=klein, 5=fractal, 6=wave, 7=crystal)
+- rot4dXW/YW/ZW: -6.28 to 6.28 (FULL rotations - use extremes!)
+- gridDensity: 5-100 (5=minimal, 100=INSANE detail)
+- morphFactor: 0-2 (2=MAXIMUM morphing)
+- chaos: 0-1 (1=PURE chaos)
+- speed: 0.1-3 (3=HYPER speed)
+- hue: -360 to 720 (negative=reverse spectrum, >360=multi-wraps)
+- intensity: 0-2 (2=BLINDING brightness)
+- saturation: 0-2 (0=grayscale, 2=HYPER saturated)
+
+SYSTEMS (switch freely, layer by layer):
+- faceted: Clean geometric, great for builds
+- quantum: Complex 3D lattice, perfect for drops
+- holographic: Pink/magenta audio-reactive, ethereal breakdowns
+
+BEAT-SYNCED MAGIC:
+- colorPulse: Array of hues that cycle on EVERY beat [30, 210, 120] = orange→blue→green
+- colorDrop: 2 or 4 = saturation→0 every 2nd/4th beat (snare drops)
+- densityMod: Add to density on beat (try 20-80 for insane pulses)
+- chaosMod: Add to chaos on beat (0.1-0.8 for rhythmic disruption)
+- morphMod: Add to morph on beat (0.3-1.5 for shape-shifting)
+- intensityMod: Add to intensity on beat (0.3-1.0 for flash strobes)
+- sysSwitch: [{"at":5, "to":"quantum"}, {"at":10, "to":"holographic"}] = mid-sequence switches
+
+PATTERNS (algorithmic overlays):
+- density_pulse: Breathing sine wave
+- rotation_spin: Accelerating 4D spins
+- color_shift: Spectrum journey
+- chaos_build: Progressive entropy
+- morph_wave: Oscillating shapes
+
+🎵 CREATE 15-25 SEQUENCES with MAXIMUM DYNAMICS:
+
+LAYER-BY-LAYER THINKING:
+- DON'T just set parameters - COMBINE them!
+- Use sysSwitch WITHIN sequences for rhythmic changes
+- Stack colorPulse + colorDrop + densityMod for multi-layered beats
+- Go from minimal (density:5) to MAXIMAL (density:100)
+- Use negative hues (-200), super-hues (500), intensity:2, saturation:2
+- Change geometry OFTEN (every 10-20s)
+- Combine patterns with beat mods
+- Use ALL 3 systems throughout the song
+- Build tension with chaos:0.1→0.9, then DROP with chaos:1 + all mods maxed
+
+MUSICAL STRUCTURE EXAMPLES (adapt to vibe):
+- INTRO: density:8, intensity:0.3, slow rotation, subtle colorPulse
+- BUILD: density:20→60, chaos:0.2→0.7, speed:1→2.5, intensityMod:0.4
+- DROP: density:100, chaos:1, ALL mods maxed, colorPulse:[0,180], sysSwitch rapid
+- BREAKDOWN: density:5, saturation:0.2, ethereal hues (200-250), slow morph
+- FINAL DROP: EVERYTHING maxed, rainbow colorPulse, geometry changes every 2s
+
+Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
+                            }]
+                        }]
+                    })
+                });
+
+                const data = await resp.json();
+                const txt = data.candidates[0].content.parts[0].text;
+                const json = txt.match(/\[[\s\S]*\]/)[0];
+                seqs = JSON.parse(json);
+                rend();
+                beatCount = 0;
+                stat(`AI: ${seqs.length} seqs with beat sync!`);
+                window.closeAI();
+            } catch (err) {
+                stat('AI failed: ' + err.message);
+                console.error(err);
+            }
+        };
+
+        window.exportVid = function() {
+            if (!aud.src) return alert('Load audio first');
+
+            stat('Preparing export...');
+
+            // Get the first visible canvas
             const canvas = document.querySelector('canvas');
-            if (!canvas) {
-                alert('No canvas found');
-                return;
+            if (!canvas) return alert('No canvas found');
+
+            // Try different MediaRecorder mimeTypes for compatibility
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/webm;codecs=vp8';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm';
+                }
             }
 
-            stat('Starting video export...');
+            try {
+                // Create video stream from canvas
+                const videoStream = canvas.captureStream(60);
 
-            // Capture canvas stream at 60fps
-            const stream = canvas.captureStream(60);
+                // Create a second AudioContext for export to avoid conflicts
+                const exportCtx = new AudioContext();
+                const exportDest = exportCtx.createMediaStreamDestination();
 
-            // Create audio context for export
-            const audioCtx = new AudioContext();
-            const source = audioCtx.createMediaElementSource(aud);
-            const dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-            source.connect(audioCtx.destination);
+                // Create a gain node to tap the audio without disrupting playback
+                const gainNode = ctx.createGain();
+                gainNode.gain.value = 1.0;
 
-            // Add audio track to stream
-            stream.addTrack(dest.stream.getAudioTracks()[0]);
+                // Insert gain node into audio chain: source -> analyser -> gain -> destination
+                // We'll connect gain to export destination
+                const srcNode = ctx.createMediaStreamSource(exportDest.stream);
 
-            // Create MediaRecorder
-            const recorder = new MediaRecorder(stream, {
-                mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 8000000
-            });
+                // Alternative: Use MediaElementAudioSourceNode if audio isn't playing
+                // Create audio element clone for export
+                const exportAudio = new Audio(aud.src);
+                exportAudio.currentTime = 0;
 
-            const chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `vib34d-choreography-${Date.now()}.webm`;
-                a.click();
-                audioCtx.close();
-                stat('Export complete!');
-            };
+                const exportAudioSource = exportCtx.createMediaElementSource(exportAudio);
+                exportAudioSource.connect(exportDest);
+                exportAudioSource.connect(exportCtx.destination);
 
-            // Start recording
-            recorder.start();
-            aud.currentTime = 0;
-            await aud.play();
-            stat('Recording...');
+                // Combine video + audio streams
+                const combinedStream = new MediaStream([
+                    ...videoStream.getVideoTracks(),
+                    ...exportDest.stream.getAudioTracks()
+                ]);
 
-            // Stop when audio ends
-            aud.onended = () => recorder.stop();
+                // Create MediaRecorder
+                const recorder = new MediaRecorder(combinedStream, {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 8000000
+                });
+
+                const chunks = [];
+
+                recorder.ondataavailable = e => {
+                    if (e.data && e.data.size > 0) {
+                        chunks.push(e.data);
+                        stat(`Recording... ${chunks.length} chunks`);
+                    }
+                };
+
+                recorder.onstop = () => {
+                    console.log('Recorder stopped, chunks:', chunks.length);
+
+                    exportCtx.close();
+                    exportAudio.pause();
+
+                    if (chunks.length === 0) {
+                        stat('Export failed: No data recorded');
+                        return;
+                    }
+
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    console.log('Blob size:', blob.size);
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `vib34d-master-${Date.now()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    stat('Export complete! Downloaded');
+                };
+
+                recorder.onerror = e => {
+                    console.error('Recorder error:', e);
+                    stat('Export failed: ' + e.error);
+                    exportCtx.close();
+                    exportAudio.pause();
+                };
+
+                // Start recording
+                console.log('Starting recorder with mimeType:', mimeType);
+                recorder.start(100); // Collect data every 100ms
+
+                // Play both audios in sync
+                aud.currentTime = 0;
+                exportAudio.currentTime = 0;
+                beatCount = 0;
+
+                Promise.all([aud.play(), exportAudio.play()]).then(() => {
+                    stat('Recording... 0 chunks');
+                }).catch(err => {
+                    console.error('Play error:', err);
+                    stat('Playback failed: ' + err.message);
+                    recorder.stop();
+                });
+
+                // Stop recording when audio ends
+                exportAudio.onended = () => {
+                    console.log('Audio ended, stopping recorder');
+                    if (recorder.state === 'recording') {
+                        recorder.stop();
+                    }
+                };
+
+            } catch (err) {
+                console.error('Export setup error:', err);
+                stat('Export failed: ' + err.message);
+            }
         };
     </script>
 </body>
