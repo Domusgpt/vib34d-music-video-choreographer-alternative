@@ -417,20 +417,43 @@
                         Object.entries(ac.par).forEach(([p, v]) => apply(p, v));
                     }
 
-                    // Beat-synced color pulsing
+                    // INTRICATE BEAT-SYNCED PATTERNS
+
+                    // densityPulse - cycling density values on every beat
+                    if (ac.densityPulse && beat) {
+                        const densities = ac.densityPulse;
+                        const idx = beatCount % densities.length;
+                        apply('gridDensity', densities[idx]);
+                    }
+
+                    // colorPulse - cycling hue values on every beat
                     if (ac.colorPulse && beat) {
                         const colors = ac.colorPulse;
                         const idx = beatCount % colors.length;
                         apply('hue', colors[idx]);
                     }
 
-                    // Color drop on snare (every 2nd or 4th beat)
-                    if (ac.colorDrop && beat && beatCount % ac.colorDrop === 0) {
-                        apply('saturation', 0); // Drop color
-                        setTimeout(() => apply('saturation', par.saturation), 100); // Restore
+                    // saturationSnap - rhythmic saturation patterns
+                    if (ac.saturationSnap && beat) {
+                        const saturations = ac.saturationSnap;
+                        const idx = beatCount % saturations.length;
+                        apply('saturation', saturations[idx]);
                     }
 
-                    // Parameter modulation
+                    // geometryMeasures - change geometry on measure boundaries (every 4 beats)
+                    if (ac.geometryMeasures && beat && beatCount % 4 === 0) {
+                        const geometries = ac.geometryMeasures;
+                        const measureIdx = Math.floor(beatCount / 4) % geometries.length;
+                        apply('geometry', geometries[measureIdx]);
+                    }
+
+                    // Color drop on snare (legacy support)
+                    if (ac.colorDrop && beat && beatCount % ac.colorDrop === 0) {
+                        apply('saturation', 0);
+                        setTimeout(() => apply('saturation', par.saturation), 100);
+                    }
+
+                    // Parameter modulation - ADD to base values on every beat
                     if (ac.densityMod && beat) apply('gridDensity', par.gridDensity + ac.densityMod);
                     if (ac.chaosMod && beat) apply('chaos', Math.min(1, par.chaos + ac.chaosMod));
                     if (ac.morphMod && beat) apply('morphFactor', Math.min(2, par.morphFactor + ac.morphMod));
@@ -509,12 +532,19 @@
                 time: t,
                 dur: 10,
                 sys: sys,
-                par: {...par}
+                par: {...par},
+                // Add intricate beat-synced patterns
+                densityPulse: [par.gridDensity - 10, par.gridDensity, par.gridDensity + 10, par.gridDensity],
+                colorPulse: [par.hue, (par.hue + 60) % 360, (par.hue + 120) % 360, (par.hue + 60) % 360],
+                densityMod: 25,
+                chaosMod: 0.15,
+                morphMod: 0.25,
+                intensityMod: 0.35
             };
             seqs.push(seq);
             seqs.sort((a, b) => a.time - b.time);
             rend();
-            stat(`Added sequence at ${t.toFixed(1)}s`);
+            stat(`Added intricate sequence at ${t.toFixed(1)}s with beat patterns`);
         };
 
         window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
@@ -536,63 +566,168 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [{
-                                text: `You are a MASTER music visualization choreographer. Create an INSANE ${dur.toFixed(0)}s visual journey for: "${prompt}"
+                                text: `You are a MASTER music visualization choreographer creating SURGICAL PRECISION choreography for: "${prompt}"
 
-🔥 YOUR CREATIVE FREEDOM - GO WILD:
+Duration: ${dur.toFixed(0)}s
 
-PARAMETERS (use FULL ranges - don't be shy!):
-- geometry: 0-7 (0=tetrahedron, 1=hypercube, 2=sphere, 3=torus, 4=klein, 5=fractal, 6=wave, 7=crystal)
-- rot4dXW/YW/ZW: -6.28 to 6.28 (FULL rotations - use extremes!)
-- gridDensity: 5-100 (5=minimal, 100=INSANE detail)
-- morphFactor: 0-2 (2=MAXIMUM morphing)
-- chaos: 0-1 (1=PURE chaos)
-- speed: 0.1-3 (3=HYPER speed)
-- hue: -360 to 720 (negative=reverse spectrum, >360=multi-wraps)
-- intensity: 0-2 (2=BLINDING brightness)
-- saturation: 0-2 (0=grayscale, 2=HYPER saturated)
+🎯 CRITICAL RULES FOR INTRICATE CHOREOGRAPHY:
 
-SYSTEMS (switch freely, layer by layer):
-- faceted: Clean geometric, great for builds
-- quantum: Complex 3D lattice, perfect for drops
-- holographic: Pink/magenta audio-reactive, ethereal breakdowns
+## BEAT-LEVEL PRECISION:
 
-BEAT-SYNCED MAGIC:
-- colorPulse: Array of hues that cycle on EVERY beat [30, 210, 120] = orange→blue→green
-- colorDrop: 2 or 4 = saturation→0 every 2nd/4th beat (snare drops)
-- densityMod: Add to density on beat (try 20-80 for insane pulses)
-- chaosMod: Add to chaos on beat (0.1-0.8 for rhythmic disruption)
-- morphMod: Add to morph on beat (0.3-1.5 for shape-shifting)
-- intensityMod: Add to intensity on beat (0.3-1.0 for flash strobes)
-- sysSwitch: [{"at":5, "to":"quantum"}, {"at":10, "to":"holographic"}] = mid-sequence switches
+**DENSITY PATTERNS - Rhythmic Back-and-Forth:**
+- densityPulse: [30, 60, 90, 60] = cycles EVERY BEAT (4-beat pattern)
+- densitySnap: [20, 80, 20, 80] = hard snap on/off (snare pattern)
+- densityBuild: [10, 20, 30, 40, 50, 60, 70, 80] = 8-beat build
+- Use densityMod for EVERY beat hit (not just some beats!)
 
-PATTERNS (algorithmic overlays):
-- density_pulse: Breathing sine wave
-- rotation_spin: Accelerating 4D spins
-- color_shift: Spectrum journey
-- chaos_build: Progressive entropy
-- morph_wave: Oscillating shapes
+**COLOR PATTERNS - Beat-Synced Cycles:**
+- colorPulse: [0, 120, 240, 60, 180, 300] = 6-beat rainbow cycle
+- colorBeat: [30, 30, 210, 210] = 2-beat color holds
+- colorWave: [0, 45, 90, 135, 180, 225, 270, 315] = smooth 8-beat spectrum sweep
+- ALWAYS use colorPulse for rhythmic color changes!
 
-🎵 CREATE 15-25 SEQUENCES with MAXIMUM DYNAMICS:
+**CHAOS/MORPH CALIBRATION:**
+- chaos: 0-0.3 = controlled (verses/intros)
+- chaos: 0.4-0.6 = moderate (builds)
+- chaos: 0.7-0.9 = intense (pre-drops)
+- chaos: 0.95-1.0 = MAXIMUM (drops only!)
+- morphFactor: 0.5-1.0 = subtle (most of the time)
+- morphFactor: 1.2-1.8 = dramatic (highlights)
 
-LAYER-BY-LAYER THINKING:
-- DON'T just set parameters - COMBINE them!
-- Use sysSwitch WITHIN sequences for rhythmic changes
-- Stack colorPulse + colorDrop + densityMod for multi-layered beats
-- Go from minimal (density:5) to MAXIMAL (density:100)
-- Use negative hues (-200), super-hues (500), intensity:2, saturation:2
-- Change geometry OFTEN (every 10-20s)
-- Combine patterns with beat mods
-- Use ALL 3 systems throughout the song
-- Build tension with chaos:0.1→0.9, then DROP with chaos:1 + all mods maxed
+**GEOMETRY CHANGES - Measure-Based:**
+- geometryMeasures: [0, 1, 5, 2, 3, 5, 7, 1] = change geometry every 4 measures
+- Use geometry changes at MUSICAL PHRASES (8, 16, 32 beat intervals)
+- NOT on every beat - only on STRUCTURAL changes
 
-MUSICAL STRUCTURE EXAMPLES (adapt to vibe):
-- INTRO: density:8, intensity:0.3, slow rotation, subtle colorPulse
-- BUILD: density:20→60, chaos:0.2→0.7, speed:1→2.5, intensityMod:0.4
-- DROP: density:100, chaos:1, ALL mods maxed, colorPulse:[0,180], sysSwitch rapid
-- BREAKDOWN: density:5, saturation:0.2, ethereal hues (200-250), slow morph
-- FINAL DROP: EVERYTHING maxed, rainbow colorPulse, geometry changes every 2s
+## BEAT MODS - MUST USE ALL:
 
-Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
+```json
+{
+  "densityPulse": [20, 40, 60, 80, 60, 40],  // 6-beat cycle
+  "colorPulse": [0, 60, 120, 180, 240, 300],  // Rainbow every 6 beats
+  "densityMod": 40,        // +40 density on EVERY beat
+  "chaosMod": 0.15,        // +0.15 chaos on EVERY beat (subtle)
+  "morphMod": 0.3,         // +0.3 morph on EVERY beat
+  "intensityMod": 0.4,     // +0.4 intensity on EVERY beat (strobe)
+  "saturationSnap": [1.5, 0.2, 1.5, 0.2],  // Saturation snap on/off every 2 beats
+  "geometryMeasures": [1, 5, 2, 7, 3, 6, 4, 0]  // Geometry rotation every 4 measures
+}
+```
+
+## PARAMETERS - PROPER USAGE:
+
+**gridDensity:**
+- 5-15: Minimal, spacious (intros/outros)
+- 20-40: Medium detail (verses)
+- 45-70: High detail (builds)
+- 75-95: Extreme detail (drops)
+- NEVER stay at one value - use densityPulse!
+
+**hue:**
+- Single value: 0-360 (pick one base color per sequence)
+- THEN use colorPulse for beat-synced variations around that base
+- Example: hue:180 (cyan base), colorPulse:[160,180,200,220] (cyan variations)
+
+**intensity:**
+- 0.2-0.4: Dark (breakdowns)
+- 0.5-0.8: Normal (verses)
+- 0.9-1.5: Bright (builds/drops)
+- Use intensityMod for beat strobes!
+
+**saturation:**
+- 0.1-0.3: Washed out (ethereal)
+- 0.5-0.9: Normal (most content)
+- 1.0-1.8: Hyper-saturated (drops)
+- Use saturationSnap for rhythmic desaturation!
+
+**chaos/morph:**
+- CALIBRATE these carefully!
+- chaos > 0.8 = visual chaos (use sparingly!)
+- morphFactor > 1.5 = extreme warping (drops only!)
+
+**4D rotations:**
+- Use rot4dXW/YW/ZW for BASE rotation
+- Then let audio reactivity ADD to it (already happens in code)
+- Slow rotations (0.1-0.5) for clarity
+- Fast rotations (1.0-2.0) for intensity
+
+## SYSTEM SWITCHING:
+
+**faceted:** Clean, geometric, BEST for intricate beat patterns
+**quantum:** Complex lattice, BEST for layered chaos
+**holographic:** Audio-reactive, BEST for organic flow
+
+Use sysSwitch for RHYTHMIC system changes:
+```json
+"sysSwitch": [
+  {"at": 4, "to": "quantum"},   // Switch at 4s into sequence
+  {"at": 8, "to": "faceted"},   // Switch back at 8s
+  {"at": 12, "to": "quantum"}   // Final switch at 12s
+]
+```
+
+## PATTERNS - USE THESE:
+
+**density_pulse:** Sine wave density breathing
+**rotation_spin:** Accelerating 4D spins
+**color_shift:** Spectrum sweep
+**chaos_build:** Progressive entropy increase
+**morph_wave:** Oscillating shape morphing
+
+COMBINE patterns with beat mods for layered complexity!
+
+## 🎵 SEQUENCE STRUCTURE (20-30 sequences):
+
+**INTRO (0-16s):**
+- geometry: 0, density: 10, chaos: 0.1, morph: 0.8
+- densityPulse: [8, 12, 16, 12], colorPulse: [180, 200, 220, 200]
+- pattern: "density_pulse"
+
+**VERSE 1 (16-48s):**
+- geometry: 1, density: 25, chaos: 0.2, morph: 1.0
+- densityPulse: [20, 30, 40, 30], colorPulse: [0, 30, 60, 30]
+- densityMod: 20, chaosMod: 0.1, morphMod: 0.2
+- geometryMeasures: [1, 2, 1, 5]
+
+**BUILD 1 (48-64s):**
+- geometry: 5, density: 40→70 (sweep!)
+- densityPulse: [40, 50, 60, 70, 80], colorPulse: [0, 60, 120, 180, 240]
+- densityMod: 35, chaosMod: 0.3, intensityMod: 0.5
+- pattern: "chaos_build"
+
+**DROP 1 (64-96s):**
+- geometry: 5, density: 90, chaos: 0.95, morph: 1.8, sys: "quantum"
+- densityPulse: [85, 95, 100, 95, 90, 95], colorPulse: [0, 180, 0, 180]
+- densityMod: 45, chaosMod: 0.5, morphMod: 0.8, intensityMod: 0.8
+- saturationSnap: [1.8, 0.1, 1.8, 0.1] (snare drops!)
+- sysSwitch: [{"at": 8, "to": "holographic"}, {"at": 16, "to": "quantum"}]
+- geometryMeasures: [5, 7, 5, 3, 5, 7]
+
+**BREAKDOWN (96-112s):**
+- geometry: 2, density: 8, chaos: 0.1, morph: 0.5, sys: "holographic"
+- densityPulse: [6, 8, 10, 8], colorPulse: [200, 220, 240, 220]
+- pattern: "density_pulse"
+
+**BUILD 2 (112-128s):**
+- Repeat build structure with different colors/geometries
+
+**FINAL DROP (128-end):**
+- EVERYTHING MAXED with ALL beat mods active
+- geometryMeasures changes every 2 measures
+- Rapid sysSwitch between all 3 systems
+
+## CRITICAL REQUIREMENTS:
+
+1. **EVERY sequence MUST have densityPulse** (beat-synced density)
+2. **EVERY sequence MUST have colorPulse** (beat-synced colors)
+3. **Drops MUST have densityMod + chaosMod + morphMod + intensityMod** (all 4!)
+4. **geometryMeasures for phrase-level changes** (not beat-level!)
+5. **Calibrate chaos/morph properly** (don't max everything!)
+6. **Use saturationSnap for rhythmic color drops**
+7. **Combine patterns with beat mods** for layered complexity
+8. **Use ALL 3 systems** throughout the song
+
+Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intricate beat-synced patterns!`
                             }]
                         }]
                     })
@@ -613,24 +748,55 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
         };
 
         window.exportVid = async function() {
-            if (!aud.src) return alert('Load audio first');
+            if (!aud.src) {
+                alert('⚠️ Load an audio file first!');
+                return;
+            }
+
+            // Check MediaRecorder support
+            if (!window.MediaRecorder) {
+                alert('❌ Video recording not supported in this browser. Try Chrome or Edge.');
+                return;
+            }
 
             stat('Preparing export...');
 
             // Get the currently VISIBLE canvas
-            const visibleCanvas = Array.from(document.querySelectorAll('canvas'))
-                .find(c => c.offsetParent !== null && c.offsetWidth > 0);
+            const allCanvases = Array.from(document.querySelectorAll('canvas'));
+            console.log('🎥 Found canvases:', allCanvases.map(c => ({
+                id: c.id,
+                visible: c.offsetParent !== null,
+                width: c.offsetWidth,
+                height: c.offsetHeight
+            })));
 
-            if (!visibleCanvas) return alert('No visible canvas found');
+            const visibleCanvas = allCanvases.find(c => c.offsetParent !== null && c.offsetWidth > 0);
 
-            console.log('🎥 Recording canvas:', visibleCanvas.id);
+            if (!visibleCanvas) {
+                alert('❌ No visible canvas found! Switch to a system first (Faceted/Quantum/Holographic).');
+                return;
+            }
+
+            console.log('🎥 Recording canvas:', visibleCanvas.id, visibleCanvas.width, 'x', visibleCanvas.height);
+
+            // Check canvas has content
+            if (visibleCanvas.width === 0 || visibleCanvas.height === 0) {
+                alert('❌ Canvas has no content. Make sure visualization is running.');
+                return;
+            }
 
             // Try different MediaRecorder mimeTypes for compatibility
             let mimeType = 'video/webm;codecs=vp9';
             if (!MediaRecorder.isTypeSupported(mimeType)) {
+                console.warn('vp9 not supported, trying vp8...');
                 mimeType = 'video/webm;codecs=vp8';
                 if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    console.warn('vp8 not supported, using default...');
                     mimeType = 'video/webm';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        alert('❌ WebM recording not supported in this browser. Try Chrome or Edge.');
+                        return;
+                    }
                 }
             }
 
