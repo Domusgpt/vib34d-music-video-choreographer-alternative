@@ -3,570 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VIB34D Music Video Choreographer - Dual Mode</title>
+    <title>VIB34D Ultimate Music Choreographer V2</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Orbitron', monospace; background: #000; color: #0ff; overflow: hidden; }
 
-        body {
-            font-family: 'Orbitron', monospace;
-            background: #000;
-            color: #0ff;
-            overflow: hidden;
-        }
+        /* Force hide legacy UI */
+        #variation-grid, .gallery-container, .trading-card-overlay, .variation-display,
+        #controls-container, .tab-system, .parameter-controls { display: none !important; }
 
-        #visualizer-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
+        #visualizer-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: #000; }
+        .holographic-layers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .holographic-layers canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        .holographic-layers {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
+        #controls { position: fixed; top: 20px; right: 20px; width: 420px; max-height: 90vh; background: rgba(0,0,0,0.95);
+            border: 3px solid #0ff; border-radius: 15px; padding: 20px; z-index: 3000; overflow-y: auto; backdrop-filter: blur(10px); }
+        #controls.mini { width: 60px; height: 60px; overflow: hidden; padding: 15px; }
+        #controls.mini > *:not(.toggle-mini) { display: none; }
+        .toggle-mini { position: absolute; top: 15px; right: 15px; background: rgba(0,255,255,0.2); border: 1px solid #0ff;
+            color: #0ff; padding: 5px 10px; font-size: 14px; border-radius: 4px; cursor: pointer; z-index: 10; }
 
-        .holographic-layers canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
+        h2 { text-align: center; font-size: 16px; margin-bottom: 15px; background: linear-gradient(90deg, #0ff, #f0f);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .section { margin-bottom: 15px; padding: 12px; background: rgba(0,255,255,0.05); border: 1px solid #0ff; border-radius: 8px; }
+        .section h3 { font-size: 12px; color: #f0f; margin-bottom: 8px; text-transform: uppercase; }
 
-        #mode-selector {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.95);
-            border: 3px solid #0ff;
-            border-radius: 15px;
-            padding: 20px;
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            min-width: 400px;
-        }
+        .param { margin-bottom: 8px; }
+        .param label { display: block; font-size: 10px; color: #0ff; margin-bottom: 3px; }
+        .param-val { float: right; color: #f0f; font-weight: 700; }
+        input[type="range"] { width: 100%; height: 5px; background: #111; border-radius: 3px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px;
+            background: linear-gradient(135deg, #0ff, #f0f); border-radius: 50%; cursor: pointer; }
 
-        #mode-selector h2 {
-            text-align: center;
-            font-size: 18px;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #0ff, #f0f);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+        .pills { display: flex; gap: 6px; margin-bottom: 10px; }
+        .pill { flex: 1; padding: 8px; background: rgba(0,255,255,0.1); border: 2px solid #0ff; border-radius: 6px;
+            text-align: center; font-size: 9px; cursor: pointer; transition: all 0.2s; }
+        .pill:hover { background: rgba(0,255,255,0.2); }
+        .pill.active { background: linear-gradient(135deg, #0ff, #00ff88); border-color: #00ff88; box-shadow: 0 0 15px #0ff; }
 
-        .mode-buttons {
-            display: flex;
-            gap: 15px;
-        }
+        .btn { width: 100%; padding: 10px; margin-bottom: 6px; background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none; color: #000; font-family: 'Orbitron', monospace; font-weight: 700; font-size: 11px;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 15px #0ff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.ai { background: linear-gradient(135deg, #4a0a68, #f0f); }
 
-        .mode-btn {
-            flex: 1;
-            background: linear-gradient(135deg, #0a4d68, #0ff);
-            border: none;
-            color: #000;
-            padding: 20px;
-            font-family: 'Orbitron', monospace;
-            font-weight: 700;
-            font-size: 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            align-items: center;
-        }
+        #timeline { position: fixed; bottom: 20px; left: 20px; right: 460px; background: rgba(0,0,0,0.95);
+            border: 2px solid #f0f; border-radius: 10px; padding: 15px; z-index: 2000; }
+        #timeline h3 { font-size: 12px; color: #f0f; margin-bottom: 10px; }
+        .audio-btns { display: flex; gap: 8px; margin-bottom: 10px; }
+        .audio-btns button { flex: 1; padding: 8px; background: linear-gradient(135deg, #4a0a68, #f0f); border: none;
+            color: #000; font-family: 'Orbitron', monospace; font-weight: 700; font-size: 10px; border-radius: 5px; cursor: pointer; }
+        .file-lbl { flex: 2; background: linear-gradient(135deg, #0a684a, #0f0); padding: 8px; border-radius: 5px;
+            cursor: pointer; text-align: center; font-size: 10px; font-weight: 700; }
+        input[type="file"] { display: none; }
 
-        .mode-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 30px #0ff;
-        }
+        .track { position: relative; height: 60px; background: #111; border-radius: 5px; margin-bottom: 10px; overflow: hidden; }
+        .playhead { position: absolute; top: 0; width: 2px; height: 100%; background: #ff0; z-index: 10; }
+        .seq-block { position: absolute; height: 100%; background: linear-gradient(135deg, rgba(0,255,255,0.3), rgba(255,0,255,0.3));
+            border: 2px solid #0ff; border-radius: 3px; padding: 4px; font-size: 8px; cursor: pointer; overflow: hidden; }
+        .seq-block:hover { background: linear-gradient(135deg, rgba(0,255,255,0.5), rgba(255,0,255,0.5)); }
 
-        .mode-btn .emoji {
-            font-size: 32px;
-        }
+        #status { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.9); border: 2px solid #0ff;
+            border-radius: 8px; padding: 10px 15px; font-size: 11px; z-index: 2500; max-width: 350px; }
 
-        .mode-btn .subtitle {
-            font-size: 10px;
-            opacity: 0.8;
-        }
-
-        #controls {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #0ff;
-            border-radius: 15px;
-            padding: 20px;
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
-            gap: 15px;
-            min-width: 600px;
-            transition: all 0.3s ease;
-        }
-
-        #controls.active {
-            display: flex;
-        }
-
-        #controls.collapsed {
-            min-height: auto;
-        }
-
-        #controls.collapsed .control-content {
-            display: none;
-        }
-
-        .collapse-toggle {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 255, 255, 0.2);
-            border: 1px solid #0ff;
-            color: #0ff;
-            padding: 5px 10px;
-            font-size: 18px;
-            cursor: pointer;
-            border-radius: 5px;
-            transition: all 0.3s;
-        }
-
-        .collapse-toggle:hover {
-            background: rgba(0, 255, 255, 0.4);
-        }
-
-        .control-row {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        button {
-            background: linear-gradient(135deg, #0a4d68, #0ff);
-            border: none;
-            color: #000;
-            padding: 12px 24px;
-            font-family: 'Orbitron', monospace;
-            font-weight: 700;
-            font-size: 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-        }
-
-        button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px #0ff;
-        }
-
-        button:active {
-            transform: scale(0.95);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .file-input-label {
-            background: linear-gradient(135deg, #4a0a68, #f0f);
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .file-input-label:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px #f0f;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        #timeline {
-            width: 100%;
-            height: 8px;
-            background: #111;
-            border-radius: 4px;
-            position: relative;
-            cursor: pointer;
-        }
-
-        #timeline-progress {
-            height: 100%;
-            background: linear-gradient(90deg, #0ff, #f0f);
-            border-radius: 4px;
-            width: 0%;
-            transition: width 0.1s linear;
-        }
-
-        #status {
-            text-align: center;
-            font-size: 12px;
-            color: #0ff;
-        }
-
-        .system-selector {
-            display: flex;
-            gap: 10px;
-        }
-
-        .system-btn {
-            flex: 1;
-            padding: 10px;
-            font-size: 12px;
-        }
-
-        .system-btn.active {
-            background: linear-gradient(135deg, #0ff, #00ff88);
-            box-shadow: 0 0 15px #0ff;
-        }
-
-        #info-panel {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid #0ff;
-            border-radius: 10px;
-            padding: 15px;
-            z-index: 1000;
-            max-width: 300px;
-            display: none;
-        }
-
-        #info-panel.active {
-            display: block;
-        }
-
-        #info-panel h3 {
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: #0ff;
-        }
-
-        #info-panel p {
-            font-size: 11px;
-            line-height: 1.5;
-            color: #aaa;
-            margin-bottom: 8px;
-        }
-
-        .beat-indicator {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100px;
-            height: 100px;
-            border: 3px solid #0ff;
-            border-radius: 50%;
-            opacity: 0;
-            transition: opacity 0.1s;
-            pointer-events: none;
-            z-index: 999;
-        }
-
-        .beat-indicator.active {
-            opacity: 0.8;
-            animation: beatPulse 0.3s ease-out;
-        }
-
-        @keyframes beatPulse {
-            0% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.5); }
-            100% { transform: translate(-50%, -50%) scale(1); }
-        }
-
-        /* Timeline Editor Mode */
-        #timeline-editor {
-            position: fixed;
-            left: 20px;
-            top: 120px;
-            bottom: 20px;
-            width: 350px;
-            background: rgba(0, 0, 0, 0.95);
-            border: 2px solid #f0f;
-            border-radius: 10px;
-            padding: 15px;
-            z-index: 1500;
-            display: none;
-            flex-direction: column;
-            gap: 10px;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-        }
-
-        #timeline-editor.active {
-            display: flex;
-        }
-
-        #timeline-editor.collapsed {
-            width: 60px;
-            overflow: hidden;
-        }
-
-        #timeline-editor.collapsed .timeline-content {
-            display: none;
-        }
-
-        #timeline-editor.collapsed h3 {
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
-            margin: 0;
-            padding: 10px 0;
-        }
-
-        #timeline-editor h3 {
-            color: #f0f;
-            margin-bottom: 10px;
-        }
-
-        .sequence-item {
-            background: rgba(255, 0, 255, 0.1);
-            border: 1px solid #f0f;
-            border-radius: 5px;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-
-        .sequence-item h4 {
-            color: #f0f;
-            font-size: 12px;
-            margin-bottom: 5px;
-        }
-
-        .sequence-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 5px;
-            font-size: 10px;
-        }
-
-        .sequence-controls label {
-            color: #aaa;
-        }
-
-        .sequence-controls input,
-        .sequence-controls select {
-            width: 100%;
-            background: #111;
-            border: 1px solid #333;
-            color: #0ff;
-            padding: 5px;
-            border-radius: 3px;
-            font-family: 'Orbitron', monospace;
-            font-size: 10px;
-        }
-
-        .add-sequence-btn {
-            background: linear-gradient(135deg, #4a0a68, #f0f);
-            margin-top: 10px;
-        }
-
-        .mode-toggle {
-            background: linear-gradient(135deg, #68520a, #ff0);
-            color: #000;
-        }
+        #ai-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 600px; background: rgba(0,0,0,0.98); border: 3px solid #f0f; border-radius: 15px; padding: 25px; z-index: 5000; }
+        #ai-modal.active { display: block; }
+        #ai-modal textarea { width: 100%; height: 100px; background: #111; border: 1px solid #0ff; color: #0ff;
+            padding: 10px; font-family: 'Orbitron', monospace; font-size: 12px; border-radius: 5px; margin-bottom: 10px; }
+        #ai-modal input { width: 100%; background: #111; border: 1px solid #0ff; color: #0ff; padding: 8px;
+            font-family: 'Orbitron', monospace; font-size: 11px; border-radius: 5px; margin-bottom: 10px; }
+        .modal-btns { display: flex; gap: 10px; }
 
         @media (max-width: 768px) {
-            #mode-selector {
-                min-width: 90%;
-                max-width: 90%;
-                padding: 15px;
-                top: 10px;
-            }
-
-            #mode-selector h2 {
-                font-size: 16px;
-            }
-
-            .mode-buttons {
-                flex-direction: column;
-            }
-
-            .mode-btn {
-                padding: 15px;
-                font-size: 12px;
-            }
-
-            .mode-btn .emoji {
-                font-size: 24px;
-            }
-
-            #controls {
-                min-width: 90%;
-                max-width: 90%;
-                bottom: 10px;
-                padding: 15px 10px;
-            }
-
-            .control-row {
-                flex-wrap: wrap;
-            }
-
-            .control-row button,
-            .file-input-label {
-                flex: 1 1 45%;
-                font-size: 11px;
-                padding: 8px 12px;
-            }
-
-            .system-btn {
-                font-size: 10px;
-                padding: 8px;
-            }
-
-            #timeline-editor {
-                width: 90%;
-                max-width: 90%;
-                left: 5%;
-                top: 80px;
-                bottom: auto;
-                max-height: 60vh;
-            }
-
-            #timeline-editor h3 {
-                font-size: 14px;
-            }
-
-            .sequence-item {
-                padding: 8px;
-                font-size: 10px;
-            }
-
-            .sequence-item h4 {
-                font-size: 11px;
-            }
-
-            .collapse-toggle {
-                font-size: 14px;
-                padding: 3px 8px;
-            }
-
-            #info-panel {
-                max-width: 90%;
-                right: 5%;
-                top: 10px;
-                font-size: 10px;
-                padding: 10px;
-            }
-
-            #info-panel h3 {
-                font-size: 12px;
-            }
-
-            #info-panel p {
-                font-size: 9px;
-            }
-
-            #status {
-                font-size: 10px;
-            }
+            #controls { width: 95%; right: 2.5%; }
+            #timeline { right: 2.5%; left: 2.5%; }
+            #ai-modal { width: 90%; }
         }
     </style>
 </head>
 <body>
-    <!-- Mode Selection Screen -->
-    <div id="mode-selector">
-        <h2>🎵 VIB34D MUSIC VIDEO CHOREOGRAPHER</h2>
-        <p style="text-align: center; font-size: 11px; color: #aaa; margin-bottom: 10px;">
-            Choose your mode: Let AI choreograph, or design your own sequences
-        </p>
-        <div class="mode-buttons">
-            <button class="mode-btn" onclick="selectMode('reactive')">
-                <span class="emoji">🎧</span>
-                <span>REACTIVE MODE</span>
-                <span class="subtitle">Real-time audio reactivity<br>Let the system respond to music</span>
-            </button>
-            <button class="mode-btn" onclick="selectMode('choreographed')">
-                <span class="emoji">🎬</span>
-                <span>HYBRID MODE</span>
-                <span class="subtitle">Choreographed sequences<br>+ Audio reactivity + System switching</span>
-            </button>
-        </div>
-    </div>
-
     <div id="visualizer-container">
         <div class="holographic-layers" id="vib34dLayers"></div>
         <div class="holographic-layers" id="quantumLayers" style="display: none;"></div>
         <div class="holographic-layers" id="holographicLayers" style="display: none;"></div>
     </div>
 
-    <div class="beat-indicator" id="beatIndicator"></div>
+    <div id="status">🎵 Ready</div>
 
-    <div id="info-panel">
-        <h3 id="mode-title">🎧 REACTIVE MODE</h3>
-        <p id="mode-description">Real-time audio analysis with automatic parameter mapping</p>
-        <p id="beat-info">BPM: -- | Beat: --</p>
-        <p id="energy-info">Energy: -- | Bass: --</p>
+    <div id="controls">
+        <button class="toggle-mini" onclick="window.toggleCtrl()">◀</button>
+
+        <h2>🎛️ VIB34D ULTIMATE V2</h2>
+
+        <div class="section">
+            <h3>🎨 Visualization System</h3>
+            <div class="pills">
+                <div class="pill active" data-sys="faceted" onclick="window.switchSys('faceted')">🔷<br>FACETED</div>
+                <div class="pill" data-sys="quantum" onclick="window.switchSys('quantum')">🌌<br>QUANTUM</div>
+                <div class="pill" data-sys="holographic" onclick="window.switchSys('holographic')">✨<br>HOLO</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔷 Geometry</h3>
+            <div class="param">
+                <label>Type <span class="param-val" id="v-geometry">0</span></label>
+                <input type="range" id="geometry" min="0" max="7" value="0" oninput="P('geometry', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🌀 4D Rotation (SLOW)</h3>
+            <div class="param">
+                <label>X-W <span class="param-val" id="v-rot4dXW">0.00</span></label>
+                <input type="range" id="rot4dXW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dXW', this.value)">
+            </div>
+            <div class="param">
+                <label>Y-W <span class="param-val" id="v-rot4dYW">0.00</span></label>
+                <input type="range" id="rot4dYW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dYW', this.value)">
+            </div>
+            <div class="param">
+                <label>Z-W <span class="param-val" id="v-rot4dZW">0.00</span></label>
+                <input type="range" id="rot4dZW" min="-2" max="2" step="0.01" value="0" oninput="P('rot4dZW', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Visuals</h3>
+            <div class="param">
+                <label>Density <span class="param-val" id="v-gridDensity">15</span></label>
+                <input type="range" id="gridDensity" min="4" max="100" value="15" oninput="P('gridDensity', this.value)">
+            </div>
+            <div class="param">
+                <label>Morph <span class="param-val" id="v-morphFactor">1.0</span></label>
+                <input type="range" id="morphFactor" min="0" max="2" step="0.01" value="1.0" oninput="P('morphFactor', this.value)">
+            </div>
+            <div class="param">
+                <label>Chaos <span class="param-val" id="v-chaos">0.2</span></label>
+                <input type="range" id="chaos" min="0" max="1" step="0.01" value="0.2" oninput="P('chaos', this.value)">
+            </div>
+            <div class="param">
+                <label>Speed <span class="param-val" id="v-speed">0.5</span></label>
+                <input type="range" id="speed" min="0.1" max="2" step="0.01" value="0.5" oninput="P('speed', this.value)">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 Color</h3>
+            <div class="param">
+                <label>Hue <span class="param-val" id="v-hue">200°</span></label>
+                <input type="range" id="hue" min="0" max="360" value="200" oninput="P('hue', this.value)">
+            </div>
+            <div class="param">
+                <label>Intensity <span class="param-val" id="v-intensity">0.5</span></label>
+                <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.5" oninput="P('intensity', this.value)">
+            </div>
+            <div class="param">
+                <label>Saturation <span class="param-val" id="v-saturation">0.8</span></label>
+                <input type="range" id="saturation" min="0" max="1" step="0.01" value="0.8" oninput="P('saturation', this.value)">
+            </div>
+        </div>
+
+        <button class="btn" id="reactivity-btn" onclick="window.toggleReact()">🎵 AUDIO REACT: <span id="react-status">ON</span></button>
+        <button class="btn" onclick="window.randomize()">🎲 Randomize</button>
+        <button class="btn ai" onclick="window.openAI()">🤖 AI Musical Choreography</button>
+        <button class="btn" id="export-btn" onclick="window.exportVid()" disabled>🎥 Export Video</button>
     </div>
 
-    <!-- Timeline Editor for Choreography Mode -->
-    <div id="timeline-editor">
-        <button class="collapse-toggle" onclick="toggleTimeline()">◀</button>
-        <h3>📝 Sequence Timeline</h3>
-        <div class="timeline-content">
-            <button class="add-sequence-btn" onclick="addSequence()">+ Add Sequence</button>
-            <div id="sequence-list"></div>
-            <button onclick="saveChoreography()">💾 Save Choreography</button>
-            <button onclick="loadChoreography()">📂 Load Choreography</button>
+    <div id="timeline">
+        <h3>🎵 TIMELINE</h3>
+        <div class="audio-btns">
+            <label class="file-lbl" for="audio-file">📁 Load Audio File</label>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="play-btn" disabled onclick="window.play()">▶ Play</button>
+            <button id="pause-btn" disabled onclick="window.pause()">⏸ Pause</button>
+            <button id="stop-btn" disabled onclick="window.stop()">⏹ Stop</button>
+        </div>
+        <div class="track" id="track">
+            <div class="playhead" id="playhead"></div>
         </div>
     </div>
 
-    <div id="controls">
-        <button class="collapse-toggle" onclick="toggleControls()">▼</button>
-        <div class="control-content">
-            <div class="control-row">
-                <label for="audio-file" class="file-input-label">
-                    📁 Load Audio File
-                </label>
-                <input type="file" id="audio-file" accept="audio/*">
-                <button id="play-btn" disabled>▶ Play</button>
-                <button id="pause-btn" disabled>⏸ Pause</button>
-                <button id="stop-btn" disabled>⏹ Stop</button>
-                <button class="mode-toggle" onclick="toggleMode()">🔄 Switch Mode</button>
-            </div>
-
-            <div id="timeline">
-                <div id="timeline-progress"></div>
-            </div>
-
-            <div class="system-selector">
-                <button class="system-btn active" data-system="faceted">🔷 FACETED</button>
-                <button class="system-btn" data-system="quantum">🌌 QUANTUM</button>
-                <button class="system-btn" data-system="holographic">✨ HOLOGRAPHIC</button>
-            </div>
-
-            <div class="control-row">
-                <button onclick="exportVideo()">🎥 Export Video</button>
-            </div>
-
-            <div id="status">Select a mode to begin</div>
+    <div id="ai-modal">
+        <h2>🤖 AI MUSICAL CHOREOGRAPHY V2</h2>
+        <p style="font-size: 10px; color: #aaa; margin-bottom: 10px;">
+            AI analyzes your song structure and creates sequences with proper musical timing:
+            half-time, double-time, repeated elements, and rhythmic perception.
+        </p>
+        <input type="text" id="api-key" placeholder="Gemini API Key (leave empty for default)">
+        <textarea id="ai-prompt" placeholder="Song description... (e.g., 'progressive house with 128 BPM, builds every 16 bars, drops at 1:00 and 2:30')"></textarea>
+        <div class="modal-btns">
+            <button class="btn ai" onclick="window.genAI()">✨ Generate</button>
+            <button class="btn" onclick="window.closeAI()">Cancel</button>
         </div>
     </div>
 
@@ -576,495 +207,438 @@
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
         import { CanvasManager } from './src/core/CanvasManager.js';
 
-        let canvasManager = null;
-        let currentMode = null;
-        let currentEngine = null;
-        let currentSystem = 'faceted';
+        let mgr = new CanvasManager();
+        let eng = null;
+        let sys = 'faceted';
+        let aud = new Audio();
+        let ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let anl = ctx.createAnalyser();
+        anl.fftSize = 2048;
+        let dat = new Uint8Array(anl.frequencyBinCount);
+        let src = null;
+        let play = false;
 
-        // Audio system
-        let audioElement = null;
-        let audioContext = null;
-        let analyser = null;
-        let sourceNode = null;
-        let dataArray = null;
-        let isPlaying = false;
-        let animationId = null;
-
-        // Engine classes for CanvasManager
-        const engineClasses = {
-            VIB34DIntegratedEngine,
-            QuantumEngine,
-            RealHolographicSystem
+        // BASE parameters - slower and more musical
+        let par = {
+            geometry: 0,
+            rot4dXW: 0, rot4dYW: 0, rot4dZW: 0,
+            gridDensity: 15,
+            morphFactor: 1.0,
+            chaos: 0.2,
+            speed: 0.5,  // SLOWER base speed for rhythm
+            hue: 200,
+            intensity: 0.5,
+            saturation: 0.8
         };
 
-        // Beat detection
-        let beatThreshold = 0.7;
-        let lastBeatTime = 0;
-        let detectedBPM = 0;
+        let seqs = [];
+        let currentSeq = null;
+        let audioReactEnabled = true; // Real-time audio reactivity
 
-        // Choreography sequences
-        let sequences = [];
+        const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
 
-        window.selectMode = async function(mode) {
-            currentMode = mode;
-            document.getElementById('mode-selector').style.display = 'none';
-            document.getElementById('controls').classList.add('active');
-            document.getElementById('info-panel').classList.add('active');
+        (async function() {
+            eng = await mgr.switchToSystem('faceted', cls);
+            document.getElementById('audio-file').addEventListener('change', loadAud);
+            aud.addEventListener('timeupdate', upd);
+            aud.addEventListener('ended', () => window.stop());
+            loop();
+            stat('Ready - Load audio and click AI Choreography');
+        })();
 
-            if (mode === 'choreographed') {
-                document.getElementById('timeline-editor').classList.add('active');
-                document.getElementById('mode-title').textContent = '🎬 HYBRID MODE';
-                document.getElementById('mode-description').textContent = 'Choreographed sequences + Full audio reactivity + System switching';
-                await generateDefaultChoreography();
-            } else {
-                document.getElementById('mode-title').textContent = '🎧 REACTIVE MODE';
-                document.getElementById('mode-description').textContent = 'Real-time audio analysis with automatic parameter mapping';
-            }
+        function stat(m) { document.getElementById('status').textContent = '🎵 ' + m; }
 
-            // Initialize CanvasManager
-            canvasManager = new CanvasManager();
-
-            // Initialize audio system
-            audioElement = new Audio();
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 2048;
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            // Setup event listeners
-            setupEventListeners();
-
-            // Initialize faceted system
-            await switchSystem('faceted');
-
-            console.log(`✅ ${mode.toUpperCase()} mode initialized`);
+        window.switchSys = async function(s) {
+            eng = await mgr.switchToSystem(s, cls);
+            sys = s;
+            document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.sys === s));
+            applyAll();
+            stat(`Switched to ${s.toUpperCase()}`);
         };
 
-        function setupEventListeners() {
-            // File input
-            document.getElementById('audio-file').addEventListener('change', (e) => {
-                loadAudioFile(e.target.files[0]);
-            });
+        window.P = function(p, v) {
+            par[p] = parseFloat(v);
+            const val = p === 'hue' ? v + '°' : (p === 'geometry' || p === 'gridDensity' ? parseInt(v) : parseFloat(v).toFixed(2));
+            document.getElementById('v-' + p).textContent = val;
+            apply(p, par[p]);
+        };
 
-            // Playback controls
-            document.getElementById('play-btn').addEventListener('click', () => play());
-            document.getElementById('pause-btn').addEventListener('click', () => pause());
-            document.getElementById('stop-btn').addEventListener('click', () => stop());
-
-            // Timeline seeking
-            document.getElementById('timeline').addEventListener('click', (e) => {
-                if (!audioElement.src) return;
-                const rect = e.target.getBoundingClientRect();
-                const pos = (e.clientX - rect.left) / rect.width;
-                audioElement.currentTime = pos * audioElement.duration;
-            });
-
-            // System switching
-            document.querySelectorAll('.system-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    switchSystem(btn.dataset.system);
-                });
-            });
-
-            // Audio events
-            audioElement.addEventListener('ended', () => stop());
-            audioElement.addEventListener('timeupdate', () => updateTimeline());
+        function apply(p, v) {
+            if (!eng) return;
+            if (eng.parameterManager) eng.parameterManager.setParameter(p, v);
+            else if (eng.updateParameter) eng.updateParameter(p, v);
+            else if (eng.updateParameters) eng.updateParameters({ [p]: v });
         }
 
-        async function loadAudioFile(file) {
-            if (!file) return;
+        function applyAll() {
+            Object.entries(par).forEach(([p, v]) => apply(p, v));
+        }
 
-            const url = URL.createObjectURL(file);
-            audioElement.src = url;
+        window.randomize = function() {
+            par.geometry = Math.floor(Math.random() * 8);
+            par.rot4dXW = Math.random() * 4 - 2;
+            par.rot4dYW = Math.random() * 4 - 2;
+            par.rot4dZW = Math.random() * 4 - 2;
+            par.gridDensity = 4 + Math.random() * 96;
+            par.morphFactor = Math.random() * 2;
+            par.chaos = Math.random();
+            par.speed = 0.1 + Math.random() * 1.9;
+            par.hue = Math.random() * 360;
+            par.intensity = Math.random();
+            par.saturation = Math.random();
+            Object.entries(par).forEach(([p, v]) => { document.getElementById(p).value = v; window.P(p, v); });
+        };
 
-            // Connect audio to analyser
-            if (!sourceNode) {
-                sourceNode = audioContext.createMediaElementSource(audioElement);
-                sourceNode.connect(analyser);
-                analyser.connect(audioContext.destination);
+        function loadAud(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            aud.src = URL.createObjectURL(f);
+            if (!src) {
+                src = ctx.createMediaElementSource(aud);
+                src.connect(anl);
+                anl.connect(ctx.destination);
             }
-
-            // Enable controls
             document.getElementById('play-btn').disabled = false;
             document.getElementById('pause-btn').disabled = false;
             document.getElementById('stop-btn').disabled = false;
-
-            document.getElementById('status').textContent = `Loaded: ${file.name}`;
-            console.log('🎵 Audio file loaded:', file.name);
+            document.getElementById('export-btn').disabled = false;
+            stat('Loaded: ' + f.name);
         }
 
-        async function switchSystem(systemName) {
-            console.log(`🔄 Switching to ${systemName}`);
+        window.play = function() {
+            if (ctx.state === 'suspended') ctx.resume();
+            aud.play();
+            play = true;
+            stat('Playing...');
+        };
 
-            // Use CanvasManager to switch
-            currentEngine = await canvasManager.switchToSystem(systemName, engineClasses);
-            currentSystem = systemName;
+        window.pause = function() { aud.pause(); play = false; stat('Paused'); };
+        window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; stat('Stopped'); };
 
-            // Update UI
-            document.querySelectorAll('.system-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.system === systemName);
-            });
+        window.toggleReact = function() {
+            audioReactEnabled = !audioReactEnabled;
+            document.getElementById('react-status').textContent = audioReactEnabled ? 'ON' : 'OFF';
+            stat(audioReactEnabled ? 'Audio reactivity ENABLED' : 'Audio reactivity DISABLED');
+        };
 
-            console.log(`✅ Switched to ${systemName}`);
-        }
+        function loop() {
+            if (play) {
+                anl.getByteFrequencyData(dat);
+                const b = avg(0, 100) / 255;  // Bass
+                const m = avg(100, 400) / 255; // Mids
+                const h = avg(400, 1024) / 255; // Highs
+                const t = aud.currentTime;
 
-        function play() {
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
-
-            audioElement.play();
-            isPlaying = true;
-            startVisualization();
-            document.getElementById('status').textContent = 'Playing...';
-        }
-
-        function pause() {
-            audioElement.pause();
-            isPlaying = false;
-            document.getElementById('status').textContent = 'Paused';
-        }
-
-        function stop() {
-            audioElement.pause();
-            audioElement.currentTime = 0;
-            isPlaying = false;
-            document.getElementById('status').textContent = 'Stopped';
-        }
-
-        function startVisualization() {
-            const render = () => {
-                if (!isPlaying) return;
-
-                // Get audio data
-                analyser.getByteFrequencyData(dataArray);
-                const audioData = processAudioData(dataArray);
-
-                // Detect beats
-                detectBeat(audioData);
-
-                // Apply mode-specific logic
-                if (currentMode === 'reactive') {
-                    applyReactiveMode(audioData);
-                } else if (currentMode === 'choreographed') {
-                    applyChoreography(audioData);
+                // REAL-TIME AUDIO REACTIVITY (when enabled and no sequences)
+                if (audioReactEnabled && seqs.length === 0) {
+                    // No sequences - use continuous audio reactivity
+                    apply('rot4dXW', par.rot4dXW + b * 0.5);
+                    apply('rot4dYW', par.rot4dYW + m * 0.5);
+                    apply('rot4dZW', par.rot4dZW + h * 0.5);
+                    apply('gridDensity', par.gridDensity + b * 30);
+                    apply('morphFactor', par.morphFactor + m * 0.5);
+                    apply('chaos', Math.min(1, par.chaos + h * 0.3));
+                    apply('intensity', Math.min(1, par.intensity + (b + m + h) / 3 * 0.4));
                 }
 
-                // Update info panel
-                updateInfoPanel(audioData);
+                // Find current sequence
+                const ac = seqs.find(s => t >= s.time && t < s.time + s.dur);
 
-                animationId = requestAnimationFrame(render);
-            };
-            render();
+                if (ac && ac !== currentSeq) {
+                    currentSeq = ac;
+
+                    // Apply sequence base parameters
+                    if (ac.sys && ac.sys !== sys) window.switchSys(ac.sys);
+                    if (ac.par) {
+                        Object.entries(ac.par).forEach(([p, v]) => {
+                            par[p] = v;
+                            apply(p, v);
+                            document.getElementById(p).value = v;
+                            window.P(p, v);
+                        });
+                    }
+
+                    stat(`SEQ: ${ac.name || 'Untitled'} (${ac.time}s-${ac.time+ac.dur}s)`);
+                }
+
+                if (ac) {
+                    const seqTime = t - ac.time;
+                    const progress = seqTime / ac.dur;
+
+                    // Apply audio reactivity multipliers from sequence
+                    const densityReact = (ac.densityReact || 0) * b;
+                    const morphReact = (ac.morphReact || 0) * m;
+                    const chaosReact = (ac.chaosReact || 0) * h;
+                    const intensityReact = (ac.intensityReact || 0) * (b + m + h) / 3;
+
+                    apply('gridDensity', par.gridDensity + densityReact);
+                    apply('morphFactor', par.morphFactor + morphReact);
+                    apply('chaos', Math.min(1, par.chaos + chaosReact));
+                    apply('intensity', Math.min(1, par.intensity + intensityReact));
+
+                    // Apply parameter sweeps (gradual changes over sequence)
+                    if (ac.sweeps) {
+                        Object.entries(ac.sweeps).forEach(([param, [start, end]]) => {
+                            const val = start + (end - start) * progress;
+                            apply(param, val);
+                        });
+                    }
+
+                    // Apply rotation dynamics
+                    if (ac.rotDynamics) {
+                        const { xw, yw, zw } = ac.rotDynamics;
+                        if (xw) apply('rot4dXW', xw.base + Math.sin(seqTime * xw.freq) * xw.amp);
+                        if (yw) apply('rot4dYW', yw.base + Math.cos(seqTime * yw.freq) * yw.amp);
+                        if (zw) apply('rot4dZW', zw.base + Math.sin(seqTime * zw.freq + Math.PI/2) * zw.amp);
+                    }
+                }
+            }
+            requestAnimationFrame(loop);
         }
 
-        function processAudioData(dataArray) {
-            const bass = getAverage(dataArray, 0, 100) / 255;
-            const mid = getAverage(dataArray, 100, 400) / 255;
-            const high = getAverage(dataArray, 400, 1024) / 255;
-            const energy = (bass + mid + high) / 3;
-
-            return { bass, mid, high, energy };
-        }
-
-        function getAverage(array, start, end) {
+        function avg(s, e) {
             let sum = 0;
-            for (let i = start; i < end; i++) {
-                sum += array[i];
-            }
-            return sum / (end - start);
+            for (let i = s; i < e; i++) sum += dat[i];
+            return sum / (e - s);
         }
 
-        function detectBeat(audioData) {
-            const now = Date.now();
-            if (audioData.bass > beatThreshold && now - lastBeatTime > 500) {
-                lastBeatTime = now;
-                onBeat();
-                detectedBPM = Math.round(60000 / 500);
-            }
+        function upd() {
+            if (!aud.duration) return;
+            document.getElementById('playhead').style.left = (aud.currentTime / aud.duration * 100) + '%';
         }
 
-        function onBeat() {
-            const indicator = document.getElementById('beatIndicator');
-            indicator.classList.add('active');
-            setTimeout(() => indicator.classList.remove('active'), 300);
-
-            if (currentEngine && currentEngine.triggerClick) {
-                currentEngine.triggerClick(1.0);
-            }
+        function rend() {
+            const tr = document.getElementById('track');
+            const ph = document.getElementById('playhead');
+            tr.innerHTML = '';
+            tr.appendChild(ph);
+            seqs.forEach(s => {
+                const b = document.createElement('div');
+                b.className = 'seq-block';
+                b.style.left = (s.time / aud.duration * 100) + '%';
+                b.style.width = (s.dur / aud.duration * 100) + '%';
+                b.innerHTML = `${s.name || s.sys?.toUpperCase() || 'SEQ'}<br>${s.time.toFixed(1)}s`;
+                b.onclick = () => {
+                    aud.currentTime = s.time;
+                    if (s.sys) window.switchSys(s.sys);
+                };
+                tr.appendChild(b);
+            });
         }
 
-        function applyReactiveMode(audioData) {
-            const setParam = (param, value) => {
-                if (currentEngine.parameterManager) {
-                    currentEngine.parameterManager.setParameter(param, value);
-                } else if (currentEngine.updateParameter) {
-                    currentEngine.updateParameter(param, value);
-                } else if (currentEngine.updateParameters) {
-                    currentEngine.updateParameters({ [param]: value });
-                }
-            };
-
-            const densityBase = 15 + audioData.bass * 30;
-            setParam('gridDensity', Math.floor(densityBase));
-
-            const morphBase = 1.0 + audioData.mid * 0.5;
-            setParam('morphFactor', morphBase);
-
-            const chaosValue = 0.2 + audioData.high * 0.6;
-            setParam('chaos', chaosValue);
-
-            const speedValue = 1.0 + audioData.energy * 0.5;
-            setParam('speed', speedValue);
-
-            const intensityValue = 0.5 + audioData.energy * 0.5;
-            setParam('intensity', intensityValue);
-
-            const saturationValue = 0.7 + audioData.bass * 0.3;
-            setParam('saturation', saturationValue);
-
-            const currentTime = audioElement.currentTime;
-            const hueShift = (audioData.mid * 60 + audioData.high * 30) % 360;
-            setParam('hue', (currentTime * 5 + hueShift) % 360);
-
-            setParam('rot4dXW', Math.sin(currentTime * 0.5 + audioData.bass * Math.PI) * Math.PI);
-            setParam('rot4dYW', Math.cos(currentTime * 0.3 + audioData.mid * Math.PI) * Math.PI);
-            setParam('rot4dZW', Math.sin(currentTime * 0.7 + audioData.high * Math.PI) * Math.PI);
-        }
-
-        async function applyChoreography(audioData) {
-            const currentTime = audioElement.currentTime;
-
-            const activeSequence = sequences.find(seq =>
-                currentTime >= seq.time && currentTime < seq.time + seq.duration
-            );
-
-            if (!activeSequence) return;
-
-            const effects = activeSequence.effects;
-
-            // System switching
-            if (effects.system && effects.system !== currentSystem) {
-                console.log(`🎬 Switching to ${effects.system} at ${currentTime.toFixed(1)}s`);
-                await switchSystem(effects.system);
-            }
-
-            const setParam = (param, value) => {
-                if (currentEngine.parameterManager) {
-                    currentEngine.parameterManager.setParameter(param, value);
-                } else if (currentEngine.updateParameter) {
-                    currentEngine.updateParameter(param, value);
-                } else if (currentEngine.updateParameters) {
-                    currentEngine.updateParameters({ [param]: value });
-                }
-            };
-
-            // Apply choreographed parameters with audio reactivity
-            const chaosBase = effects.chaos || 0.5;
-            setParam('chaos', chaosBase + audioData.energy * 0.4);
-
-            const speedBase = effects.speed || 1.0;
-            setParam('speed', speedBase * (1 + audioData.energy * 0.6));
-
-            const densityBase = 15;
-            setParam('gridDensity', Math.floor(densityBase + audioData.bass * 35));
-
-            let hueValue = 0;
-            if (effects.colorShift === 'rainbow') {
-                hueValue = (currentTime * 60 + audioData.energy * 60) % 360;
-            } else if (effects.colorShift === 'fast') {
-                hueValue = (currentTime * 30 + audioData.bass * 120) % 360;
-            } else if (effects.colorShift === 'medium') {
-                hueValue = (currentTime * 10 + audioData.mid * 60) % 360;
-            } else {
-                hueValue = (currentTime * 5 + audioData.high * 30) % 360;
-            }
-            setParam('hue', hueValue % 360);
-
-            setParam('intensity', 0.5 + audioData.energy * 0.5);
-            setParam('saturation', 0.7 + audioData.bass * 0.3);
-        }
-
-        async function generateDefaultChoreography() {
-            sequences = [
-                { time: 0, duration: 15, effects: { system: 'faceted', chaos: 0.1, speed: 0.5, colorShift: 'slow' } },
-                { time: 15, duration: 15, effects: { system: 'faceted', chaos: 0.3, speed: 1.0, colorShift: 'medium' } },
-                { time: 30, duration: 20, effects: { system: 'quantum', chaos: 0.8, speed: 2.0, colorShift: 'fast' } },
-                { time: 50, duration: 10, effects: { system: 'holographic', chaos: 0.9, speed: 2.5, colorShift: 'rainbow' } },
-                { time: 60, duration: 15, effects: { system: 'faceted', chaos: 0.05, speed: 0.3, colorShift: 'slow' } },
-                { time: 75, duration: 999, effects: { system: 'quantum', chaos: 1.0, speed: 3.0, colorShift: 'rainbow' } }
-            ];
-            renderSequenceList();
-        }
-
-        function renderSequenceList() {
-            const list = document.getElementById('sequence-list');
-            if (!list) return;
-
-            list.innerHTML = sequences.map((seq, index) => `
-                <div class="sequence-item">
-                    <h4>Sequence ${index + 1} (${seq.time}s - ${seq.time + seq.duration}s)</h4>
-                    <div class="sequence-controls">
-                        <label>System</label>
-                        <select onchange="window.updateSequence(${index}, 'system', this.value)" style="grid-column: span 2;">
-                            <option value="faceted" ${seq.effects.system === 'faceted' ? 'selected' : ''}>🔷 Faceted</option>
-                            <option value="quantum" ${seq.effects.system === 'quantum' ? 'selected' : ''}>🌌 Quantum</option>
-                            <option value="holographic" ${seq.effects.system === 'holographic' ? 'selected' : ''}>✨ Holographic</option>
-                        </select>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        window.updateSequence = function(index, property, value) {
-            if (sequences[index]) {
-                sequences[index].effects[property] = value;
-            }
+        window.toggleCtrl = function() {
+            document.getElementById('controls').classList.toggle('mini');
+            document.querySelector('.toggle-mini').textContent = document.getElementById('controls').classList.contains('mini') ? '▶' : '◀';
         };
 
-        function updateTimeline() {
-            if (!audioElement.duration) return;
-            const progress = (audioElement.currentTime / audioElement.duration) * 100;
-            document.getElementById('timeline-progress').style.width = progress + '%';
-        }
+        window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
+        window.closeAI = function() { document.getElementById('ai-modal').classList.remove('active'); };
 
-        function updateInfoPanel(audioData) {
-            document.getElementById('beat-info').textContent = `BPM: ${detectedBPM} | Energy: ${(audioData.energy * 100).toFixed(0)}%`;
-            document.getElementById('energy-info').textContent = `Bass: ${(audioData.bass * 100).toFixed(0)}% | Mid: ${(audioData.mid * 100).toFixed(0)}%`;
-        }
+        window.genAI = async function() {
+            const prompt = document.getElementById('ai-prompt').value;
+            if (!prompt) return alert('Enter song description');
 
-        window.toggleMode = function() {
-            const newMode = currentMode === 'reactive' ? 'choreographed' : 'reactive';
-            selectMode(newMode);
-        };
-
-        window.toggleControls = function() {
-            const controls = document.getElementById('controls');
-            const toggle = controls.querySelector('.collapse-toggle');
-            controls.classList.toggle('collapsed');
-            toggle.textContent = controls.classList.contains('collapsed') ? '▲' : '▼';
-        };
-
-        window.toggleTimeline = function() {
-            const timeline = document.getElementById('timeline-editor');
-            const toggle = timeline.querySelector('.collapse-toggle');
-            timeline.classList.toggle('collapsed');
-            toggle.textContent = timeline.classList.contains('collapsed') ? '▶' : '◀';
-        };
-
-        window.exportVideo = async function() {
-            if (!audioElement || !audioElement.src) {
-                alert('Please load an audio file first');
+            const key = document.getElementById('api-key').value;
+            if (!key) {
+                alert('Please enter your Gemini API key');
                 return;
             }
-
-            const status = document.getElementById('status');
-            status.textContent = 'Preparing export...';
-
-            document.getElementById('controls').style.display = 'none';
-            document.getElementById('timeline-editor').style.display = 'none';
-            document.getElementById('info-panel').style.display = 'none';
+            const dur = aud.duration || 180;
+            stat('AI analyzing musical structure...');
 
             try {
-                const canvas = document.querySelector('canvas');
-                if (!canvas) throw new Error('No canvas found');
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are a 4D VISUALIZATION CHOREOGRAPHY MASTER. Create a ${dur.toFixed(0)}s journey for: "${prompt}"
 
-                const stream = canvas.captureStream(60);
+🌀 CRITICAL: 4D ROTATIONS ARE THE STAR OF THIS SHOW!
 
-                const audioCtx = new AudioContext();
-                const source = audioCtx.createMediaElementSource(audioElement);
-                const dest = audioCtx.createMediaStreamDestination();
-                source.connect(dest);
-                source.connect(audioCtx.destination);
+The shader rotates 4D space (x,y,z,w) using THREE rotation planes:
+- rot4dXW: Rotates X-W plane (horizontal spin through 4th dimension)
+- rot4dYW: Rotates Y-W plane (vertical spin through 4th dimension)
+- rot4dZW: Rotates Z-W plane (depth spin through 4th dimension)
 
-                stream.addTrack(dest.stream.getAudioTracks()[0]);
+When these rotate, 3D projections create IMPOSSIBLE GEOMETRY that morphs and transforms!
 
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm;codecs=vp9',
-                    videoBitsPerSecond: 5000000
+🔥 USE 4D ROTATIONS MASSIVELY:
+
+VERSE: Slow single-plane rotation
+  rot4dXW: 0.3 (slow X-W spin)
+  rot4dYW: 0, rot4dZW: 0
+
+BUILD: Add second plane, speed up
+  rot4dXW: 0.6, rot4dYW: 0.4, rot4dZW: 0
+
+DROP: FULL 3-PLANE ROTATION + HIGH DENSITY
+  rot4dXW: 1.2, rot4dYW: 0.8, rot4dZW: 0.6
+  gridDensity: 90 (creates fractal detail)
+
+BREAKDOWN: Slow counter-rotation
+  rot4dXW: -0.2, rot4dYW: 0.3, rot4dZW: -0.1 (negative = reverse)
+
+🎯 ROT DYNAMICS - OSCILLATING ROTATIONS:
+
+Instead of fixed rotation, make them PULSE with music:
+
+"rotDynamics": {
+  "xw": {
+    "base": 0.5,    // Center rotation value
+    "freq": 0.5,    // Oscillation Hz (0.5 = 2 seconds per cycle, matches 120 BPM)
+    "amp": 0.8      // How much it swings (0.5 ± 0.8 = -0.3 to 1.3)
+  },
+  "yw": {"base": 0.3, "freq": 0.33, "amp": 0.5},  // Different rhythm (3:2 polyrhythm)
+  "zw": {"base": -0.2, "freq": 0.25, "amp": 0.6}  // Even slower (4 sec cycle)
+}
+
+This creates POLYRHYTHMIC 4D rotation where each plane pulses at different rates!
+
+📊 GRID DENSITY = FRACTAL DETAIL:
+
+The shader multiplies position by gridDensity before calculating geometry.
+Higher density = MORE REPETITIONS of the pattern = fractal detail!
+
+sparse: 8-15 (wide spacing, clean)
+moderate: 20-40 (balanced)
+intense: 50-80 (detailed fractals)
+INSANE: 85-100 (maximum detail for drops)
+
+💥 DROPS NEED:
+- gridDensity: 90-100 (fractal explosion)
+- rot4dXW/YW/ZW: ALL high (1.0-1.5 range, full 4D spin)
+- chaos: 0.7-0.9 (controlled chaos)
+- speed: 0.3-0.5 (SLOW to see the rotation)
+- morphFactor: 1.5-2.0 (maximum shape warping)
+
+🎨 GEOMETRY CHANGES CREATE DIFFERENT FRACTALS:
+
+0=tetrahedron (triangular lattice)
+1=hypercube (cubic lattice - best for 4D rotation visibility)
+2=sphere (concentric shells)
+3=torus (donut fractals)
+4=klein bottle (impossible topology)
+5=fractal (recursive patterns - INSANE with high density)
+6=wave (interference patterns)
+7=crystal (sharp prismatic)
+
+Change geometry at MAJOR section changes (chorus→verse→drop).
+Use fractal (5) or hypercube (1) for drops.
+
+🎵 SEQUENCE TEMPLATE:
+
+{
+  "name": "DROP 1 - 4D Fractal Explosion",
+  "time": 60,
+  "dur": 16,
+  "sys": "faceted",
+  "par": {
+    "geometry": 5,           // Fractal
+    "rot4dXW": 1.2,          // Fast X-W spin
+    "rot4dYW": 0.9,          // Fast Y-W spin
+    "rot4dZW": 0.7,          // Fast Z-W spin
+    "gridDensity": 95,       // MAXIMUM fractal detail
+    "morphFactor": 1.8,      // Heavy morphing
+    "chaos": 0.8,            // Controlled chaos
+    "speed": 0.4,            // SLOW to see rotation
+    "hue": 280,              // Purple
+    "intensity": 0.7,
+    "saturation": 0.9
+  },
+  "densityReact": 5,         // Small react (already at 95)
+  "morphReact": 0.2,
+  "chaosReact": 0.15,
+  "intensityReact": 0.25,
+  "rotDynamics": {           // Polyrhythmic 4D oscillation
+    "xw": {"base": 1.2, "freq": 0.5, "amp": 0.4},
+    "yw": {"base": 0.9, "freq": 0.33, "amp": 0.5},
+    "zw": {"base": 0.7, "freq": 0.4, "amp": 0.3}
+  },
+  "sweeps": {                // Gradual changes
+    "hue": [280, 320],       // Purple → Pink
+    "chaos": [0.7, 0.9]      // Chaos builds
+  }
+}
+
+🎼 MUSICAL STRUCTURE:
+
+INTRO (0-16s):
+  - geometry: 0 (tetra)
+  - rot4dXW: 0.2, others: 0
+  - gridDensity: 10
+  - speed: 0.4
+
+VERSE 1 (16-48s):
+  - geometry: 1 (cube)
+  - rot4dXW: 0.4, rot4dYW: 0.2
+  - gridDensity: 25
+  - speed: 0.5
+
+BUILD 1 (48-64s):
+  - sweeps: rot4dXW [0.4→1.0], rot4dYW [0.2→0.7], gridDensity [25→60], chaos [0.2→0.6]
+  - speed: 0.6→1.0
+
+DROP 1 (64-96s): **4D ROTATION SHOWCASE**
+  - geometry: 5 or 1 (fractal/cube)
+  - rot4dXW: 1.2, rot4dYW: 0.9, rot4dZW: 0.7 (FULL 3-PLANE)
+  - gridDensity: 90-100 (fractal detail)
+  - rotDynamics with polyrhythm
+  - speed: 0.3-0.4 (SLOW)
+
+BREAKDOWN (96-112s):
+  - geometry: 2 (sphere)
+  - rot4dXW: -0.1, rot4dYW: 0.2, rot4dZW: -0.05 (gentle counter-rotation)
+  - gridDensity: 12 (sparse)
+  - speed: 0.25
+
+BUILD 2 (112-128s):
+  - Add rot4dZW into mix
+  - Sweep all three rotations upward
+  - gridDensity: 30→75
+
+FINAL DROP (128-160s): **EVEN MORE 4D**
+  - rot4dXW: 1.5, rot4dYW: 1.2, rot4dZW: 1.0 (MAXIMUM)
+  - gridDensity: 100
+  - geometry: 5 (fractal)
+  - rotDynamics with FASTER freq (0.66 Hz = double-time feel)
+
+🔁 CRITICAL RULES:
+
+1. USE ALL THREE ROT4D PLANES - don't leave them at 0!
+2. DROP = HIGH rot4d values (0.8-1.5) + HIGH gridDensity (85-100)
+3. Slow speed (0.3-0.5) during complex rotation so you can SEE it
+4. rotDynamics creates polyrhythmic movement
+5. Sweeps for gradual transitions
+6. Change geometry at major sections only
+7. Fractal (5) or Hypercube (1) for drops
+8. Negative rotations for counter-spin effects
+
+Create ${Math.ceil(dur/12)} sequences that SHOWCASE 4D ROTATION MATHEMATICS.
+Return ONLY JSON array.`
+                            }]
+                        }]
+                    })
                 });
 
-                const chunks = [];
-                recorder.ondataavailable = e => chunks.push(e.data);
-
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `vib34d-export-${Date.now()}.webm`;
-                    a.click();
-
-                    document.getElementById('controls').style.display = 'flex';
-                    if (currentMode === 'choreographed') {
-                        document.getElementById('timeline-editor').style.display = 'flex';
-                    }
-                    document.getElementById('info-panel').style.display = 'block';
-                    status.textContent = 'Export complete!';
-                };
-
-                recorder.start();
-                audioElement.currentTime = 0;
-                await audioElement.play();
-
-                status.textContent = 'Recording...';
-
-                audioElement.onended = () => {
-                    recorder.stop();
-                    audioCtx.close();
-                };
-
-            } catch (error) {
-                console.error('Export failed:', error);
-                status.textContent = 'Export failed: ' + error.message;
-
-                document.getElementById('controls').style.display = 'flex';
-                if (currentMode === 'choreographed') {
-                    document.getElementById('timeline-editor').style.display = 'flex';
-                }
-                document.getElementById('info-panel').style.display = 'block';
+                const data = await resp.json();
+                const txt = data.candidates[0].content.parts[0].text;
+                const json = txt.match(/\[[\s\S]*\]/)[0];
+                seqs = JSON.parse(json);
+                rend();
+                stat(`AI: ${seqs.length} musical sequences loaded!`);
+                window.closeAI();
+            } catch (err) {
+                stat('AI failed: ' + err.message);
+                console.error(err);
             }
         };
 
-        window.addSequence = function() {
-            const newSeq = {
-                time: audioElement.currentTime || 0,
-                duration: 10,
-                effects: { system: currentSystem, chaos: 0.5, speed: 1.0, colorShift: 'medium' }
-            };
-            sequences.push(newSeq);
-            sequences.sort((a, b) => a.time - b.time);
-            renderSequenceList();
-        };
-
-        window.saveChoreography = function() {
-            const data = JSON.stringify(sequences, null, 2);
-            const blob = new Blob([data], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'choreography.json';
-            a.click();
-        };
-
-        window.loadChoreography = function() {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        sequences = JSON.parse(event.target.result);
-                        renderSequenceList();
-                    } catch (error) {
-                        console.error('Failed to import:', error);
-                    }
-                };
-                reader.readAsText(file);
-            };
-            input.click();
+        window.exportVid = function() {
+            stat('Video export not yet implemented in V2');
+            // TODO: Implement working export
         };
     </script>
 </body>
