@@ -192,6 +192,19 @@
             <button id="stop-btn" disabled onclick="window.stop()">⏹</button>
             <button onclick="window.addSeq()">➕</button>
         </div>
+
+        <!-- Recording Controls (shown during export) -->
+        <div id="recording-controls" style="display: none; background: linear-gradient(135deg, #ff0000, #cc0000); padding: 12px; border-radius: 8px; margin: 10px 0; box-shadow: 0 4px 10px rgba(255,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span id="recording-time" style="font-weight: bold; font-size: 16px;">🔴 Recording: 0:00</span>
+                <span id="recording-size" style="font-size: 14px; opacity: 0.9;">0.00 MB</span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="window.stopRecording()" style="flex: 1; padding: 8px; background: #fff; color: #000; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">⏹️ Stop & Download</button>
+                <button onclick="window.cancelRecording()" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.3); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; cursor: pointer;">❌ Cancel</button>
+            </div>
+        </div>
+
         <div class="track" id="track">
             <div class="playhead" id="playhead"></div>
         </div>
@@ -234,6 +247,14 @@
         let lastBeatTime = 0;
         let beatThreshold = 0.75;
         let beatCount = 0;
+        let bassHistory = [];
+        const BASS_HISTORY_SIZE = 30;
+
+        // Video export state
+        let activeRecorder = null;
+        let recordingStartTime = 0;
+        let recordingChunks = [];
+        let recordingInterval = null;
 
         const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
 
@@ -344,9 +365,51 @@
         window.pause = function() { aud.pause(); play = false; stat('Paused'); };
         window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; beatCount = 0; stat('Stopped'); };
 
+        window.stopRecording = function() {
+            if (activeRecorder && activeRecorder.state === 'recording') {
+                console.log('🎥 User stopped recording');
+                activeRecorder.stop();
+                aud.pause();
+            }
+        };
+
+        window.cancelRecording = function() {
+            if (activeRecorder && activeRecorder.state === 'recording') {
+                console.log('🎥 User cancelled recording');
+                activeRecorder.stop();
+                recordingChunks = [];  // Clear chunks - won't download
+                aud.pause();
+                document.getElementById('recording-controls').style.display = 'none';
+                if (recordingInterval) clearInterval(recordingInterval);
+                stat('Recording cancelled');
+            }
+        };
+
+        function updateRecordingUI() {
+            if (activeRecorder && activeRecorder.state === 'recording') {
+                const elapsed = (Date.now() - recordingStartTime) / 1000;
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = Math.floor(elapsed % 60);
+                document.getElementById('recording-time').textContent =
+                    `🔴 Recording: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                const totalSize = recordingChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+                document.getElementById('recording-size').textContent =
+                    `${(totalSize / 1024 / 1024).toFixed(2)} MB`;
+            }
+        }
+
         function detectBeat(bass) {
+            // Adaptive beat detection - adjust threshold based on music
+            bassHistory.push(bass);
+            if (bassHistory.length > BASS_HISTORY_SIZE) bassHistory.shift();
+
+            // Calculate dynamic threshold (30% above average bass)
+            const avgBass = bassHistory.reduce((a, b) => a + b, 0) / bassHistory.length;
+            const dynamicThreshold = Math.max(0.3, avgBass * 1.35);  // At least 0.3, or 35% above average
+
             const now = Date.now();
-            if (bass > beatThreshold && now - lastBeatTime > 250) {
+            if (bass > dynamicThreshold && now - lastBeatTime > 250) {
                 lastBeatTime = now;
                 beatCount++;
 
@@ -361,6 +424,8 @@
         }
 
         let sequenceSwitching = false;
+        let currentSequence = null;
+        let baseParams = {...par};  // Store base parameter values
 
         async function loop() {
             if (play) {
@@ -377,22 +442,25 @@
                 const pulse = Math.sin(t * 2) * 0.5 + 0.5;
                 const breathe = Math.sin(t * 0.5) * 0.5 + 0.5;
 
-                // Apply reactivity
-                apply('gridDensity', par.gridDensity + b * 60 + pulse * 25);
-                apply('morphFactor', par.morphFactor + m * 0.9 + breathe * 0.5);
-                apply('chaos', par.chaos + h * 0.7 + pulse * 0.4);
-                apply('speed', par.speed + e * 1.4);
-                apply('intensity', par.intensity + e * 0.8 + (beat ? 0.5 : 0));
-                apply('saturation', par.saturation + b * 0.5 + (beat ? 0.3 : 0));
-
-                // 4D rotation dynamics
-                apply('rot4dXW', Math.sin(t * 0.3 + b * Math.PI * 2) * 3.14);
-                apply('rot4dYW', Math.cos(t * 0.5 + m * Math.PI * 2) * 3.14);
-                apply('rot4dZW', Math.sin(t * 0.7 + h * Math.PI * 2) * 3.14);
-
-                // Check sequence
+                // ==============================================
+                // PRIORITY 1: CHECK FOR ACTIVE SEQUENCE (HIGHEST PRIORITY)
+                // ==============================================
                 const ac = seqs.find(s => t >= s.time && t < s.time + s.dur);
+
                 if (ac) {
+                    // Sequence is active - it becomes the BASE for all parameters
+
+                    // Update base params when sequence changes
+                    if (ac !== currentSequence) {
+                        currentSequence = ac;
+                        console.log(`🎬 Sequence active: ${ac.name}`);
+
+                        // Set base params from sequence
+                        if (ac.par) {
+                            baseParams = {...ac.par};
+                        }
+                    }
+
                     // Mid-sequence system switching
                     if (ac.sysSwitch) {
                         const switches = ac.sysSwitch;
@@ -412,56 +480,111 @@
                         sequenceSwitching = true;
                         await window.switchSys(ac.sys, ac.par);
                         sequenceSwitching = false;
-                    } else if (ac.par) {
-                        // Apply parameters if no system switch needed
-                        Object.entries(ac.par).forEach(([p, v]) => apply(p, v));
                     }
 
-                    // INTRICATE BEAT-SYNCED PATTERNS
+                    // INTRICATE BEAT-SYNCED PATTERNS - Override base params on beats
 
                     // densityPulse - cycling density values on every beat
                     if (ac.densityPulse && beat) {
                         const densities = ac.densityPulse;
                         const idx = beatCount % densities.length;
-                        apply('gridDensity', densities[idx]);
+                        baseParams.gridDensity = densities[idx];
                     }
 
                     // colorPulse - cycling hue values on every beat
                     if (ac.colorPulse && beat) {
                         const colors = ac.colorPulse;
                         const idx = beatCount % colors.length;
-                        apply('hue', colors[idx]);
+                        baseParams.hue = colors[idx];
                     }
 
                     // saturationSnap - rhythmic saturation patterns
                     if (ac.saturationSnap && beat) {
                         const saturations = ac.saturationSnap;
                         const idx = beatCount % saturations.length;
-                        apply('saturation', saturations[idx]);
+                        baseParams.saturation = saturations[idx];
                     }
 
                     // geometryMeasures - change geometry on measure boundaries (every 4 beats)
                     if (ac.geometryMeasures && beat && beatCount % 4 === 0) {
                         const geometries = ac.geometryMeasures;
                         const measureIdx = Math.floor(beatCount / 4) % geometries.length;
-                        apply('geometry', geometries[measureIdx]);
+                        baseParams.geometry = geometries[measureIdx];
                     }
 
                     // Color drop on snare (legacy support)
                     if (ac.colorDrop && beat && beatCount % ac.colorDrop === 0) {
                         apply('saturation', 0);
-                        setTimeout(() => apply('saturation', par.saturation), 100);
+                        setTimeout(() => apply('saturation', baseParams.saturation), 100);
                     }
 
                     // Parameter modulation - ADD to base values on every beat
-                    if (ac.densityMod && beat) apply('gridDensity', par.gridDensity + ac.densityMod);
-                    if (ac.chaosMod && beat) apply('chaos', Math.min(1, par.chaos + ac.chaosMod));
-                    if (ac.morphMod && beat) apply('morphFactor', Math.min(2, par.morphFactor + ac.morphMod));
-                    if (ac.intensityMod && beat) apply('intensity', Math.min(2, par.intensity + ac.intensityMod));
+                    if (ac.densityMod && beat) baseParams.gridDensity += ac.densityMod;
+                    if (ac.chaosMod && beat) baseParams.chaos = Math.min(1, baseParams.chaos + ac.chaosMod);
+                    if (ac.morphMod && beat) baseParams.morphFactor = Math.min(2, baseParams.morphFactor + ac.morphMod);
+                    if (ac.intensityMod && beat) baseParams.intensity = Math.min(2, baseParams.intensity + ac.intensityMod);
 
-                    // Patterns
-                    if (ac.pattern) applyPat(ac.pattern, t - ac.time, ac.dur);
+                    // Patterns - modify base params
+                    if (ac.pattern) {
+                        const prog = (t - ac.time) / ac.dur;
+                        if (ac.pattern === 'density_pulse') {
+                            baseParams.gridDensity += Math.sin(prog * Math.PI * 4) * 40;
+                        } else if (ac.pattern === 'rotation_spin') {
+                            baseParams.rot4dXW = prog * Math.PI * 4;
+                            baseParams.rot4dYW = prog * Math.PI * 3;
+                            baseParams.rot4dZW = prog * Math.PI * 5;
+                        } else if (ac.pattern === 'color_shift') {
+                            baseParams.hue = (baseParams.hue + prog * 180) % 360;
+                        } else if (ac.pattern === 'chaos_build') {
+                            baseParams.chaos = Math.min(1, baseParams.chaos + prog * 0.8);
+                        } else if (ac.pattern === 'morph_wave') {
+                            baseParams.morphFactor += Math.sin(prog * Math.PI * 2) * 0.9;
+                        }
+                    }
+
+                } else {
+                    // NO sequence active - use slider values as base
+                    if (currentSequence !== null) {
+                        currentSequence = null;
+                        baseParams = {...par};  // Reset to slider values
+                        console.log('🎬 No sequence - using slider values');
+                    }
                 }
+
+                // ==============================================
+                // PRIORITY 2: AUDIO REACTIVITY (OSCILLATES AROUND BASE)
+                // ==============================================
+                // Audio reactivity creates VARIATIONS around base parameters
+                // It ADDS and SUBTRACTS from base based on audio + time
+
+                // Density: bass increases, pulse oscillates ±
+                apply('gridDensity', baseParams.gridDensity + (b - 0.5) * 40 + (pulse - 0.5) * 20);
+
+                // Morph: mid frequency modulates, breathe oscillates ±
+                apply('morphFactor', baseParams.morphFactor + (m - 0.5) * 0.6 + (breathe - 0.5) * 0.4);
+
+                // Chaos: high freq increases, pulse adds variation
+                apply('chaos', Math.max(0, Math.min(1, baseParams.chaos + (h - 0.5) * 0.4 + (pulse - 0.5) * 0.3)));
+
+                // Speed: energy modulates ±
+                apply('speed', Math.max(0.1, baseParams.speed + (e - 0.5) * 0.8));
+
+                // Intensity: energy increases, beat flash
+                apply('intensity', baseParams.intensity + (e - 0.3) * 0.5 + (beat ? 0.3 : 0));
+
+                // Saturation: bass modulates ±, beat flash
+                apply('saturation', baseParams.saturation + (b - 0.5) * 0.4 + (beat ? 0.2 : 0));
+
+                // 4D rotation dynamics - oscillate around base rotation
+                apply('rot4dXW', baseParams.rot4dXW + Math.sin(t * 0.3 + b * Math.PI * 2) * 0.8);
+                apply('rot4dYW', baseParams.rot4dYW + Math.cos(t * 0.5 + m * Math.PI * 2) * 0.8);
+                apply('rot4dZW', baseParams.rot4dZW + Math.sin(t * 0.7 + h * Math.PI * 2) * 0.8);
+
+                // Hue - oscillate ± around base hue
+                apply('hue', (baseParams.hue + (b - 0.5) * 30) % 360);
+
+                // Geometry - only from base (no audio variation)
+                apply('geometry', baseParams.geometry);
             }
             requestAnimationFrame(loop);
         }
@@ -735,8 +858,25 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
 
                 const data = await resp.json();
                 const txt = data.candidates[0].content.parts[0].text;
+
+                // LOG RAW LLM RESPONSE
+                console.log('🤖 LLM RAW RESPONSE (first 500 chars):', txt.substring(0, 500));
+
                 const json = txt.match(/\[[\s\S]*\]/)[0];
-                seqs = JSON.parse(json);
+                const sequences = JSON.parse(json);
+
+                // LOG PARSED SEQUENCES
+                console.log(`🎬 PARSED ${sequences.length} SEQUENCES:`);
+                sequences.forEach((seq, i) => {
+                    console.log(`  ${i + 1}. ${seq.name} (${seq.time}s-${seq.time + seq.dur}s) [${seq.sys || 'faceted'}]`);
+                    console.log(`     - Parameters: ${Object.keys(seq.par || {}).length} params`, seq.par);
+                    console.log(`     - densityPulse: ${seq.densityPulse ? `[${seq.densityPulse.slice(0, 4).join(', ')}...]` : 'MISSING ❌'}`);
+                    console.log(`     - colorPulse: ${seq.colorPulse ? `[${seq.colorPulse.slice(0, 4).join(', ')}...]` : 'MISSING ❌'}`);
+                    console.log(`     - geometryMeasures: ${seq.geometryMeasures ? `[${seq.geometryMeasures.slice(0, 4).join(', ')}...]` : 'none'}`);
+                    console.log(`     - Beat mods: density=${seq.densityMod || 0}, chaos=${seq.chaosMod || 0}, morph=${seq.morphMod || 0}, intensity=${seq.intensityMod || 0}`);
+                });
+
+                seqs = sequences;
                 rend();
                 beatCount = 0;
                 stat(`AI: ${seqs.length} seqs with beat sync!`);
@@ -824,27 +964,39 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                     videoBitsPerSecond: 8000000
                 });
 
-                const chunks = [];
+                // Store recorder globally for manual control
+                activeRecorder = recorder;
+                recordingStartTime = Date.now();
+                recordingChunks = [];
 
                 recorder.ondataavailable = e => {
                     if (e.data && e.data.size > 0) {
-                        chunks.push(e.data);
-                        stat(`Recording... ${(chunks.length * 0.1).toFixed(1)}s`);
+                        recordingChunks.push(e.data);
                     }
                 };
 
                 recorder.onstop = () => {
-                    console.log('🎥 Recorder stopped, chunks:', chunks.length);
+                    console.log('🎥 Recorder stopped, chunks:', recordingChunks.length);
+
+                    // Hide recording controls
+                    document.getElementById('recording-controls').style.display = 'none';
+                    if (recordingInterval) {
+                        clearInterval(recordingInterval);
+                        recordingInterval = null;
+                    }
 
                     // Clean up audio tap
                     anl.disconnect(exportDest);
 
-                    if (chunks.length === 0) {
-                        stat('Export failed: No data recorded');
+                    // Reset global state
+                    activeRecorder = null;
+
+                    if (recordingChunks.length === 0) {
+                        stat('Export cancelled or no data recorded');
                         return;
                     }
 
-                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const blob = new Blob(recordingChunks, { type: 'video/webm' });
                     console.log('🎥 Blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
 
                     const url = URL.createObjectURL(blob);
@@ -857,6 +1009,8 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
 
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
                     stat('✅ Export complete! Video downloaded');
+
+                    recordingChunks = [];
                 };
 
                 recorder.onerror = e => {
@@ -869,18 +1023,24 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 console.log('🎥 Starting recorder...');
                 recorder.start(100); // Collect data every 100ms
 
+                // Show recording controls
+                document.getElementById('recording-controls').style.display = 'block';
+
+                // Update UI every 100ms
+                recordingInterval = setInterval(updateRecordingUI, 100);
+
                 // Restart audio from beginning
                 aud.currentTime = 0;
                 beatCount = 0;
 
                 await aud.play();
-                stat('🔴 Recording...');
+                stat('🔴 Recording... (use controls to stop)');
 
                 // Stop recording when audio ends
                 aud.onended = () => {
                     console.log('🎥 Audio ended, stopping recorder');
-                    if (recorder.state === 'recording') {
-                        recorder.stop();
+                    if (activeRecorder && activeRecorder.state === 'recording') {
+                        activeRecorder.stop();
                     }
                 };
 
