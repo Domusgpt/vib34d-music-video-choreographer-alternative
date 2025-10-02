@@ -66,6 +66,30 @@
             align-items: center;
         }
 
+        .export-status {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            font-size: 11px;
+            color: #0ff;
+        }
+
+        .export-progress {
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 255, 255, 0.15);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+
+        #export-progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            transition: width 0.2s ease-out;
+        }
+
         button {
             background: linear-gradient(135deg, #0a4d68, #0ff);
             border: none;
@@ -239,430 +263,25 @@
             <button class="system-btn" data-system="holographic">✨ HOLOGRAPHIC</button>
         </div>
 
+        <div class="control-row">
+            <button id="export-video-btn" disabled>🎬 Export Video</button>
+            <div class="export-status">
+                <span id="export-status">Load an audio file to enable export.</span>
+                <div class="export-progress">
+                    <div id="export-progress-fill"></div>
+                </div>
+            </div>
+        </div>
+
         <div id="status">Ready to load audio file</div>
     </div>
 
     <script type="module">
-        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
-        import { QuantumEngine } from './src/quantum/QuantumEngine.js';
-        import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { MusicVideoChoreographer } from './music-choreographer-engine.js';
 
-        class MusicVideoChoreographer {
-            constructor() {
-                this.audio = new Audio();
-                this.audioContext = null;
-                this.analyser = null;
-                this.dataArray = null;
-                this.currentSystem = 'faceted';
-                this.currentEngine = null;
-                this.isPlaying = false;
-                this.animationId = null;
+        const choreographer = new MusicVideoChoreographer('choreographed');
+        window.choreographer = choreographer;
 
-                // Beat detection
-                this.beatThreshold = 0.7;
-                this.lastBeatTime = 0;
-                this.beatInterval = 500; // ms
-                this.detectedBPM = 0;
-
-                // Choreography sequences
-                this.sequences = [];
-                this.currentSequence = null;
-
-                this.init();
-            }
-
-            async init() {
-                // Initialize audio context
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                this.analyser = this.audioContext.createAnalyser();
-                this.analyser.fftSize = 2048;
-                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-
-                // Initialize default engine
-                await this.switchSystem('faceted');
-
-                // Setup event listeners
-                this.setupEventListeners();
-
-                console.log('🎵 Music Video Choreographer initialized');
-            }
-
-            setupEventListeners() {
-                // File input
-                document.getElementById('audio-file').addEventListener('change', (e) => {
-                    this.loadAudioFile(e.target.files[0]);
-                });
-
-                // Playback controls
-                document.getElementById('play-btn').addEventListener('click', () => this.play());
-                document.getElementById('pause-btn').addEventListener('click', () => this.pause());
-                document.getElementById('stop-btn').addEventListener('click', () => this.stop());
-
-                // Timeline seeking
-                document.getElementById('timeline').addEventListener('click', (e) => {
-                    const rect = e.target.getBoundingClientRect();
-                    const pos = (e.clientX - rect.left) / rect.width;
-                    this.audio.currentTime = pos * this.audio.duration;
-                });
-
-                // System switching
-                document.querySelectorAll('.system-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        this.switchSystem(btn.dataset.system);
-                    });
-                });
-
-                // Audio events
-                this.audio.addEventListener('ended', () => this.stop());
-                this.audio.addEventListener('timeupdate', () => this.updateTimeline());
-            }
-
-            async loadAudioFile(file) {
-                if (!file) return;
-
-                const url = URL.createObjectURL(file);
-                this.audio.src = url;
-
-                // Connect audio to analyser
-                if (!this.sourceNode) {
-                    this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
-                    this.sourceNode.connect(this.analyser);
-                    this.analyser.connect(this.audioContext.destination);
-                }
-
-                // Enable controls
-                document.getElementById('play-btn').disabled = false;
-                document.getElementById('pause-btn').disabled = false;
-                document.getElementById('stop-btn').disabled = false;
-
-                // Generate choreography
-                await this.generateChoreography();
-
-                this.updateStatus(`Loaded: ${file.name}`);
-                console.log('🎵 Audio file loaded:', file.name);
-            }
-
-            async generateChoreography() {
-                // Auto-generate complex choreographed sequences
-                this.sequences = [
-                    // Intro: Slow build (0-15s)
-                    {
-                        time: 0,
-                        duration: 15,
-                        effects: {
-                            geometry: 'cycle', // Cycle through geometries
-                            rotation: 'smooth', // Smooth 4D rotation
-                            chaos: 0.1,
-                            speed: 0.5,
-                            colorShift: 'slow'
-                        }
-                    },
-                    // Build: Increasing intensity (15-30s)
-                    {
-                        time: 15,
-                        duration: 15,
-                        effects: {
-                            geometry: 'morph', // Morph between shapes
-                            rotation: 'accelerate',
-                            chaos: 0.3,
-                            speed: 1.0,
-                            colorShift: 'medium'
-                        }
-                    },
-                    // Drop: Chaos mode (30-60s)
-                    {
-                        time: 30,
-                        duration: 30,
-                        effects: {
-                            geometry: 'random', // Random geometry changes
-                            rotation: 'chaos',
-                            chaos: 0.8,
-                            speed: 2.0,
-                            colorShift: 'fast'
-                        }
-                    },
-                    // Breakdown: Minimal (60-75s)
-                    {
-                        time: 60,
-                        duration: 15,
-                        effects: {
-                            geometry: 'hold', // Hold current
-                            rotation: 'minimal',
-                            chaos: 0.05,
-                            speed: 0.3,
-                            colorShift: 'freeze'
-                        }
-                    },
-                    // Final drop: Maximum chaos (75-end)
-                    {
-                        time: 75,
-                        duration: 999,
-                        effects: {
-                            geometry: 'explosive', // Rapid changes
-                            rotation: 'extreme',
-                            chaos: 1.0,
-                            speed: 3.0,
-                            colorShift: 'rainbow'
-                        }
-                    }
-                ];
-
-                console.log('🎬 Generated choreography with', this.sequences.length, 'sequences');
-            }
-
-            async switchSystem(systemName) {
-                // Cleanup old engine
-                if (this.currentEngine && this.currentEngine.destroy) {
-                    this.currentEngine.destroy();
-                }
-
-                // Clear canvases
-                const container = document.getElementById('vib34dLayers');
-                container.innerHTML = '';
-
-                // Create canvases based on system requirements
-                if (systemName === 'faceted') {
-                    // Faceted uses: background-canvas, shadow-canvas, content-canvas, highlight-canvas, accent-canvas
-                    const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-                    layers.forEach(layer => {
-                        const canvas = document.createElement('canvas');
-                        canvas.id = `${layer}-canvas`;
-                        canvas.width = window.innerWidth;
-                        canvas.height = window.innerHeight;
-                        container.appendChild(canvas);
-                    });
-                } else if (systemName === 'quantum') {
-                    // Quantum uses: quantum-background-canvas, quantum-shadow-canvas, etc.
-                    const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-                    layers.forEach(layer => {
-                        const canvas = document.createElement('canvas');
-                        canvas.id = `quantum-${layer}-canvas`;
-                        canvas.width = window.innerWidth;
-                        canvas.height = window.innerHeight;
-                        container.appendChild(canvas);
-                    });
-                } else if (systemName === 'holographic') {
-                    // Holographic uses: holo-layer-0 through holo-layer-4
-                    for (let i = 0; i < 5; i++) {
-                        const canvas = document.createElement('canvas');
-                        canvas.id = `holo-layer-${i}`;
-                        canvas.width = window.innerWidth;
-                        canvas.height = window.innerHeight;
-                        container.appendChild(canvas);
-                    }
-                }
-
-                // Initialize new engine
-                try {
-                    if (systemName === 'faceted') {
-                        this.currentEngine = new VIB34DIntegratedEngine();
-                    } else if (systemName === 'quantum') {
-                        this.currentEngine = new QuantumEngine();
-                    } else if (systemName === 'holographic') {
-                        this.currentEngine = new RealHolographicSystem();
-                    }
-
-                    this.currentSystem = systemName;
-
-                    // Update UI
-                    document.querySelectorAll('.system-btn').forEach(btn => {
-                        btn.classList.toggle('active', btn.dataset.system === systemName);
-                    });
-
-                    console.log('✅ Switched to', systemName, 'system');
-                } catch (error) {
-                    console.error('Failed to switch system:', error);
-                }
-            }
-
-            play() {
-                if (this.audioContext.state === 'suspended') {
-                    this.audioContext.resume();
-                }
-
-                this.audio.play();
-                this.isPlaying = true;
-                this.startVisualization();
-                this.updateStatus('Playing...');
-            }
-
-            pause() {
-                this.audio.pause();
-                this.isPlaying = false;
-                this.updateStatus('Paused');
-            }
-
-            stop() {
-                this.audio.pause();
-                this.audio.currentTime = 0;
-                this.isPlaying = false;
-                this.updateStatus('Stopped');
-            }
-
-            startVisualization() {
-                const render = () => {
-                    if (!this.isPlaying) return;
-
-                    // Get audio data
-                    this.analyser.getByteFrequencyData(this.dataArray);
-                    const audioData = this.processAudioData(this.dataArray);
-
-                    // Detect beats
-                    this.detectBeat(audioData);
-
-                    // Apply choreography
-                    this.applyChoreography(audioData);
-
-                    // Update info panel
-                    this.updateInfoPanel(audioData);
-
-                    this.animationId = requestAnimationFrame(render);
-                };
-                render();
-            }
-
-            processAudioData(dataArray) {
-                const bass = this.getAverage(dataArray, 0, 100) / 255;
-                const mid = this.getAverage(dataArray, 100, 400) / 255;
-                const high = this.getAverage(dataArray, 400, 1024) / 255;
-                const energy = (bass + mid + high) / 3;
-
-                return { bass, mid, high, energy };
-            }
-
-            getAverage(array, start, end) {
-                let sum = 0;
-                for (let i = start; i < end; i++) {
-                    sum += array[i];
-                }
-                return sum / (end - start);
-            }
-
-            detectBeat(audioData) {
-                const now = Date.now();
-                if (audioData.bass > this.beatThreshold && now - this.lastBeatTime > this.beatInterval) {
-                    this.lastBeatTime = now;
-                    this.onBeat();
-
-                    // Update BPM estimate
-                    this.detectedBPM = Math.round(60000 / this.beatInterval);
-                }
-            }
-
-            onBeat() {
-                // Visual beat indicator
-                const indicator = document.getElementById('beatIndicator');
-                indicator.classList.add('active');
-                setTimeout(() => indicator.classList.remove('active'), 300);
-
-                // Trigger engine effects
-                if (this.currentEngine && this.currentEngine.triggerClick) {
-                    this.currentEngine.triggerClick(1.0);
-                }
-            }
-
-            applyChoreography(audioData) {
-                const currentTime = this.audio.currentTime;
-
-                // Find active sequence
-                const activeSequence = this.sequences.find(seq =>
-                    currentTime >= seq.time && currentTime < seq.time + seq.duration
-                );
-
-                if (!activeSequence) return;
-
-                // Apply sequence effects
-                const effects = activeSequence.effects;
-
-                // Helper function to set parameter across different engine types
-                const setParam = (param, value) => {
-                    if (this.currentEngine.parameterManager) {
-                        this.currentEngine.parameterManager.setParameter(param, value);
-                    } else if (this.currentEngine.updateParameter) {
-                        this.currentEngine.updateParameter(param, value);
-                    } else if (this.currentEngine.updateParameters) {
-                        this.currentEngine.updateParameters({ [param]: value });
-                    }
-                };
-
-                // Geometry changes
-                if (effects.geometry === 'cycle') {
-                    const geomIndex = Math.floor((currentTime - activeSequence.time) / 2) % 9;
-                    setParam('geometry', geomIndex);
-                } else if (effects.geometry === 'random' && audioData.energy > 0.6) {
-                    const geomIndex = Math.floor(Math.random() * 9);
-                    setParam('geometry', geomIndex);
-                } else if (effects.geometry === 'explosive' && Math.random() < 0.1) {
-                    // Rapid random changes in explosive mode
-                    const geomIndex = Math.floor(Math.random() * 9);
-                    setParam('geometry', geomIndex);
-                }
-
-                // Rotation choreography
-                if (effects.rotation === 'chaos') {
-                    setParam('rot4dXW', Math.sin(currentTime * 2) * Math.PI * audioData.bass);
-                    setParam('rot4dYW', Math.cos(currentTime * 1.5) * Math.PI * audioData.mid);
-                    setParam('rot4dZW', Math.sin(currentTime * 3) * Math.PI * audioData.high);
-                } else if (effects.rotation === 'smooth') {
-                    setParam('rot4dXW', Math.sin(currentTime * 0.5) * Math.PI);
-                    setParam('rot4dYW', Math.cos(currentTime * 0.3) * Math.PI);
-                } else if (effects.rotation === 'extreme') {
-                    setParam('rot4dXW', Math.sin(currentTime * 5) * Math.PI * (1 + audioData.energy));
-                    setParam('rot4dYW', Math.cos(currentTime * 4) * Math.PI * (1 + audioData.bass));
-                    setParam('rot4dZW', Math.sin(currentTime * 6) * Math.PI * (1 + audioData.high));
-                } else if (effects.rotation === 'accelerate') {
-                    const accel = (currentTime - activeSequence.time) / activeSequence.duration;
-                    setParam('rot4dXW', Math.sin(currentTime * (0.5 + accel * 2)) * Math.PI);
-                    setParam('rot4dYW', Math.cos(currentTime * (0.3 + accel * 1.5)) * Math.PI);
-                }
-
-                // Apply chaos, speed, and color
-                setParam('chaos', effects.chaos + audioData.energy * 0.3);
-                setParam('speed', effects.speed * (1 + audioData.energy * 0.5));
-
-                // Morph factor based on audio
-                const morphBase = effects.rotation === 'chaos' ? 1.5 : 1.0;
-                setParam('morphFactor', morphBase + audioData.mid * 0.5);
-
-                // Grid density reacts to bass
-                const densityBase = 15 + audioData.bass * 30;
-                setParam('gridDensity', Math.floor(densityBase));
-
-                // Color shifting
-                if (effects.colorShift === 'rainbow') {
-                    setParam('hue', (currentTime * 60) % 360);
-                } else if (effects.colorShift === 'fast') {
-                    setParam('hue', (currentTime * 30 + audioData.bass * 120) % 360);
-                } else if (effects.colorShift === 'medium') {
-                    setParam('hue', (currentTime * 10) % 360);
-                } else if (effects.colorShift === 'slow') {
-                    setParam('hue', (currentTime * 5) % 360);
-                }
-
-                // Audio reactivity overlays
-                setParam('intensity', 0.5 + audioData.energy * 0.5);
-                setParam('saturation', 0.7 + audioData.bass * 0.3);
-            }
-
-            updateTimeline() {
-                const progress = (this.audio.currentTime / this.audio.duration) * 100;
-                document.getElementById('timeline-progress').style.width = progress + '%';
-            }
-
-            updateInfoPanel(audioData) {
-                document.getElementById('beat-info').textContent = `BPM: ${this.detectedBPM} | Beat Threshold: ${this.beatThreshold}`;
-                document.getElementById('energy-info').textContent = `Energy: ${(audioData.energy * 100).toFixed(0)}% | Bass: ${(audioData.bass * 100).toFixed(0)}%`;
-            }
-
-            updateStatus(message) {
-                document.getElementById('status').textContent = message;
-            }
-        }
-
-        // Initialize choreographer
-        const choreographer = new MusicVideoChoreographer();
-
-        // Handle window resize
         window.addEventListener('resize', () => {
             document.querySelectorAll('canvas').forEach(canvas => {
                 canvas.width = window.innerWidth;
