@@ -190,7 +190,6 @@
             <button id="play-btn" disabled onclick="window.play()">▶</button>
             <button id="pause-btn" disabled onclick="window.pause()">⏸</button>
             <button id="stop-btn" disabled onclick="window.stop()">⏹</button>
-            <button onclick="window.addSeq()">➕</button>
         </div>
         <div class="track" id="track">
             <div class="playhead" id="playhead"></div>
@@ -248,39 +247,12 @@
 
         function stat(m) { document.getElementById('status').textContent = '🎵 ' + m; }
 
-        window.switchSys = async function(s, paramsToApply = null) {
-            // Store current parameters if not provided
-            const params = paramsToApply || {...par};
-
-            console.log(`🔄 Switching to ${s} with params:`, params);
-
-            // Switch system
+        window.switchSys = async function(s) {
             eng = await mgr.switchToSystem(s, cls);
             sys = s;
-
-            // Update UI
             document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.sys === s));
-
-            // Wait for engine to be fully ready (CRITICAL!)
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Apply parameters to new engine
-            Object.entries(params).forEach(([p, v]) => {
-                par[p] = v;
-                apply(p, v);
-                // Sync UI sliders
-                const slider = document.getElementById(p);
-                if (slider) {
-                    slider.value = v;
-                    const val = p === 'hue' ? v + '°' : (p === 'geometry' || p === 'gridDensity' ? parseInt(v) : parseFloat(v).toFixed(2));
-                    const display = document.getElementById('v-' + p);
-                    if (display) display.textContent = val;
-                }
-            });
-
-            console.log(`✅ ${s} ready with parameters applied`);
+            applyAll();
             stat(`Switched to ${s.toUpperCase()}`);
-            return eng;
         };
 
         window.P = function(p, v) {
@@ -360,9 +332,7 @@
             return false;
         }
 
-        let sequenceSwitching = false;
-
-        async function loop() {
+        function loop() {
             if (play) {
                 anl.getByteFrequencyData(dat);
                 const b = avg(0, 100) / 255;
@@ -398,24 +368,13 @@
                         const switches = ac.sysSwitch;
                         for (let sw of switches) {
                             if (t >= ac.time + sw.at && t < ac.time + sw.at + 0.5) {
-                                if (sys !== sw.to && !sequenceSwitching) {
-                                    sequenceSwitching = true;
-                                    await window.switchSys(sw.to, ac.par);
-                                    sequenceSwitching = false;
-                                }
+                                if (sys !== sw.to) window.switchSys(sw.to);
                             }
                         }
                     }
 
-                    // Main sequence system switching with parameters
-                    if (ac.sys && ac.sys !== sys && !ac.sysSwitch && !sequenceSwitching) {
-                        sequenceSwitching = true;
-                        await window.switchSys(ac.sys, ac.par);
-                        sequenceSwitching = false;
-                    } else if (ac.par) {
-                        // Apply parameters if no system switch needed
-                        Object.entries(ac.par).forEach(([p, v]) => apply(p, v));
-                    }
+                    if (ac.sys && ac.sys !== sys && !ac.sysSwitch) window.switchSys(ac.sys);
+                    if (ac.par) Object.entries(ac.par).forEach(([p, v]) => apply(p, v));
 
                     // Beat-synced color pulsing
                     if (ac.colorPulse && beat) {
@@ -477,21 +436,11 @@
                 b.style.left = (s.time / aud.duration * 100) + '%';
                 b.style.width = (s.dur / aud.duration * 100) + '%';
                 b.innerHTML = `${s.sys ? s.sys.toUpperCase() : 'SEQ'}<br>${s.time.toFixed(1)}s`;
-                b.onclick = async () => {
+                b.onclick = () => {
                     aud.currentTime = s.time;
                     beatCount = 0;
-                    // Switch system with sequence parameters
-                    if (s.sys && s.sys !== sys) {
-                        await window.switchSys(s.sys, s.par);
-                    } else if (s.par) {
-                        // Apply parameters without switching
-                        Object.entries(s.par).forEach(([p, v]) => {
-                            par[p] = v;
-                            const slider = document.getElementById(p);
-                            if (slider) slider.value = v;
-                            window.P(p, v);
-                        });
-                    }
+                    if (s.sys) window.switchSys(s.sys);
+                    if (s.par) Object.entries(s.par).forEach(([p, v]) => { par[p] = v; document.getElementById(p).value = v; window.P(p, v); });
                 };
                 tr.appendChild(b);
             });
@@ -500,21 +449,6 @@
         window.toggleCtrl = function() {
             document.getElementById('controls').classList.toggle('mini');
             document.querySelector('.toggle-mini').textContent = document.getElementById('controls').classList.contains('mini') ? '▶' : '◀';
-        };
-
-        window.addSeq = function() {
-            const t = aud.currentTime || 0;
-            const seq = {
-                name: `Manual ${seqs.length + 1}`,
-                time: t,
-                dur: 10,
-                sys: sys,
-                par: {...par}
-            };
-            seqs.push(seq);
-            seqs.sort((a, b) => a.time - b.time);
-            rend();
-            stat(`Added sequence at ${t.toFixed(1)}s`);
         };
 
         window.openAI = function() { document.getElementById('ai-modal').classList.add('active'); };
@@ -612,18 +546,14 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
             }
         };
 
-        window.exportVid = async function() {
+        window.exportVid = function() {
             if (!aud.src) return alert('Load audio first');
 
             stat('Preparing export...');
 
-            // Get the currently VISIBLE canvas
-            const visibleCanvas = Array.from(document.querySelectorAll('canvas'))
-                .find(c => c.offsetParent !== null && c.offsetWidth > 0);
-
-            if (!visibleCanvas) return alert('No visible canvas found');
-
-            console.log('🎥 Recording canvas:', visibleCanvas.id);
+            // Get the first visible canvas
+            const canvas = document.querySelector('canvas');
+            if (!canvas) return alert('No canvas found');
 
             // Try different MediaRecorder mimeTypes for compatibility
             let mimeType = 'video/webm;codecs=vp9';
@@ -634,17 +564,30 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
                 }
             }
 
-            console.log('🎥 Using mimeType:', mimeType);
-
             try {
-                // Capture canvas stream at 60fps
-                const videoStream = visibleCanvas.captureStream(60);
+                // Create video stream from canvas
+                const videoStream = canvas.captureStream(60);
 
-                // Create destination to tap audio from EXISTING audio context
-                const exportDest = ctx.createMediaStreamDestination();
+                // Create a second AudioContext for export to avoid conflicts
+                const exportCtx = new AudioContext();
+                const exportDest = exportCtx.createMediaStreamDestination();
 
-                // Connect analyser to export destination (tap the audio)
-                anl.connect(exportDest);
+                // Create a gain node to tap the audio without disrupting playback
+                const gainNode = ctx.createGain();
+                gainNode.gain.value = 1.0;
+
+                // Insert gain node into audio chain: source -> analyser -> gain -> destination
+                // We'll connect gain to export destination
+                const srcNode = ctx.createMediaStreamSource(exportDest.stream);
+
+                // Alternative: Use MediaElementAudioSourceNode if audio isn't playing
+                // Create audio element clone for export
+                const exportAudio = new Audio(aud.src);
+                exportAudio.currentTime = 0;
+
+                const exportAudioSource = exportCtx.createMediaElementSource(exportAudio);
+                exportAudioSource.connect(exportDest);
+                exportAudioSource.connect(exportCtx.destination);
 
                 // Combine video + audio streams
                 const combinedStream = new MediaStream([
@@ -663,15 +606,15 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
                 recorder.ondataavailable = e => {
                     if (e.data && e.data.size > 0) {
                         chunks.push(e.data);
-                        stat(`Recording... ${(chunks.length * 0.1).toFixed(1)}s`);
+                        stat(`Recording... ${chunks.length} chunks`);
                     }
                 };
 
                 recorder.onstop = () => {
-                    console.log('🎥 Recorder stopped, chunks:', chunks.length);
+                    console.log('Recorder stopped, chunks:', chunks.length);
 
-                    // Clean up audio tap
-                    anl.disconnect(exportDest);
+                    exportCtx.close();
+                    exportAudio.pause();
 
                     if (chunks.length === 0) {
                         stat('Export failed: No data recorded');
@@ -679,47 +622,54 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
                     }
 
                     const blob = new Blob(chunks, { type: 'video/webm' });
-                    console.log('🎥 Blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+                    console.log('Blob size:', blob.size);
 
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `vib34d-choreography-${Date.now()}.webm`;
+                    a.download = `vib34d-master-${Date.now()}.webm`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
 
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
-                    stat('✅ Export complete! Video downloaded');
+                    stat('Export complete! Downloaded');
                 };
 
                 recorder.onerror = e => {
-                    console.error('🎥 Recorder error:', e);
-                    stat('Export failed: ' + (e.error || 'Unknown error'));
-                    anl.disconnect(exportDest);
+                    console.error('Recorder error:', e);
+                    stat('Export failed: ' + e.error);
+                    exportCtx.close();
+                    exportAudio.pause();
                 };
 
                 // Start recording
-                console.log('🎥 Starting recorder...');
+                console.log('Starting recorder with mimeType:', mimeType);
                 recorder.start(100); // Collect data every 100ms
 
-                // Restart audio from beginning
+                // Play both audios in sync
                 aud.currentTime = 0;
+                exportAudio.currentTime = 0;
                 beatCount = 0;
 
-                await aud.play();
-                stat('🔴 Recording...');
+                Promise.all([aud.play(), exportAudio.play()]).then(() => {
+                    stat('Recording... 0 chunks');
+                }).catch(err => {
+                    console.error('Play error:', err);
+                    stat('Playback failed: ' + err.message);
+                    recorder.stop();
+                });
 
                 // Stop recording when audio ends
-                aud.onended = () => {
-                    console.log('🎥 Audio ended, stopping recorder');
+                exportAudio.onended = () => {
+                    console.log('Audio ended, stopping recorder');
                     if (recorder.state === 'recording') {
                         recorder.stop();
                     }
                 };
 
             } catch (err) {
-                console.error('🎥 Export setup error:', err);
+                console.error('Export setup error:', err);
                 stat('Export failed: ' + err.message);
             }
         };
