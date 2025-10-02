@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #0f0;
+            padding: 20px;
+        }
+        .log {
+            background: #111;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 3px solid #0f0;
+        }
+        .error {
+            border-color: #f00;
+            color: #f00;
+        }
+        .success {
+            border-color: #0f0;
+            color: #0f0;
+        }
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px 5px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Video Export Test Suite</h1>
+    <p>This will test the export functionality in isolation</p>
+
+    <h2>Step 1: Load Audio</h2>
+    <input type="file" id="audio-file" accept="audio/*">
+    <div id="audio-status" class="log">No audio loaded</div>
+
+    <h2>Step 2: Start Export Test</h2>
+    <button id="test-btn" disabled>Run Export Test</button>
+    <button id="stop-btn" disabled>Stop Recording</button>
+
+    <h2>Test Results:</h2>
+    <div id="results"></div>
+
+    <script type="module">
+        import { VIB34DIntegratedEngine } from './src/core/Engine.js';
+        import { CanvasManager } from './src/core/CanvasManager.js';
+
+        let aud = new Audio();
+        let ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let anl = ctx.createAnalyser();
+        anl.fftSize = 2048;
+        let src = null;
+
+        let activeRecorder = null;
+        let recordingChunks = [];
+        let recordingStartTime = 0;
+
+        function log(message, type = 'log') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('results').appendChild(div);
+            console.log(message);
+            document.getElementById('results').scrollTop = document.getElementById('results').scrollHeight;
+        }
+
+        // Audio file input
+        document.getElementById('audio-file').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            log(`Loading audio: ${file.name}`);
+
+            const url = URL.createObjectURL(file);
+            aud.src = url;
+
+            if (!src) {
+                src = ctx.createMediaElementSource(aud);
+                src.connect(anl);
+                anl.connect(ctx.destination);
+            }
+
+            aud.onloadedmetadata = () => {
+                log(`✅ Audio loaded: ${aud.duration.toFixed(1)}s duration`, 'success');
+                document.getElementById('audio-status').textContent = `Loaded: ${file.name} (${aud.duration.toFixed(1)}s)`;
+                document.getElementById('audio-status').className = 'log success';
+                document.getElementById('test-btn').disabled = false;
+            };
+        });
+
+        // Initialize canvas
+        const mgr = new CanvasManager();
+        const cls = { VIB34DIntegratedEngine };
+        let eng = await mgr.switchToSystem('faceted', cls);
+
+        log('✅ Canvas initialized');
+
+        // Simple animation loop
+        function loop() {
+            if (eng && eng.render) {
+                eng.render();
+            }
+            requestAnimationFrame(loop);
+        }
+        loop();
+
+        // Test export
+        document.getElementById('test-btn').addEventListener('click', async function() {
+            log('🎥 ========= STARTING EXPORT TEST =========');
+
+            if (!aud.src) {
+                log('❌ No audio loaded', 'error');
+                return;
+            }
+
+            // Check MediaRecorder support
+            if (!window.MediaRecorder) {
+                log('❌ MediaRecorder not supported', 'error');
+                return;
+            }
+            log('✅ MediaRecorder supported');
+
+            // Get visible canvas
+            const allCanvases = Array.from(document.querySelectorAll('canvas'));
+            log(`Found ${allCanvases.length} canvas elements`);
+
+            const visibleCanvas = allCanvases.find(c => c.offsetParent !== null && c.offsetWidth > 0);
+
+            if (!visibleCanvas) {
+                log('❌ No visible canvas found', 'error');
+                return;
+            }
+
+            log(`✅ Using canvas: ${visibleCanvas.id} (${visibleCanvas.width}x${visibleCanvas.height})`);
+
+            // Check mimeType support
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                log('⚠️  vp9 not supported, trying vp8...');
+                mimeType = 'video/webm;codecs=vp8';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    log('⚠️  vp8 not supported, using default webm');
+                    mimeType = 'video/webm';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        log('❌ WebM not supported at all', 'error');
+                        return;
+                    }
+                }
+            }
+            log(`✅ Using mimeType: ${mimeType}`);
+
+            try {
+                // Capture streams
+                const videoStream = visibleCanvas.captureStream(60);
+                log(`✅ Canvas stream captured (${videoStream.getVideoTracks().length} video tracks)`);
+
+                const exportDest = ctx.createMediaStreamDestination();
+                anl.connect(exportDest);
+                log(`✅ Audio destination created (${exportDest.stream.getAudioTracks().length} audio tracks)`);
+
+                const combinedStream = new MediaStream([
+                    ...videoStream.getVideoTracks(),
+                    ...exportDest.stream.getAudioTracks()
+                ]);
+                log(`✅ Combined stream: ${combinedStream.getVideoTracks().length} video + ${combinedStream.getAudioTracks().length} audio`);
+
+                // Create recorder
+                const recorder = new MediaRecorder(combinedStream, {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 8000000
+                });
+
+                activeRecorder = recorder;
+                recordingChunks = [];
+                recordingStartTime = Date.now();
+
+                recorder.ondataavailable = e => {
+                    if (e.data && e.data.size > 0) {
+                        recordingChunks.push(e.data);
+                        log(`📦 Chunk #${recordingChunks.length}: ${e.data.size} bytes`);
+                    }
+                };
+
+                recorder.onstop = () => {
+                    log('🛑 Recorder stopped');
+                    log(`Chunks collected: ${recordingChunks.length}`);
+                    log(`Total size: ${recordingChunks.reduce((sum, c) => sum + c.size, 0)} bytes`);
+
+                    anl.disconnect(exportDest);
+
+                    if (recordingChunks.length === 0) {
+                        log('❌ No chunks recorded!', 'error');
+                        return;
+                    }
+
+                    const blob = new Blob(recordingChunks, { type: 'video/webm' });
+                    log(`✅ Blob created: ${(blob.size / 1024 / 1024).toFixed(2)} MB`, 'success');
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `test-export-${Date.now()}.webm`;
+                    a.click();
+
+                    log(`✅ Download triggered: ${a.download}`, 'success');
+                    log('🎉 EXPORT TEST PASSED!', 'success');
+
+                    document.getElementById('stop-btn').disabled = true;
+                    document.getElementById('test-btn').disabled = false;
+                    activeRecorder = null;
+                };
+
+                recorder.onerror = e => {
+                    log(`❌ Recorder error: ${e.error}`, 'error');
+                };
+
+                // Start recording
+                log(`Starting recorder...`);
+                recorder.start(100);
+                log(`✅ Recorder state: ${recorder.state}`);
+
+                document.getElementById('test-btn').disabled = true;
+                document.getElementById('stop-btn').disabled = false;
+
+                // Play audio
+                aud.currentTime = 0;
+                await aud.play();
+                log(`✅ Audio playing`);
+
+                // Auto-stop when audio ends
+                aud.onended = () => {
+                    log('Audio ended, stopping recorder');
+                    if (activeRecorder && activeRecorder.state === 'recording') {
+                        activeRecorder.stop();
+                    }
+                };
+
+            } catch (err) {
+                log(`❌ Export error: ${err.message}`, 'error');
+                console.error(err);
+            }
+        });
+
+        // Manual stop
+        document.getElementById('stop-btn').addEventListener('click', function() {
+            if (activeRecorder && activeRecorder.state === 'recording') {
+                log('User stopped recording');
+                activeRecorder.stop();
+                aud.pause();
+            }
+        });
+    </script>
+</body>
+</html>
