@@ -396,7 +396,7 @@ Examples:
         <button id="llm-generate" onclick="generateFromAI()">✨ Generate Parameters</button>
         <div style="font-size: 10px; color: #666;">
             <label>API Key (stored locally):</label>
-            <input type="password" class="api-key-input" id="api-key-input" placeholder="AIza..." value="AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI">
+            <input type="password" class="api-key-input" id="api-key-input" placeholder="AIza..." value="YOUR_GEMINI_API_KEY_HERE">
         </div>
         <div id="llm-status">Enter description and click Generate</div>
     </div>
@@ -449,7 +449,7 @@ Examples:
 
         // Initialize LLM Interface with provided API key
         llmInterface = new LLMParameterInterface();
-        llmInterface.setApiKey('AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI');
+        llmInterface.setApiKey('YOUR_GEMINI_API_KEY_HERE');
         window.llmInterface = llmInterface;
 
         console.log('✅ Canvas Manager initialized');

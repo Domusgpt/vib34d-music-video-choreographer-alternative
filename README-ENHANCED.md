@@ -84,7 +84,7 @@ python3 -m http.server 8080
 ## 🔑 API Key Configuration
 
 ### Using the Pre-Configured Key
-The API key `AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI` is already configured in:
+The API key `YOUR_GEMINI_API_KEY_HERE` is already configured in:
 - `index-enhanced.html` (line 313)
 - The LLM interface input field
 

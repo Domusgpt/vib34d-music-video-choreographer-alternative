@@ -438,7 +438,11 @@
             const prompt = document.getElementById('ai-prompt').value;
             if (!prompt) return alert('Enter song description');
 
-            const key = document.getElementById('api-key').value || 'AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI';
+            const key = document.getElementById('api-key').value;
+            if (!key) {
+                alert('Please enter your Gemini API key');
+                return;
+            }
             const dur = aud.duration || 180;
             stat('AI analyzing musical structure...');
 

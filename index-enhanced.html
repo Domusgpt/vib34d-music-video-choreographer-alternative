@@ -436,7 +436,7 @@ Examples:
         <button id="llm-generate" onclick="generateFromAI()" style="background: linear-gradient(135deg, #4a0a68, #f0f); border: none; color: #fff; padding: 12px 24px; font-family: 'Courier New', monospace; font-weight: 700; font-size: 12px; border-radius: 8px; cursor: pointer; text-transform: uppercase;">✨ GENERATE PARAMETERS</button>
         <div style="font-size: 10px; color: #666;">
             <label>API Key (stored locally):</label>
-            <input type="password" id="llm-api-key-input" placeholder="AIza..." value="AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI" style="width: 100%; background: #111; border: 1px solid #f0f; color: #0ff; padding: 8px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 10px;">
+            <input type="password" id="llm-api-key-input" placeholder="AIza..." value="YOUR_GEMINI_API_KEY_HERE" style="width: 100%; background: #111; border: 1px solid #f0f; color: #0ff; padding: 8px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 10px;">
         </div>
         <div id="llm-status" style="font-size: 11px; color: #aaa; text-align: center;">Enter description and click Generate</div>
     </div>
@@ -455,7 +455,7 @@ Examples:
 
         <div class="control-group" style="margin-top: 10px;">
             <label style="font-size: 10px; margin-bottom: 5px; display: block;">🤖 GEMINI API KEY (for AI choreography)</label>
-            <input type="password" id="gemini-api-key" placeholder="Enter Gemini API key..." value="AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI" style="width: 100%; padding: 5px; font-size: 9px; background: rgba(0,255,255,0.1); border: 1px solid #0ff; color: #0ff;">
+            <input type="password" id="gemini-api-key" placeholder="Enter Gemini API key..." value="YOUR_GEMINI_API_KEY_HERE" style="width: 100%; padding: 5px; font-size: 9px; background: rgba(0,255,255,0.1); border: 1px solid #0ff; color: #0ff;">
             <button class="ui-btn" id="analyze-song-btn" style="width: 100%; margin-top: 5px; font-size: 9px;">🎵 ANALYZE SONG WITH AI</button>
             <div id="ai-analysis-status" style="font-size: 8px; margin-top: 5px; color: #0ff;"></div>
         </div>
@@ -668,7 +668,7 @@ Examples:
 
                 // Initialize LLM interface
                 this.llmInterface = new LLMParameterInterface();
-                this.llmInterface.setApiKey('AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI');
+                this.llmInterface.setApiKey('YOUR_GEMINI_API_KEY_HERE');
                 console.log('✅ LLM Interface initialized');
 
                 await this.initCanvases();
