@@ -167,6 +167,7 @@
             </div>
         </div>
 
+        <button class="btn" id="reactivity-btn" onclick="window.toggleReact()">🎵 AUDIO REACT: <span id="react-status">ON</span></button>
         <button class="btn" onclick="window.randomize()">🎲 Randomize</button>
         <button class="btn ai" onclick="window.openAI()">🤖 AI Musical Choreography</button>
         <button class="btn" id="export-btn" onclick="window.exportVid()" disabled>🎥 Export Video</button>
@@ -232,6 +233,7 @@
 
         let seqs = [];
         let currentSeq = null;
+        let audioReactEnabled = true; // Real-time audio reactivity
 
         const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
 
@@ -313,13 +315,31 @@
         window.pause = function() { aud.pause(); play = false; stat('Paused'); };
         window.stop = function() { aud.pause(); aud.currentTime = 0; play = false; stat('Stopped'); };
 
+        window.toggleReact = function() {
+            audioReactEnabled = !audioReactEnabled;
+            document.getElementById('react-status').textContent = audioReactEnabled ? 'ON' : 'OFF';
+            stat(audioReactEnabled ? 'Audio reactivity ENABLED' : 'Audio reactivity DISABLED');
+        };
+
         function loop() {
-            if (play && seqs.length > 0) {
+            if (play) {
                 anl.getByteFrequencyData(dat);
                 const b = avg(0, 100) / 255;  // Bass
                 const m = avg(100, 400) / 255; // Mids
                 const h = avg(400, 1024) / 255; // Highs
                 const t = aud.currentTime;
+
+                // REAL-TIME AUDIO REACTIVITY (when enabled and no sequences)
+                if (audioReactEnabled && seqs.length === 0) {
+                    // No sequences - use continuous audio reactivity
+                    apply('rot4dXW', par.rot4dXW + b * 0.5);
+                    apply('rot4dYW', par.rot4dYW + m * 0.5);
+                    apply('rot4dZW', par.rot4dZW + h * 0.5);
+                    apply('gridDensity', par.gridDensity + b * 30);
+                    apply('morphFactor', par.morphFactor + m * 0.5);
+                    apply('chaos', Math.min(1, par.chaos + h * 0.3));
+                    apply('intensity', Math.min(1, par.intensity + (b + m + h) / 3 * 0.4));
+                }
 
                 // Find current sequence
                 const ac = seqs.find(s => t >= s.time && t < s.time + s.dur);
