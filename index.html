@@ -181,6 +181,7 @@
             <button id="play-btn" disabled onclick="window.play()">▶ Play</button>
             <button id="pause-btn" disabled onclick="window.pause()">⏸ Pause</button>
             <button id="stop-btn" disabled onclick="window.stop()">⏹ Stop</button>
+            <button onclick="window.addSeq()">➕ Add Sequence</button>
         </div>
         <div class="track" id="track">
             <div class="playhead" id="playhead"></div>
@@ -636,9 +637,75 @@ Return ONLY JSON array.`
             }
         };
 
-        window.exportVid = function() {
-            stat('Video export not yet implemented in V2');
-            // TODO: Implement working export
+        window.addSeq = function() {
+            const t = aud.currentTime || 0;
+            const seq = {
+                name: `Sequence ${seqs.length + 1}`,
+                time: t,
+                dur: 10,
+                sys: sys,
+                par: {...par}
+            };
+            seqs.push(seq);
+            seqs.sort((a, b) => a.time - b.time);
+            rend();
+            stat(`Added sequence at ${t.toFixed(1)}s`);
+        };
+
+        window.exportVid = async function() {
+            if (!aud.src) {
+                alert('Load audio first');
+                return;
+            }
+
+            const canvas = document.querySelector('canvas');
+            if (!canvas) {
+                alert('No canvas found');
+                return;
+            }
+
+            stat('Starting video export...');
+
+            // Capture canvas stream at 60fps
+            const stream = canvas.captureStream(60);
+
+            // Create audio context for export
+            const audioCtx = new AudioContext();
+            const source = audioCtx.createMediaElementSource(aud);
+            const dest = audioCtx.createMediaStreamDestination();
+            source.connect(dest);
+            source.connect(audioCtx.destination);
+
+            // Add audio track to stream
+            stream.addTrack(dest.stream.getAudioTracks()[0]);
+
+            // Create MediaRecorder
+            const recorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 8000000
+            });
+
+            const chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `vib34d-choreography-${Date.now()}.webm`;
+                a.click();
+                audioCtx.close();
+                stat('Export complete!');
+            };
+
+            // Start recording
+            recorder.start();
+            aud.currentTime = 0;
+            await aud.play();
+            stat('Recording...');
+
+            // Stop when audio ends
+            aud.onended = () => recorder.stop();
         };
     </script>
 </body>
