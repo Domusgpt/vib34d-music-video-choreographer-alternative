@@ -456,14 +456,23 @@
 
         window.genAI = async function() {
             const prompt = document.getElementById('ai-prompt').value;
-            if (!prompt) return alert('Enter description');
+            if (!prompt) {
+                alert('Enter description');
+                return;
+            }
 
-            const key = document.getElementById('api-key').value || 'AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI';
+            const key = document.getElementById('api-key').value.trim();
+            if (!key) {
+                alert('Enter a Gemini API key');
+                stat('AI failed: API key required');
+                return;
+            }
+
             const dur = aud.duration || 180;
             stat('AI generating with beat sync...');
 
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
                 const resp = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -532,98 +541,126 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
                     })
                 });
 
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+
                 const data = await resp.json();
-                const txt = data.candidates[0].content.parts[0].text;
-                const json = txt.match(/\[[\s\S]*\]/)[0];
-                seqs = JSON.parse(json);
+                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) {
+                    throw new Error('No choreography returned');
+                }
+
+                const match = text.match(/\[[\s\S]*\]/);
+                if (!match) {
+                    throw new Error('Response missing choreography array');
+                }
+
+                seqs = JSON.parse(match[0]);
                 rend();
                 beatCount = 0;
                 stat(`AI: ${seqs.length} seqs with beat sync!`);
                 window.closeAI();
             } catch (err) {
+                console.error('AI generation failed', err);
                 stat('AI failed: ' + err.message);
-                console.error(err);
             }
         };
 
-        window.exportVid = function() {
-            if (!aud.src) return alert('Load audio first');
+        window.exportVid = async function() {
+            if (!aud.src) {
+                alert('Load audio first');
+                return;
+            }
+
+            if (typeof MediaRecorder === 'undefined') {
+                stat('Export failed: MediaRecorder not supported in this browser');
+                return;
+            }
 
             stat('Preparing export...');
 
-            // Get the first visible canvas
             const canvas = document.querySelector('canvas');
-            if (!canvas) return alert('No canvas found');
-
-            // Try different MediaRecorder mimeTypes for compatibility
-            let mimeType = 'video/webm;codecs=vp9';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'video/webm;codecs=vp8';
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = 'video/webm';
-                }
+            if (!canvas || !canvas.captureStream) {
+                stat('Export failed: Unable to capture canvas stream');
+                return;
             }
 
+            const mimeCandidates = [
+                'video/webm;codecs=vp9',
+                'video/webm;codecs=vp8',
+                'video/webm'
+            ];
+            const mimeType = mimeCandidates.find(type => {
+                try {
+                    return MediaRecorder.isTypeSupported(type);
+                } catch (err) {
+                    return false;
+                }
+            }) || '';
+
             try {
-                // Create video stream from canvas
                 const videoStream = canvas.captureStream(60);
+                const exportDest = ctx.createMediaStreamDestination();
+                let fallbackAudioStream = null;
 
-                // Create a second AudioContext for export to avoid conflicts
-                const exportCtx = new AudioContext();
-                const exportDest = exportCtx.createMediaStreamDestination();
+                try {
+                    anl.connect(exportDest);
+                } catch (err) {
+                    console.warn('Export: analyser connect failed', err);
+                }
 
-                // Create a gain node to tap the audio without disrupting playback
-                const gainNode = ctx.createGain();
-                gainNode.gain.value = 1.0;
+                const combinedStream = new MediaStream();
+                videoStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
 
-                // Insert gain node into audio chain: source -> analyser -> gain -> destination
-                // We'll connect gain to export destination
-                const srcNode = ctx.createMediaStreamSource(exportDest.stream);
+                const audioTracks = exportDest.stream.getAudioTracks();
+                if (audioTracks.length) {
+                    audioTracks.forEach(track => combinedStream.addTrack(track));
+                } else if (aud.captureStream) {
+                    fallbackAudioStream = aud.captureStream();
+                    if (fallbackAudioStream) {
+                        fallbackAudioStream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
+                    }
+                }
 
-                // Alternative: Use MediaElementAudioSourceNode if audio isn't playing
-                // Create audio element clone for export
-                const exportAudio = new Audio(aud.src);
-                exportAudio.currentTime = 0;
+                if (combinedStream.getAudioTracks().length === 0) {
+                    stat('Export failed: No audio track available for recording');
+                    try { anl.disconnect(exportDest); } catch (err) {}
+                    videoStream.getTracks().forEach(track => track.stop());
+                    return;
+                }
 
-                const exportAudioSource = exportCtx.createMediaElementSource(exportAudio);
-                exportAudioSource.connect(exportDest);
-                exportAudioSource.connect(exportCtx.destination);
-
-                // Combine video + audio streams
-                const combinedStream = new MediaStream([
-                    ...videoStream.getVideoTracks(),
-                    ...exportDest.stream.getAudioTracks()
-                ]);
-
-                // Create MediaRecorder
                 const recorder = new MediaRecorder(combinedStream, {
                     mimeType: mimeType,
                     videoBitsPerSecond: 8000000
                 });
 
                 const chunks = [];
+                const cleanup = () => {
+                    try { anl.disconnect(exportDest); } catch (err) {}
+                    exportDest.stream.getTracks().forEach(track => track.stop());
+                    if (fallbackAudioStream) {
+                        fallbackAudioStream.getTracks().forEach(track => track.stop());
+                    }
+                    videoStream.getTracks().forEach(track => track.stop());
+                };
 
-                recorder.ondataavailable = e => {
-                    if (e.data && e.data.size > 0) {
-                        chunks.push(e.data);
+                recorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        chunks.push(event.data);
                         stat(`Recording... ${chunks.length} chunks`);
                     }
                 };
 
                 recorder.onstop = () => {
-                    console.log('Recorder stopped, chunks:', chunks.length);
+                    cleanup();
 
-                    exportCtx.close();
-                    exportAudio.pause();
-
-                    if (chunks.length === 0) {
+                    if (!chunks.length) {
                         stat('Export failed: No data recorded');
                         return;
                     }
 
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    console.log('Blob size:', blob.size);
-
+                    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -631,43 +668,41 @@ Return ONLY the JSON array. Make it INSANE. Be a VISUAL GENIUS.`
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
-
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
                     stat('Export complete! Downloaded');
                 };
 
-                recorder.onerror = e => {
-                    console.error('Recorder error:', e);
-                    stat('Export failed: ' + e.error);
-                    exportCtx.close();
-                    exportAudio.pause();
+                recorder.onerror = (event) => {
+                    console.error('Recorder error:', event);
+                    cleanup();
+                    stat('Export failed: ' + (event.error?.message || event.name || 'Unknown error'));
                 };
 
-                // Start recording
-                console.log('Starting recorder with mimeType:', mimeType);
-                recorder.start(100); // Collect data every 100ms
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
 
-                // Play both audios in sync
                 aud.currentTime = 0;
-                exportAudio.currentTime = 0;
                 beatCount = 0;
 
-                Promise.all([aud.play(), exportAudio.play()]).then(() => {
-                    stat('Recording... 0 chunks');
-                }).catch(err => {
-                    console.error('Play error:', err);
-                    stat('Playback failed: ' + err.message);
-                    recorder.stop();
-                });
+                recorder.start(100);
 
-                // Stop recording when audio ends
-                exportAudio.onended = () => {
-                    console.log('Audio ended, stopping recorder');
+                try {
+                    await aud.play();
+                    stat('Recording... 0 chunks');
+                } catch (err) {
+                    console.error('Playback failed', err);
+                    recorder.stop();
+                    return;
+                }
+
+                const stopRecording = () => {
                     if (recorder.state === 'recording') {
                         recorder.stop();
                     }
                 };
 
+                aud.addEventListener('ended', stopRecording, { once: true });
             } catch (err) {
                 console.error('Export setup error:', err);
                 stat('Export failed: ' + err.message);
