@@ -5,24 +5,59 @@
  */
 
 export class GeometryLibrary {
+    static baseGeometries = [
+        'TETRAHEDRON',
+        'HYPERCUBE',
+        'SPHERE',
+        'TORUS',
+        'KLEIN BOTTLE',
+        'FRACTAL',
+        'WAVE',
+        'CRYSTAL'
+    ];
+
+    static customGeometries = [];
+
     static getGeometryNames() {
-        return [
-            'TETRAHEDRON',
-            'HYPERCUBE', 
-            'SPHERE',
-            'TORUS',
-            'KLEIN BOTTLE',
-            'FRACTAL',
-            'WAVE',
-            'CRYSTAL'
-        ];
+        return [...this.baseGeometries, ...this.customGeometries];
     }
-    
+
     static getGeometryName(type) {
         const names = this.getGeometryNames();
         return names[type] || 'UNKNOWN';
     }
-    
+
+    static normalizeName(name) {
+        if (typeof name !== 'string') {
+            return '';
+        }
+        return name.trim().replace(/\s+/g, ' ');
+    }
+
+    static hasGeometry(name) {
+        const normalized = this.normalizeName(name).toUpperCase();
+        if (!normalized) return false;
+        return this.getGeometryNames().some(item => item.toUpperCase() === normalized);
+    }
+
+    static registerGeometry(name) {
+        const normalized = this.normalizeName(name);
+        if (!normalized) {
+            return false;
+        }
+
+        if (this.hasGeometry(normalized)) {
+            return false;
+        }
+
+        this.customGeometries.push(normalized.toUpperCase());
+        return true;
+    }
+
+    static clearCustomGeometries() {
+        this.customGeometries = [];
+    }
+
     /**
      * Get variation parameters for specific geometry and level
      */

@@ -110,7 +110,8 @@
             <h3>🔷 Geometry</h3>
             <div class="param">
                 <label>Type <span class="param-val" id="v-geometry">0</span></label>
-                <input type="range" id="geometry" min="0" max="7" value="0" oninput="P('geometry', this.value)">
+                <input type="range" id="geometry" min="0" max="0" value="0" oninput="P('geometry', this.value)">
+                <div class="geometry-legend" id="geometry-legend" style="margin-top:6px;font-size:10px;line-height:1.4;display:flex;flex-wrap:wrap;gap:4px;opacity:0.8;"></div>
             </div>
         </div>
 
@@ -203,6 +204,7 @@
         import { VIB34DIntegratedEngine } from './src/core/Engine.js';
         import { QuantumEngine } from './src/quantum/QuantumEngine.js';
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
         import { CanvasManager } from './src/core/CanvasManager.js';
 
         let mgr = new CanvasManager();
@@ -217,6 +219,7 @@
         let play = false;
         let par = { geometry: 0, rot4dXW: 0, rot4dYW: 0, rot4dZW: 0, gridDensity: 15, morphFactor: 1.0, chaos: 0.2, speed: 1.0, hue: 200, intensity: 0.5, saturation: 0.8 };
         let seqs = [];
+        let geometryNames = GeometryLibrary.getGeometryNames();
         let recChunks = [];
         let rec = null;
 
@@ -224,6 +227,7 @@
 
         (async function() {
             eng = await mgr.switchToSystem('faceted', cls);
+            refreshGeometryControls();
             document.getElementById('audio-file').addEventListener('change', loadAud);
             aud.addEventListener('timeupdate', upd);
             aud.addEventListener('ended', () => window.stop());
@@ -233,17 +237,123 @@
 
         function stat(m) { document.getElementById('status').textContent = '🎵 ' + m; }
 
+        function geometryCount() {
+            geometryNames = GeometryLibrary.getGeometryNames();
+            return geometryNames.length;
+        }
+
+        function clampGeometry(index) {
+            const count = geometryCount();
+            if (count === 0) return 0;
+            return Math.max(0, Math.min(count - 1, Math.round(index)));
+        }
+
+        function geometryLabel(index) {
+            if (!geometryNames.length) {
+                return `${index}`;
+            }
+            const normalized = clampGeometry(index);
+            const name = geometryNames[normalized];
+            return name ? `${normalized} · ${name}` : `${normalized}`;
+        }
+
+        function updateGeometryLegend() {
+            const legend = document.getElementById('geometry-legend');
+            if (!legend) return;
+            if (!geometryNames.length) {
+                legend.innerHTML = '<span style="opacity:0.6;">No geometries available</span>';
+                return;
+            }
+            legend.innerHTML = geometryNames
+                .map((name, idx) => `<span style="background:rgba(0,255,255,0.08);padding:2px 4px;border-radius:3px;">${idx}: ${name}</span>`)
+                .join('');
+        }
+
+        function updateGeometryReadout(index) {
+            const readout = document.getElementById('v-geometry');
+            if (!readout) return;
+            if (index === undefined || index === null || Number.isNaN(index)) {
+                readout.textContent = '--';
+                return;
+            }
+            readout.textContent = geometryLabel(index);
+        }
+
+        function refreshGeometryControls() {
+            geometryCount();
+            const slider = document.getElementById('geometry');
+            if (slider) {
+                const maxIndex = Math.max(geometryNames.length - 1, 0);
+                slider.max = maxIndex;
+                const normalized = clampGeometry(par.geometry ?? 0);
+                par.geometry = normalized;
+                slider.value = normalized;
+                updateGeometryReadout(normalized);
+            }
+            updateGeometryLegend();
+        }
+
+        if (!GeometryLibrary.__uiListeners) {
+            GeometryLibrary.__uiListeners = new Set();
+
+            const originalRegisterGeometry = GeometryLibrary.registerGeometry.bind(GeometryLibrary);
+            GeometryLibrary.registerGeometry = function(name) {
+                const added = originalRegisterGeometry(name);
+                if (added) {
+                    GeometryLibrary.__uiListeners.forEach(listener => {
+                        try { listener(); } catch (err) { console.warn('Geometry listener failed', err); }
+                    });
+                }
+                return added;
+            };
+
+            if (typeof GeometryLibrary.clearCustomGeometries === 'function') {
+                const originalClear = GeometryLibrary.clearCustomGeometries.bind(GeometryLibrary);
+                GeometryLibrary.clearCustomGeometries = function(...args) {
+                    const result = originalClear(...args);
+                    GeometryLibrary.__uiListeners.forEach(listener => {
+                        try { listener(); } catch (err) { console.warn('Geometry listener failed', err); }
+                    });
+                    return result;
+                };
+            }
+        }
+
+        const handleGeometryLibraryUpdate = () => {
+            geometryNames = GeometryLibrary.getGeometryNames();
+            refreshGeometryControls();
+        };
+
+        GeometryLibrary.__uiListeners.add(handleGeometryLibraryUpdate);
+
+        window.addEventListener('beforeunload', () => {
+            if (GeometryLibrary.__uiListeners) {
+                GeometryLibrary.__uiListeners.delete(handleGeometryLibraryUpdate);
+            }
+        });
+
+        window.refreshGeometryControls = refreshGeometryControls;
+
         window.switchSys = async function(s) {
             eng = await mgr.switchToSystem(s, cls);
             sys = s;
             document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.sys === s));
+            refreshGeometryControls();
             applyAll();
             stat(`Switched to ${s.toUpperCase()}`);
         };
 
         window.P = function(p, v) {
             par[p] = parseFloat(v);
-            document.getElementById('v-' + p).textContent = p === 'hue' ? v + '°' : (p === 'geometry' || p === 'gridDensity' ? parseInt(v) : parseFloat(v).toFixed(2));
+            if (p === 'geometry') {
+                par[p] = clampGeometry(par[p]);
+                const slider = document.getElementById('geometry');
+                if (slider) slider.value = par[p];
+                updateGeometryReadout(par[p]);
+            } else {
+                const val = p === 'hue' ? v + '°' : (p === 'gridDensity' ? parseInt(v) : parseFloat(v).toFixed(2));
+                document.getElementById('v-' + p).textContent = val;
+            }
             apply(p, par[p]);
         };
 
@@ -259,7 +369,9 @@
         }
 
         window.randomize = function() {
-            par.geometry = Math.floor(Math.random() * 8);
+            geometryCount();
+            const count = Math.max(geometryNames.length, 1);
+            par.geometry = count > 0 ? Math.floor(Math.random() * count) : 0;
             par.rot4dXW = Math.random() * 12.56 - 6.28;
             par.rot4dYW = Math.random() * 12.56 - 6.28;
             par.rot4dZW = Math.random() * 12.56 - 6.28;
@@ -396,14 +508,23 @@
 
         window.genAI = async function() {
             const prompt = document.getElementById('ai-prompt').value;
-            if (!prompt) return alert('Enter description');
+            if (!prompt) {
+                alert('Enter description');
+                return;
+            }
 
-            const key = document.getElementById('api-key').value || 'AIzaSyD1dHwFcwVxg6r-Lt8I7U6CgznDfwn4GeI';
+            const key = document.getElementById('api-key').value.trim();
+            if (!key) {
+                alert('Enter a Gemini API key');
+                stat('AI failed: API key required');
+                return;
+            }
+
             const dur = aud.duration || 180; // Use actual duration or default 3min
             stat('AI analyzing full song structure...');
 
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
                 const resp = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -429,7 +550,7 @@ For each sequence, create:
 - time: start time in seconds
 - dur: duration in seconds
 - sys: system type (faceted, quantum, or holographic)
-- geometry: 0-7 (switch at transitions for impact)
+- geometry: consult the live legend (indices expand automatically as new shapes load)
 - rot4dXW, rot4dYW, rot4dZW: -6.28 to 6.28 (use extreme values for drops)
 - gridDensity: 5-100 (pulse between low/high for oomf)
 - morphFactor: 0-2 (high for chaotic, low for clean)
@@ -454,60 +575,167 @@ Return ONLY valid JSON array with 10-15 sequences covering the full ${dur.toFixe
                     })
                 });
 
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+
                 const data = await resp.json();
-                const txt = data.candidates[0].content.parts[0].text;
-                const json = txt.match(/\[[\s\S]*\]/)[0];
-                seqs = JSON.parse(json);
+                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) {
+                    throw new Error('No choreography returned');
+                }
+
+                const match = text.match(/\[[\s\S]*\]/);
+                if (!match) {
+                    throw new Error('Response missing choreography array');
+                }
+
+                seqs = JSON.parse(match[0]);
                 rend();
                 stat(`AI choreographed ${seqs.length} sequences - ${dur.toFixed(0)}s full song!`);
                 window.closeAI();
             } catch (err) {
+                console.error('AI generation failed', err);
                 stat('AI failed: ' + err.message);
-                console.error(err);
             }
         };
 
         window.exportVid = async function() {
-            if (!aud.src) return alert('Load audio first');
+            if (!aud.src) {
+                alert('Load audio first');
+                return;
+            }
+
+            if (typeof MediaRecorder === 'undefined') {
+                stat('Export failed: MediaRecorder not supported in this browser');
+                return;
+            }
 
             stat('Preparing export...');
-            const canv = document.querySelector('canvas');
-            const stream = canv.captureStream(60);
 
-            // Create new audio context for export to avoid "already connected" error
-            const expCtx = new AudioContext();
-            const expSrc = expCtx.createMediaElementSource(aud);
-            const expDest = expCtx.createMediaStreamDestination();
-            expSrc.connect(expDest);
-            expSrc.connect(expCtx.destination);
+            const canvas = document.querySelector('canvas');
+            if (!canvas || !canvas.captureStream) {
+                stat('Export failed: Unable to capture canvas stream');
+                return;
+            }
 
-            stream.addTrack(expDest.stream.getAudioTracks()[0]);
-
-            rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
-            recChunks = [];
-
-            rec.ondataavailable = e => recChunks.push(e.data);
-            rec.onstop = () => {
-                const blob = new Blob(recChunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `vib34d-ultimate-${Date.now()}.webm`;
-                a.click();
-                expCtx.close();
-                stat('Export complete!');
-            };
-
-            rec.start();
-            aud.currentTime = 0;
-            await aud.play();
-            stat('Recording... (will auto-stop at end)');
-
-            aud.onended = () => {
-                if (rec && rec.state === 'recording') {
-                    rec.stop();
+            const mimeCandidates = [
+                'video/webm;codecs=vp9',
+                'video/webm;codecs=vp8',
+                'video/webm'
+            ];
+            const mimeType = mimeCandidates.find(type => {
+                try {
+                    return MediaRecorder.isTypeSupported(type);
+                } catch (err) {
+                    return false;
                 }
-            };
+            }) || '';
+
+            try {
+                const stream = canvas.captureStream(60);
+                const exportDest = ctx.createMediaStreamDestination();
+                let fallbackAudioStream = null;
+
+                try {
+                    anl.connect(exportDest);
+                } catch (err) {
+                    console.warn('Export: analyser connect failed', err);
+                }
+
+                const combinedStream = new MediaStream();
+                stream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
+
+                let audioTracks = exportDest.stream.getAudioTracks();
+                if (!audioTracks.length && aud.captureStream) {
+                    fallbackAudioStream = aud.captureStream();
+                    if (fallbackAudioStream) {
+                        audioTracks = fallbackAudioStream.getAudioTracks();
+                    }
+                }
+
+                audioTracks.forEach(track => combinedStream.addTrack(track));
+
+                if (combinedStream.getAudioTracks().length === 0) {
+                    stat('Export failed: No audio track available for recording');
+                    try { anl.disconnect(exportDest); } catch (err) {}
+                    stream.getTracks().forEach(track => track.stop());
+                    if (fallbackAudioStream) {
+                        fallbackAudioStream.getTracks().forEach(track => track.stop());
+                    }
+                    return;
+                }
+
+                rec = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 8000000 });
+                recChunks = [];
+
+                const cleanup = () => {
+                    try { anl.disconnect(exportDest); } catch (err) {}
+                    exportDest.stream.getTracks().forEach(track => track.stop());
+                    stream.getTracks().forEach(track => track.stop());
+                    if (fallbackAudioStream) {
+                        fallbackAudioStream.getTracks().forEach(track => track.stop());
+                    }
+                };
+
+                rec.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recChunks.push(event.data);
+                        stat(`Recording... ${recChunks.length} chunks`);
+                    }
+                };
+
+                rec.onstop = () => {
+                    cleanup();
+
+                    if (!recChunks.length) {
+                        stat('Export failed: No data recorded');
+                        return;
+                    }
+
+                    const blob = new Blob(recChunks, { type: mimeType || 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `vib34d-ultimate-${Date.now()}.webm`;
+                    a.click();
+                    stat('Export complete!');
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                };
+
+                rec.onerror = (event) => {
+                    console.error('Recorder error:', event);
+                    cleanup();
+                    stat('Export failed: ' + (event.error?.message || event.name || 'Unknown error'));
+                };
+
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
+
+                aud.currentTime = 0;
+                rec.start(100);
+
+                try {
+                    await aud.play();
+                    stat('Recording... (will auto-stop at end)');
+                } catch (err) {
+                    console.error('Playback failed', err);
+                    rec.stop();
+                    return;
+                }
+
+                const stopRecording = () => {
+                    if (rec && rec.state === 'recording') {
+                        rec.stop();
+                    }
+                };
+
+                aud.addEventListener('ended', stopRecording, { once: true });
+            } catch (err) {
+                console.error('Export setup error:', err);
+                stat('Export failed: ' + err.message);
+            }
         };
     </script>
 </body>

@@ -3,8 +3,13 @@
  * Unified parameter control for both holographic and polytopal systems
  */
 
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+
 export class ParameterManager {
     constructor() {
+        const geometryNames = GeometryLibrary.getGeometryNames();
+        const defaultGeometryIndex = geometryNames.length > 0 ? 0 : -1;
+
         // Default parameter set combining both systems
         this.params = {
             // Current variation
@@ -26,9 +31,9 @@ export class ParameterManager {
             saturation: 0.8,   // Color saturation (0 to 1)
             
             // Geometry selection
-            geometry: 0        // Current geometry type (0-7)
+            geometry: Math.max(0, defaultGeometryIndex)        // Current geometry type (0-n)
         };
-        
+
         // Parameter definitions for validation and UI
         this.parameterDefs = {
             variation: { min: 0, max: 99, step: 1, type: 'int' },
@@ -43,11 +48,30 @@ export class ParameterManager {
             hue: { min: 0, max: 360, step: 1, type: 'int' },
             intensity: { min: 0, max: 1, step: 0.01, type: 'float' },
             saturation: { min: 0, max: 1, step: 0.01, type: 'float' },
-            geometry: { min: 0, max: 7, step: 1, type: 'int' }
+            geometry: { min: 0, max: Math.max(geometryNames.length - 1, 0), step: 1, type: 'int' }
         };
         
+        // Track parameters that were introduced dynamically
+        this.dynamicParameters = new Set();
+
         // Default parameter backup for reset
         this.defaults = { ...this.params };
+    }
+
+    updateGeometryRange(geometryCount = GeometryLibrary.getGeometryNames().length) {
+        const maxIndex = Math.max(geometryCount - 1, 0);
+        if (!this.parameterDefs.geometry) {
+            this.parameterDefs.geometry = { min: 0, max: maxIndex, step: 1, type: 'int' };
+        } else {
+            this.parameterDefs.geometry.min = 0;
+            this.parameterDefs.geometry.max = maxIndex;
+            this.parameterDefs.geometry.step = 1;
+            this.parameterDefs.geometry.type = 'int';
+        }
+
+        if (this.params.geometry > maxIndex) {
+            this.params.geometry = maxIndex;
+        }
     }
     
     /**
@@ -63,19 +87,24 @@ export class ParameterManager {
     setParameter(name, value) {
         if (this.parameterDefs[name]) {
             const def = this.parameterDefs[name];
-            
+
+            if (def.allowOverflow) {
+                this.params[name] = value;
+                return true;
+            }
+
             // Clamp value to valid range
             value = Math.max(def.min, Math.min(def.max, value));
-            
+
             // Apply type conversion
             if (def.type === 'int') {
                 value = Math.round(value);
             }
-            
+
             this.params[name] = value;
             return true;
         }
-        
+
         console.warn(`Unknown parameter: ${name}`);
         return false;
     }
@@ -94,6 +123,91 @@ export class ParameterManager {
      */
     getParameter(name) {
         return this.params[name];
+    }
+
+    /**
+     * Alias used by new choreography bridge
+     */
+    getParameterValue(name) {
+        return this.getParameter(name);
+    }
+
+    /**
+     * Register parameters introduced by AI choreography or external systems
+     */
+    registerDynamicParameter(name, definition = {}) {
+        if (!name) {
+            return;
+        }
+
+        let minValue = definition.min;
+        let maxValue = definition.max;
+
+        if (Array.isArray(definition.range)) {
+            const [rangeMin, rangeMax] = definition.range;
+            if (minValue === undefined) minValue = rangeMin;
+            if (maxValue === undefined) maxValue = rangeMax;
+        } else if (definition.range && typeof definition.range === 'object') {
+            if (minValue === undefined) {
+                minValue = definition.range.min ?? definition.range.lower;
+            }
+            if (maxValue === undefined) {
+                maxValue = definition.range.max ?? definition.range.upper;
+            }
+        }
+
+        const {
+            type = 'float',
+            defaultValue = 0,
+            allowOverflow = true
+        } = definition;
+
+        const step = type === 'int' ? 1 : (definition.step ?? 0.01);
+        const min = minValue ?? Number.NEGATIVE_INFINITY;
+        const max = maxValue ?? Number.POSITIVE_INFINITY;
+
+        if (!(name in this.params)) {
+            this.params[name] = defaultValue;
+        }
+
+        this.parameterDefs[name] = {
+            min,
+            max,
+            step,
+            type,
+            allowOverflow
+        };
+
+        this.dynamicParameters.add(name);
+    }
+
+    /**
+     * External writers can opt into overflow behaviour or register new params
+     */
+    setParameterExternal(name, value, options = {}) {
+        const {
+            allowOverflow = false,
+            register = false,
+            definition = {},
+            defaultValue = 0
+        } = options;
+
+        if (register && !this.parameterDefs[name]) {
+            this.registerDynamicParameter(name, {
+                ...definition,
+                defaultValue,
+                allowOverflow: allowOverflow || definition.allowOverflow
+            });
+        } else if (allowOverflow && this.parameterDefs[name] && !this.parameterDefs[name].allowOverflow) {
+            this.parameterDefs[name].allowOverflow = true;
+        }
+
+        if (allowOverflow || (this.parameterDefs[name] && this.parameterDefs[name].allowOverflow)) {
+            this.params[name] = value;
+            return true;
+        }
+
+        return this.setParameter(name, value);
     }
     
     /**
