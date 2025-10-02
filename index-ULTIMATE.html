@@ -468,46 +468,141 @@ Return ONLY valid JSON array with 10-15 sequences covering the full ${dur.toFixe
         };
 
         window.exportVid = async function() {
-            if (!aud.src) return alert('Load audio first');
+            if (!aud.src) {
+                alert('Load audio first');
+                return;
+            }
+
+            if (typeof MediaRecorder === 'undefined') {
+                stat('Export failed: MediaRecorder not supported in this browser');
+                return;
+            }
 
             stat('Preparing export...');
-            const canv = document.querySelector('canvas');
-            const stream = canv.captureStream(60);
 
-            // Create new audio context for export to avoid "already connected" error
-            const expCtx = new AudioContext();
-            const expSrc = expCtx.createMediaElementSource(aud);
-            const expDest = expCtx.createMediaStreamDestination();
-            expSrc.connect(expDest);
-            expSrc.connect(expCtx.destination);
+            const canvas = document.querySelector('canvas');
+            if (!canvas || !canvas.captureStream) {
+                stat('Export failed: Unable to capture canvas stream');
+                return;
+            }
 
-            stream.addTrack(expDest.stream.getAudioTracks()[0]);
-
-            rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
-            recChunks = [];
-
-            rec.ondataavailable = e => recChunks.push(e.data);
-            rec.onstop = () => {
-                const blob = new Blob(recChunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `vib34d-ultimate-${Date.now()}.webm`;
-                a.click();
-                expCtx.close();
-                stat('Export complete!');
-            };
-
-            rec.start();
-            aud.currentTime = 0;
-            await aud.play();
-            stat('Recording... (will auto-stop at end)');
-
-            aud.onended = () => {
-                if (rec && rec.state === 'recording') {
-                    rec.stop();
+            const mimeCandidates = [
+                'video/webm;codecs=vp9',
+                'video/webm;codecs=vp8',
+                'video/webm'
+            ];
+            const mimeType = mimeCandidates.find(type => {
+                try {
+                    return MediaRecorder.isTypeSupported(type);
+                } catch (err) {
+                    return false;
                 }
-            };
+            }) || '';
+
+            try {
+                const stream = canvas.captureStream(60);
+                const exportDest = ctx.createMediaStreamDestination();
+                let fallbackAudioStream = null;
+
+                try {
+                    anl.connect(exportDest);
+                } catch (err) {
+                    console.warn('Export: analyser connect failed', err);
+                }
+
+                const combinedStream = new MediaStream();
+                stream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
+
+                let audioTracks = exportDest.stream.getAudioTracks();
+                if (!audioTracks.length && aud.captureStream) {
+                    fallbackAudioStream = aud.captureStream();
+                    if (fallbackAudioStream) {
+                        audioTracks = fallbackAudioStream.getAudioTracks();
+                    }
+                }
+
+                audioTracks.forEach(track => combinedStream.addTrack(track));
+
+                if (combinedStream.getAudioTracks().length === 0) {
+                    stat('Export failed: No audio track available for recording');
+                    try { anl.disconnect(exportDest); } catch (err) {}
+                    stream.getTracks().forEach(track => track.stop());
+                    if (fallbackAudioStream) {
+                        fallbackAudioStream.getTracks().forEach(track => track.stop());
+                    }
+                    return;
+                }
+
+                rec = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 8000000 });
+                recChunks = [];
+
+                const cleanup = () => {
+                    try { anl.disconnect(exportDest); } catch (err) {}
+                    exportDest.stream.getTracks().forEach(track => track.stop());
+                    stream.getTracks().forEach(track => track.stop());
+                    if (fallbackAudioStream) {
+                        fallbackAudioStream.getTracks().forEach(track => track.stop());
+                    }
+                };
+
+                rec.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recChunks.push(event.data);
+                        stat(`Recording... ${recChunks.length} chunks`);
+                    }
+                };
+
+                rec.onstop = () => {
+                    cleanup();
+
+                    if (!recChunks.length) {
+                        stat('Export failed: No data recorded');
+                        return;
+                    }
+
+                    const blob = new Blob(recChunks, { type: mimeType || 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `vib34d-ultimate-${Date.now()}.webm`;
+                    a.click();
+                    stat('Export complete!');
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                };
+
+                rec.onerror = (event) => {
+                    console.error('Recorder error:', event);
+                    cleanup();
+                    stat('Export failed: ' + (event.error?.message || event.name || 'Unknown error'));
+                };
+
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
+
+                aud.currentTime = 0;
+                rec.start(100);
+
+                try {
+                    await aud.play();
+                    stat('Recording... (will auto-stop at end)');
+                } catch (err) {
+                    console.error('Playback failed', err);
+                    rec.stop();
+                    return;
+                }
+
+                const stopRecording = () => {
+                    if (rec && rec.state === 'recording') {
+                        rec.stop();
+                    }
+                };
+
+                aud.addEventListener('ended', stopRecording, { once: true });
+            } catch (err) {
+                console.error('Export setup error:', err);
+                stat('Export failed: ' + err.message);
+            }
         };
     </script>
 </body>
