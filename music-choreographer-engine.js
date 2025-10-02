@@ -6,6 +6,8 @@
 import { VIB34DIntegratedEngine } from './src/core/Engine.js';
 import { QuantumEngine } from './src/quantum/QuantumEngine.js';
 import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+import { DynamicParameterBridge } from './src/choreography/DynamicParameterBridge.js';
+import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -18,6 +20,7 @@ export class MusicVideoChoreographer {
         this.currentEngine = null;
         this.isPlaying = false;
         this.animationId = null;
+        this.canvasManager = null;
 
         // Beat detection
         this.beatThreshold = 0.7;
@@ -28,6 +31,13 @@ export class MusicVideoChoreographer {
         // Choreography sequences (for choreographed mode)
         this.sequences = [];
         this.currentSequence = null;
+        this.dynamicBridge = new DynamicParameterBridge(this);
+
+        // Geometry controls
+        this.geometryModes = new Set(['hold', 'cycle', 'morph', 'random', 'explosive']);
+        this.lastGeometryIndex = 0;
+        this.refreshGeometryMetadata();
+        this.resetGeometryState(false);
 
         // Audio reactivity multipliers (for reactive mode)
         this.reactivitySettings = {
@@ -41,6 +51,108 @@ export class MusicVideoChoreographer {
         this.init();
     }
 
+    refreshGeometryMetadata() {
+        this.geometryNames = GeometryLibrary.getGeometryNames();
+        this.geometryCount = this.geometryNames.length;
+        this.geometryNameLookup = new Map(
+            this.geometryNames.map((name, index) => [name.toLowerCase(), index])
+        );
+        this.geometryIndexList = Array.from({ length: this.geometryCount }, (_, index) => index);
+
+        if (this.geometryCount > 0) {
+            this.lastGeometryIndex = this.normalizeGeometryIndex(this.lastGeometryIndex);
+        } else {
+            this.lastGeometryIndex = 0;
+        }
+
+        if (this.currentEngine && this.currentEngine.parameterManager && this.currentEngine.parameterManager.updateGeometryRange) {
+            this.currentEngine.parameterManager.updateGeometryRange(this.geometryCount);
+        }
+
+        this.applyGeometryMetadataToUI();
+    }
+
+    applyGeometryMetadataToUI() {
+        if (typeof document === 'undefined') return;
+
+        const slider = document.getElementById('geometry');
+        if (slider) {
+            const maxIndex = Math.max(this.geometryCount - 1, 0);
+            if (slider.max !== String(maxIndex)) {
+                slider.max = String(maxIndex);
+            }
+            if (Number(slider.value) > maxIndex) {
+                slider.value = String(maxIndex);
+            }
+        }
+
+        const sliderWrapper = slider?.parentElement;
+        if (sliderWrapper) {
+            let legend = sliderWrapper.querySelector('.geometry-legend');
+            if (!legend) {
+                legend = document.createElement('div');
+                legend.className = 'geometry-legend';
+                legend.style.marginTop = '6px';
+                legend.style.display = 'flex';
+                legend.style.flexWrap = 'wrap';
+                legend.style.gap = '4px';
+                legend.style.fontSize = '9px';
+                legend.style.lineHeight = '1.4';
+                legend.style.opacity = '0.8';
+                sliderWrapper.appendChild(legend);
+            }
+
+            legend.innerHTML = this.geometryNames.map((name, index) => {
+                return `<span style="background:rgba(0,255,255,0.08);padding:2px 4px;border-radius:3px;">${index}: ${name}</span>`;
+            }).join('');
+        }
+
+        this.updateGeometryReadout(this.lastGeometryIndex);
+    }
+
+    getGeometryName(index) {
+        if (!Number.isFinite(index)) {
+            return 'UNKNOWN';
+        }
+        if (!this.geometryNames || !this.geometryNames.length) {
+            return `#${index}`;
+        }
+        const normalized = this.normalizeGeometryIndex(index);
+        return this.geometryNames[normalized] || `#${index}`;
+    }
+
+    updateGeometryReadout(index) {
+        if (typeof document === 'undefined') return;
+        const readout = document.getElementById('v-geometry');
+        if (!readout) return;
+
+        if (index === null || index === undefined) {
+            readout.textContent = '--';
+            return;
+        }
+
+        const geometryName = this.getGeometryName(index);
+        readout.textContent = `${index} · ${geometryName}`;
+    }
+
+    registerGeometryIfNeeded(name) {
+        if (!name) return null;
+        const normalized = GeometryLibrary.normalizeName(name);
+        if (!normalized) return null;
+
+        const key = normalized.toLowerCase();
+        if (this.geometryNameLookup && this.geometryNameLookup.has(key)) {
+            return this.geometryNameLookup.get(key);
+        }
+
+        const added = GeometryLibrary.registerGeometry(normalized);
+        if (added) {
+            this.refreshGeometryMetadata();
+        }
+
+        return this.geometryNameLookup?.get(key) ?? null;
+    }
+
     async init() {
         console.log(`🎵 Initializing Music Video Choreographer in ${this.mode.toUpperCase()} mode`);
 
@@ -52,9 +164,13 @@ export class MusicVideoChoreographer {
 
         // Initialize default engine
         await this.switchSystem('faceted');
+        this.dynamicBridge.bindToEngine(this.currentEngine);
 
         // Setup event listeners
         this.setupEventListeners();
+
+        // Expose AI choreography ingestion for external tooling / UI overlays
+        window.loadAIChoreography = (data) => this.ingestAIChoreography(data);
 
         // Initialize mode-specific features
         if (this.mode === 'choreographed') {
@@ -121,86 +237,218 @@ export class MusicVideoChoreographer {
         this.sequences = [
             {
                 time: 0,
-                duration: 15,
+                duration: 14,
                 effects: {
                     system: 'faceted', // Start with Faceted
                     geometry: 'cycle',
+                    geometryList: this.geometryNames.slice(),
                     rotation: 'smooth',
                     chaos: 0.1,
-                    speed: 0.5,
+                    speed: 0.6,
                     colorShift: 'slow',
-                    densityBoost: 0
+                    densityBoost: 0,
+                    parameters: {
+                        gridDensity: {
+                            value: 20,
+                            audioAxis: 'bass',
+                            scale: 55,
+                            allowOverflow: true,
+                            range: [12, 160]
+                        },
+                        morphFactor: {
+                            value: 0.9,
+                            audioAxis: 'mid',
+                            scale: 1.3,
+                            allowOverflow: true,
+                            range: [0, 3]
+                        },
+                        hue: {
+                            value: 210,
+                            audioAxis: 'energy',
+                            scale: 60,
+                            mode: 'mix'
+                        }
+                    }
                 }
             },
             {
-                time: 15,
-                duration: 15,
+                time: 14,
+                duration: 14,
                 effects: {
-                    system: 'faceted', // Stay on Faceted
+                    system: 'faceted', // stay on Faceted but build energy
                     geometry: 'morph',
+                    geometryList: this.geometryNames.slice(),
                     rotation: 'accelerate',
-                    chaos: 0.3,
-                    speed: 1.0,
+                    chaos: 0.28,
+                    speed: 1.1,
                     colorShift: 'medium',
-                    densityBoost: 10
+                    densityBoost: 16,
+                    parameters: {
+                        chaos: {
+                            value: 0.35,
+                            audioAxis: 'high',
+                            scale: 0.6,
+                            mode: 'add',
+                            range: [0, 1]
+                        },
+                        speed: {
+                            value: 1.2,
+                            audioAxis: 'energy',
+                            scale: 0.9,
+                            allowOverflow: true,
+                            range: [0.8, 3.5]
+                        }
+                    }
                 }
             },
             {
-                time: 30,
-                duration: 20,
+                time: 28,
+                duration: 18,
                 effects: {
-                    system: 'quantum', // SWITCH to Quantum for drop
+                    system: 'quantum', // SWITCH to Quantum for the first drop
                     geometry: 'random',
+                    geometryList: this.geometryNames.slice(),
                     rotation: 'chaos',
-                    chaos: 0.8,
-                    speed: 2.0,
+                    chaos: 0.75,
+                    speed: 2.1,
                     colorShift: 'fast',
-                    densityBoost: 20
+                    densityBoost: 28,
+                    parameters: {
+                        gridDensity: {
+                            value: 48,
+                            audioAxis: ['bass', 'energy'],
+                            scale: 65,
+                            randomize: 8,
+                            allowOverflow: true,
+                            range: [25, 180]
+                        },
+                        intensity: {
+                            value: 0.9,
+                            audioAxis: 'energy',
+                            scale: 0.8,
+                            mode: 'max',
+                            range: [0, 2],
+                            allowOverflow: true
+                        },
+                        saturation: {
+                            value: 1.1,
+                            audioAxis: 'bass',
+                            scale: 0.6,
+                            allowOverflow: true,
+                            range: [0, 2]
+                        }
+                    },
+                    actions: ['triggerClick']
                 }
             },
             {
-                time: 50,
-                duration: 10,
+                time: 46,
+                duration: 12,
                 effects: {
-                    system: 'holographic', // SWITCH to Holographic
+                    system: 'holographic', // ethereal breakdown
                     geometry: 'explosive',
-                    rotation: 'extreme',
-                    chaos: 0.9,
-                    speed: 2.5,
-                    colorShift: 'rainbow',
-                    densityBoost: 30
-                }
-            },
-            {
-                time: 60,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // BACK to Faceted for breakdown
-                    geometry: 'hold',
+                    geometryList: this.geometryNames.slice(),
                     rotation: 'minimal',
-                    chaos: 0.05,
-                    speed: 0.3,
+                    chaos: 0.22,
+                    speed: 0.7,
                     colorShift: 'freeze',
-                    baseHue: 240,
-                    densityBoost: -5
+                    baseHue: 260,
+                    densityBoost: -8,
+                    parameters: {
+                        hue: {
+                            value: 240,
+                            wave: { speed: 0.35, amplitude: 45 },
+                            allowOverflow: true,
+                            range: [120, 420]
+                        },
+                        saturation: {
+                            value: 0.35,
+                            audioAxis: 'mid',
+                            scale: -0.4,
+                            mode: 'mix',
+                            range: [0, 1]
+                        },
+                        intensity: {
+                            value: 0.45,
+                            audioAxis: 'energy',
+                            scale: 0.35,
+                            range: [0, 2]
+                        }
+                    }
                 }
             },
             {
-                time: 75,
+                time: 58,
+                duration: 16,
+                effects: {
+                    system: 'faceted', // rebuild
+                    geometry: 'cycle',
+                    rotation: 'smooth',
+                    chaos: 0.18,
+                    speed: 1.3,
+                    colorShift: 'medium',
+                    densityBoost: 12,
+                    parameters: {
+                        morphFactor: {
+                            value: 1.1,
+                            audioAxis: 'mid',
+                            scale: 1.4,
+                            allowOverflow: true,
+                            range: [0.2, 2.8]
+                        },
+                        gridDensity: {
+                            value: 26,
+                            audioAxis: 'bass',
+                            scale: 40,
+                            mode: 'mix',
+                            allowOverflow: true,
+                            range: [12, 140]
+                        }
+                    }
+                }
+            },
+            {
+                time: 74,
                 duration: 999,
                 effects: {
                     system: 'quantum', // Final drop on Quantum
                     geometry: 'explosive',
                     rotation: 'extreme',
                     chaos: 1.0,
-                    speed: 3.0,
+                    speed: 3.2,
                     colorShift: 'rainbow',
-                    densityBoost: 40
+                    densityBoost: 42,
+                    parameters: {
+                        gridDensity: {
+                            value: 60,
+                            audioAxis: 'bass',
+                            scale: 75,
+                            allowOverflow: true,
+                            range: [30, 220]
+                        },
+                        chaos: {
+                            value: 0.8,
+                            audioAxis: 'energy',
+                            scale: 0.3,
+                            mode: 'max',
+                            range: [0, 1]
+                        },
+                        speed: {
+                            value: 2.4,
+                            audioAxis: 'energy',
+                            scale: 1.2,
+                            allowOverflow: true,
+                            range: [1.2, 4]
+                        }
+                    },
+                    actions: ['triggerClick']
                 }
             }
         ];
 
+        this.resetGeometryState(false);
         this.renderSequenceList();
+        this.scanGeometryDescriptors(this.sequences);
         console.log('🎬 Generated default choreography with system switching');
     }
 
@@ -208,7 +456,26 @@ export class MusicVideoChoreographer {
         const list = document.getElementById('sequence-list');
         if (!list) return;
 
-        list.innerHTML = this.sequences.map((seq, index) => `
+        const legendMarkup = `
+            <div class="geometry-legend-panel" style="margin-bottom:10px;padding:8px;border-radius:6px;background:rgba(0,255,255,0.06);border:1px solid rgba(0,255,255,0.2);font-size:10px;line-height:1.5;">
+                <strong>Available Geometries (${this.geometryNames.length})</strong><br>
+                ${this.geometryNames.map((name, idx) => `<span style="display:inline-block;margin:2px 4px;padding:2px 6px;border-radius:4px;background:rgba(0,255,255,0.08);">${idx}: ${name}</span>`).join(' ')}
+            </div>
+        `;
+
+        const sequenceMarkup = this.sequences.length ? this.sequences.map((seq, index) => {
+            const dynamicSummary = this.renderDynamicSummary(seq.effects);
+            const startIndex = this.resolveGeometryDescriptor(seq.effects.geometryStart);
+            const geometryListValue = this.describeGeometryListInput(seq.effects.geometryList);
+            const intervalValue = seq.effects.geometryInterval ?? '';
+            const cyclesValue = seq.effects.geometryCycles ?? '';
+            const thresholdValue = seq.effects.geometryEnergyThreshold ?? '';
+            const axisValue = seq.effects.geometryAudioAxis ?? '';
+            const geometryValue = seq.effects.geometry;
+            const numericGeometryTarget = (typeof geometryValue === 'number' && Number.isFinite(geometryValue))
+                ? this.normalizeGeometryIndex(geometryValue)
+                : null;
+            return `
             <div class="sequence-item">
                 <h4>Sequence ${index + 1} (${seq.time}s - ${seq.time + seq.duration}s)</h4>
                 <div class="sequence-controls">
@@ -232,7 +499,36 @@ export class MusicVideoChoreographer {
                         <option value="morph" ${seq.effects.geometry === 'morph' ? 'selected' : ''}>Morph</option>
                         <option value="random" ${seq.effects.geometry === 'random' ? 'selected' : ''}>Random</option>
                         <option value="explosive" ${seq.effects.geometry === 'explosive' ? 'selected' : ''}>Explosive</option>
+                        ${this.geometryNames.map((name, idx) => {
+                            const normalized = name.toLowerCase();
+                            const isSelected = (typeof geometryValue === 'string' && geometryValue.toLowerCase() === normalized)
+                                || (numericGeometryTarget !== null && numericGeometryTarget === idx);
+                            return `<option value="${name}" ${isSelected ? 'selected' : ''}>${name}</option>`;
+                        }).join('')}
                     </select>
+
+                    <label>Start Geometry</label>
+                    <select onchange="choreographer.updateSequence(${index}, 'geometryStart', this.value)">
+                        <option value="" ${startIndex === null || startIndex === undefined ? 'selected' : ''}>Auto (carry over)</option>
+                        ${this.geometryNames.map((name, idx) => `<option value="${idx}" ${startIndex === idx ? 'selected' : ''}>${idx}: ${name}</option>`).join('')}
+                    </select>
+
+                    <label>Geometry List</label>
+                    <input type="text" value="${geometryListValue}" placeholder="e.g. Tetrahedron, Wave, 3" onchange="choreographer.updateSequence(${index}, 'geometryList', this.value)">
+
+                    <label>Geometry Interval (s)</label>
+                    <input type="number" step="0.1" min="0.1" value="${intervalValue}" placeholder="2" onchange="choreographer.updateSequence(${index}, 'geometryInterval', this.value)">
+
+                    <label>Geometry Cycles</label>
+                    <input type="number" step="1" min="1" value="${cyclesValue}" placeholder="1" onchange="choreographer.updateSequence(${index}, 'geometryCycles', this.value)">
+
+                    <label>Geometry Audio Axis</label>
+                    <select onchange="choreographer.updateSequence(${index}, 'geometryAudioAxis', this.value)">
+                        ${this.renderGeometryAxisOptions(axisValue)}
+                    </select>
+
+                    <label>Random Threshold</label>
+                    <input type="number" step="0.05" min="0" max="1" value="${thresholdValue}" placeholder="${seq.effects.geometry === 'explosive' ? 0.4 : 0.6}" onchange="choreographer.updateSequence(${index}, 'geometryEnergyThreshold', this.value)">
 
                     <label>Rotation</label>
                     <select onchange="choreographer.updateSequence(${index}, 'rotation', this.value)">
@@ -261,9 +557,138 @@ export class MusicVideoChoreographer {
                 <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,255,255,0.05); border-radius: 3px;">
                     ℹ️ Audio reactivity is ALWAYS active - these are base values that audio modulates
                 </div>
+                ${dynamicSummary}
                 <button onclick="choreographer.deleteSequence(${index})" style="margin-top: 10px; background: #f44; font-size: 10px; padding: 5px;">Delete</button>
             </div>
-        `).join('');
+        `;
+        }).join('') : `<div class="sequence-empty" style="padding:12px;border:1px dashed rgba(0,255,255,0.3);border-radius:6px;font-size:11px;color:#7ff;">No sequences defined yet.</div>`;
+
+        list.innerHTML = legendMarkup + sequenceMarkup;
+    }
+
+    describeGeometryStrategy(effects = {}) {
+        if (!effects) return '';
+
+        const summaryParts = [];
+        const geometry = effects.geometry;
+
+        if (geometry !== undefined && geometry !== null) {
+            if (typeof geometry === 'string') {
+                const trimmed = geometry.trim();
+                if (this.geometryModes.has(trimmed.toLowerCase())) {
+                    summaryParts.push(`Mode: ${trimmed}`);
+                } else {
+                    const index = this.resolveGeometryDescriptor(trimmed);
+                    if (index !== null && index !== undefined) {
+                        summaryParts.push(`Target: ${this.getGeometryName(index)} (#${index})`);
+                    } else {
+                        summaryParts.push(`Target: ${GeometryLibrary.normalizeName(trimmed)}`);
+                    }
+                }
+            } else if (typeof geometry === 'number' && Number.isFinite(geometry)) {
+                const normalized = this.normalizeGeometryIndex(geometry);
+                summaryParts.push(`Target #: ${this.getGeometryName(normalized)} (#${normalized})`);
+            } else if (typeof geometry === 'object') {
+                const mode = geometry.mode || geometry.behavior || geometry.type;
+                if (mode) {
+                    summaryParts.push(`Mode: ${mode}`);
+                }
+                if (geometry.name) {
+                    const index = this.resolveGeometryDescriptor(geometry.name);
+                    if (index !== null && index !== undefined) {
+                        summaryParts.push(`Target: ${this.getGeometryName(index)} (#${index})`);
+                    } else {
+                        summaryParts.push(`Target: ${GeometryLibrary.normalizeName(geometry.name)}`);
+                    }
+                }
+                if (geometry.list) {
+                    const listSummary = this.describeGeometryListInput(geometry.list);
+                    if (listSummary) {
+                        summaryParts.push(`List: ${listSummary}`);
+                    }
+                }
+            }
+        }
+
+        const startIndex = this.resolveGeometryDescriptor(effects.geometryStart);
+        if (startIndex !== null && startIndex !== undefined) {
+            summaryParts.push(`Start ➜ ${this.getGeometryName(startIndex)} (#${startIndex})`);
+        }
+
+        const listValue = this.describeGeometryListInput(effects.geometryList);
+        if (listValue) {
+            summaryParts.push(`List ➜ ${listValue}`);
+        }
+
+        if (effects.geometryInterval !== undefined && effects.geometryInterval !== null) {
+            summaryParts.push(`Interval ${Number(effects.geometryInterval).toFixed(2)}s`);
+        }
+
+        if (effects.geometryCycles !== undefined && effects.geometryCycles !== null) {
+            summaryParts.push(`Cycles ×${Math.round(effects.geometryCycles)}`);
+        }
+
+        if (effects.geometryAudioAxis) {
+            summaryParts.push(`Axis ${effects.geometryAudioAxis}`);
+        }
+
+        if (effects.geometryEnergyThreshold !== undefined) {
+            summaryParts.push(`Threshold ${Number(effects.geometryEnergyThreshold).toFixed(2)}`);
+        }
+
+        if (!summaryParts.length) {
+            return '';
+        }
+
+        return summaryParts.join(' | ');
+    }
+
+    renderDynamicSummary(effects = {}) {
+        const parts = [];
+        const geometrySummary = this.describeGeometryStrategy(effects);
+        if (geometrySummary) {
+            parts.push(`<div class="dynamic-summary" style="margin-top:6px;padding:6px;border-radius:4px;background:rgba(0,170,255,0.08);font-size:10px;line-height:1.4;"><strong>Geometry</strong><br>${geometrySummary}</div>`);
+        }
+        if (effects.parameters && Object.keys(effects.parameters).length) {
+            const entries = Object.entries(effects.parameters).map(([name, descriptor]) => {
+                if (typeof descriptor === 'number') {
+                    return `${name}: ${descriptor}`;
+                }
+                if (typeof descriptor === 'object') {
+                    const details = [];
+                    if (descriptor.audioAxis || descriptor.audio) {
+                        details.push(`↔ audio:${descriptor.audioAxis || descriptor.audio}`);
+                    }
+                    if (descriptor.range) {
+                        details.push(`range:${JSON.stringify(descriptor.range)}`);
+                    }
+                    if (descriptor.mode) {
+                        details.push(`mode:${descriptor.mode}`);
+                    }
+                    return `${name}: ${descriptor.value ?? descriptor.base ?? 'auto'}${details.length ? ' (' + details.join(', ') + ')' : ''}`;
+                }
+                return `${name}: ${descriptor}`;
+            }).join('<br>');
+            parts.push(`<div class="dynamic-summary" style="margin-top:6px;padding:6px;border-radius:4px;background:rgba(0,255,255,0.05);font-size:10px;line-height:1.4;"><strong>Dynamic Parameters</strong><br>${entries}</div>`);
+        }
+
+        if (effects.actions && effects.actions.length) {
+            const entries = effects.actions.map(action => {
+                if (typeof action === 'string') return action;
+                if (action.type) {
+                    const suffix = action.args ? ` → ${JSON.stringify(action.args)}` : '';
+                    return `${action.type}${suffix}`;
+                }
+                return JSON.stringify(action);
+            }).join('<br>');
+            parts.push(`<div class="dynamic-summary" style="margin-top:6px;padding:6px;border-radius:4px;background:rgba(255,0,255,0.05);font-size:10px;line-height:1.4;"><strong>Actions</strong><br>${entries}</div>`);
+        }
+
+        if (!parts.length) {
+            return '';
+        }
+
+        return `<div class="dynamic-insight">${parts.join('')}</div>`;
     }
 
     updateSequence(index, property, value) {
@@ -274,21 +699,89 @@ export class MusicVideoChoreographer {
             seq[property] = parseFloat(value);
         } else if (property === 'chaos' || property === 'speed') {
             seq.effects[property] = parseFloat(value);
+        } else if (property === 'geometry') {
+            const resolved = this.normalizeGeometryBehaviorValue(value);
+            if (resolved === null) {
+                delete seq.effects.geometry;
+            } else {
+                seq.effects.geometry = resolved;
+            }
+        } else if (property === 'geometryStart') {
+            const resolved = this.coerceGeometryIndexDescriptor(value);
+            if (resolved === null || resolved === undefined) {
+                delete seq.effects.geometryStart;
+            } else {
+                seq.effects.geometryStart = resolved;
+            }
+        } else if (property === 'geometryList') {
+            const list = this.coerceGeometryList(value);
+            if (list && list.length) {
+                seq.effects.geometryList = list;
+            } else {
+                delete seq.effects.geometryList;
+            }
+        } else if (property === 'geometryInterval') {
+            const numeric = parseFloat(value);
+            if (Number.isFinite(numeric)) {
+                seq.effects.geometryInterval = Math.max(0.05, numeric);
+            } else {
+                delete seq.effects.geometryInterval;
+            }
+        } else if (property === 'geometryCycles') {
+            const numeric = parseInt(value, 10);
+            if (Number.isFinite(numeric)) {
+                seq.effects.geometryCycles = Math.max(1, numeric);
+            } else {
+                delete seq.effects.geometryCycles;
+            }
+        } else if (property === 'geometryAudioAxis') {
+            const axis = value ? value.toString().toLowerCase() : '';
+            if (!axis) {
+                delete seq.effects.geometryAudioAxis;
+            } else {
+                seq.effects.geometryAudioAxis = axis;
+            }
+        } else if (property === 'geometryEnergyThreshold') {
+            const numeric = parseFloat(value);
+            if (Number.isFinite(numeric)) {
+                seq.effects.geometryEnergyThreshold = Math.min(1, Math.max(0, numeric));
+            } else {
+                delete seq.effects.geometryEnergyThreshold;
+            }
         } else {
             seq.effects[property] = value;
         }
 
+        if ([
+            'time',
+            'duration',
+            'geometry',
+            'geometryList',
+            'geometryInterval',
+            'geometryStart',
+            'geometryCycles',
+            'geometryAudioAxis',
+            'geometryEnergyThreshold'
+        ].includes(property)) {
+            this.resetGeometryState(true);
+        }
+
+        this.scanGeometryDescriptors(this.sequences);
+        this.renderSequenceList();
         console.log(`Updated sequence ${index}:`, seq);
     }
 
     deleteSequence(index) {
         this.sequences.splice(index, 1);
+        this.resetGeometryState(true);
         this.renderSequenceList();
     }
 
     addSequenceToTimeline(newSeq) {
         this.sequences.push(newSeq);
         this.sequences.sort((a, b) => a.time - b.time);
+        this.scanGeometryDescriptors(this.sequences);
+        this.resetGeometryState(true);
         this.renderSequenceList();
     }
 
@@ -342,6 +835,8 @@ export class MusicVideoChoreographer {
             }
 
             this.currentSystem = systemName;
+            this.canvasManager = this.currentEngine?.canvasManager || null;
+            this.dynamicBridge.bindToEngine(this.currentEngine);
 
             // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
@@ -349,6 +844,7 @@ export class MusicVideoChoreographer {
             });
 
             console.log('✅ Switched to', systemName, 'system');
+            this.refreshGeometryMetadata();
         } catch (error) {
             console.error('Failed to switch system:', error);
         }
@@ -519,16 +1015,26 @@ export class MusicVideoChoreographer {
             this.switchSystem(effects.system);
         }
 
-        // Geometry choreography
-        if (effects.geometry === 'cycle') {
-            const geomIndex = Math.floor((currentTime - activeSequence.time) / 2) % 9;
-            setParam('geometry', geomIndex);
-        } else if (effects.geometry === 'random' && audioData.energy > 0.6) {
-            const geomIndex = Math.floor(Math.random() * 9);
-            setParam('geometry', geomIndex);
-        } else if (effects.geometry === 'explosive' && Math.random() < 0.1) {
-            const geomIndex = Math.floor(Math.random() * 9);
-            setParam('geometry', geomIndex);
+        const sequenceId = this.sequences.indexOf(activeSequence);
+        if (sequenceId !== this.geometryState.activeSequenceId) {
+            this.geometryState.activeSequenceId = sequenceId;
+            this.geometryState.sequenceStartGeometry = this.lastGeometryIndex;
+            this.geometryState.lastRandomIndex = this.lastGeometryIndex;
+            this.geometryState.lastRandomChangeTime = -Infinity;
+        }
+
+        const geometryIndex = this.computeGeometryTarget(
+            effects,
+            activeSequence,
+            currentTime,
+            audioData
+        );
+
+        if (geometryIndex !== null && geometryIndex !== undefined) {
+            setParam('geometry', geometryIndex);
+            this.lastGeometryIndex = geometryIndex;
+            this.geometryState.lastRandomIndex = geometryIndex;
+            this.updateGeometryReadout(geometryIndex);
         }
 
         // Rotation choreography (WITH audio overlay)
@@ -598,6 +1104,467 @@ export class MusicVideoChoreographer {
         if (this.currentEngine && this.currentEngine.audioEnabled !== undefined) {
             this.currentEngine.audioEnabled = true;
         }
+
+        // Allow AI-defined parameters and actions to override / extend the base behaviour
+        this.dynamicBridge.apply(effects, audioData);
+    }
+
+    computeGeometryTarget(effects, activeSequence, currentTime, audioData) {
+        if (!effects) return null;
+
+        const geometrySetting = effects.geometry;
+        if (geometrySetting === undefined || geometrySetting === null) {
+            return null;
+        }
+
+        if (typeof geometrySetting === 'number' && Number.isFinite(geometrySetting)) {
+            return this.normalizeGeometryIndex(geometrySetting);
+        }
+
+        if (typeof geometrySetting === 'string') {
+            const key = geometrySetting.toLowerCase().trim();
+            if (this.geometryNameLookup.has(key)) {
+                return this.geometryNameLookup.get(key);
+            }
+            return this.computeGeometryByMode(
+                key,
+                effects,
+                activeSequence,
+                currentTime,
+                audioData,
+                {}
+            );
+        }
+
+        if (typeof geometrySetting === 'object') {
+            if (typeof geometrySetting.index === 'number') {
+                return this.normalizeGeometryIndex(geometrySetting.index);
+            }
+
+            if (geometrySetting.name) {
+                const nameKey = String(geometrySetting.name).toLowerCase().trim();
+                if (this.geometryNameLookup.has(nameKey)) {
+                    return this.geometryNameLookup.get(nameKey);
+                }
+            }
+
+            const modeSource = geometrySetting.mode || geometrySetting.behavior || geometrySetting.type;
+            if (modeSource) {
+                const modeKey = String(modeSource).toLowerCase().trim();
+                return this.computeGeometryByMode(
+                    modeKey,
+                    effects,
+                    activeSequence,
+                    currentTime,
+                    audioData,
+                    geometrySetting
+                );
+            }
+        }
+
+        return null;
+    }
+
+    computeGeometryByMode(mode, effects, activeSequence, currentTime, audioData, config = {}) {
+        if (!mode) return null;
+
+        const normalizedList = this.normalizeGeometryList(config.list ?? effects.geometryList);
+        const interval = Math.max(0.1, config.interval ?? effects.geometryInterval ?? 2);
+        const direction = (config.direction === 'reverse' || config.direction === 'backward' || config.direction === -1)
+            ? -1
+            : 1;
+
+        switch (mode) {
+            case 'hold':
+                return this.lastGeometryIndex;
+            case 'cycle': {
+                const elapsed = Math.max(0, currentTime - activeSequence.time);
+                const rawSteps = Math.floor(elapsed / interval);
+
+                if (normalizedList && normalizedList.length) {
+                    const listLength = normalizedList.length;
+                    const stepIndex = rawSteps % listLength;
+                    const pointer = direction >= 0
+                        ? stepIndex
+                        : (listLength - ((stepIndex % listLength) + 1));
+                    return normalizedList[(pointer + listLength) % listLength];
+                }
+
+                const startIndex = this.normalizeGeometryIndex(
+                    config.startIndex ?? config.start ?? effects.geometryStart ?? this.geometryState.sequenceStartGeometry ?? this.lastGeometryIndex
+                );
+                return this.normalizeGeometryIndex(startIndex + rawSteps * direction);
+            }
+            case 'morph': {
+                const list = (normalizedList && normalizedList.length)
+                    ? normalizedList
+                    : this.geometryIndexList;
+                if (!list.length) {
+                    return this.lastGeometryIndex;
+                }
+
+                const duration = Math.max(activeSequence.duration || 0.001, 0.001);
+                const progress = Math.max(0, currentTime - activeSequence.time) / duration;
+                const cycles = Math.max(1, config.cycles ?? config.repeats ?? effects.geometryCycles ?? 1);
+                const scaled = progress * list.length * cycles;
+                const indexInList = Math.floor(scaled) % list.length;
+                return list[indexInList];
+            }
+            case 'random':
+            case 'explosive': {
+                const list = (normalizedList && normalizedList.length)
+                    ? normalizedList
+                    : this.geometryIndexList;
+                if (!list.length) {
+                    return this.lastGeometryIndex;
+                }
+
+                const axisKey = config.axis || config.audioAxis || effects.geometryAudioAxis;
+                const audioMetric = axisKey && audioData && audioData[axisKey] !== undefined
+                    ? audioData[axisKey]
+                    : (audioData?.energy ?? 0);
+                const threshold = config.threshold ?? effects.geometryEnergyThreshold ?? (mode === 'explosive' ? 0.4 : 0.6);
+                const minInterval = Math.max(0.05, config.interval ?? effects.geometryInterval ?? (mode === 'explosive' ? 0.4 : 0.75));
+                const force = config.always === true;
+
+                if ((force || audioMetric >= threshold) && (currentTime - this.geometryState.lastRandomChangeTime >= minInterval)) {
+                    let nextIndex = list[Math.floor(Math.random() * list.length)];
+                    if (config.avoidRepeats !== false && list.length > 1) {
+                        let attempts = 0;
+                        while (nextIndex === this.geometryState.lastRandomIndex && attempts < 5) {
+                            nextIndex = list[Math.floor(Math.random() * list.length)];
+                            attempts++;
+                        }
+                    }
+                    this.geometryState.lastRandomIndex = nextIndex;
+                    this.geometryState.lastRandomChangeTime = currentTime;
+                    return nextIndex;
+                }
+
+                return this.geometryState.lastRandomIndex;
+            }
+            default:
+                if (this.geometryNameLookup.has(mode)) {
+                    return this.geometryNameLookup.get(mode);
+                }
+                return this.lastGeometryIndex;
+        }
+    }
+
+    normalizeGeometryIndex(index) {
+        if (!Number.isFinite(index) || this.geometryCount <= 0) {
+            return 0;
+        }
+
+        const base = Math.floor(index);
+        const wrapped = ((base % this.geometryCount) + this.geometryCount) % this.geometryCount;
+        return wrapped;
+    }
+
+    normalizeGeometryList(source) {
+        if (!source) return null;
+        const list = Array.isArray(source) ? source : [source];
+        const normalized = list
+            .map((item, idx) => this.geometryDescriptorToIndex(item, idx))
+            .filter(value => value !== null && value !== undefined);
+        return normalized.length ? normalized : null;
+    }
+
+    geometryDescriptorToIndex(descriptor, fallback = 0) {
+        if (descriptor === undefined || descriptor === null) {
+            return this.normalizeGeometryIndex(fallback);
+        }
+
+        if (typeof descriptor === 'number' && Number.isFinite(descriptor)) {
+            return this.normalizeGeometryIndex(descriptor);
+        }
+
+        if (typeof descriptor === 'string') {
+            const key = descriptor.toLowerCase().trim();
+            if (this.geometryNameLookup.has(key)) {
+                return this.geometryNameLookup.get(key);
+            }
+        }
+
+        if (typeof descriptor === 'object') {
+            if (typeof descriptor.index === 'number') {
+                return this.normalizeGeometryIndex(descriptor.index);
+            }
+            if (descriptor.name) {
+                const key = String(descriptor.name).toLowerCase().trim();
+                if (this.geometryNameLookup.has(key)) {
+                    return this.geometryNameLookup.get(key);
+                }
+            }
+        }
+
+        return this.normalizeGeometryIndex(fallback);
+    }
+
+    resolveGeometryDescriptor(descriptor) {
+        if (descriptor === undefined || descriptor === null) {
+            return null;
+        }
+
+        if (typeof descriptor === 'number' && Number.isFinite(descriptor)) {
+            return this.normalizeGeometryIndex(descriptor);
+        }
+
+        if (typeof descriptor === 'string') {
+            const trimmed = descriptor.trim();
+            if (!trimmed) return null;
+            if (/^-?\d+$/.test(trimmed)) {
+                return this.normalizeGeometryIndex(Number(trimmed));
+            }
+            const key = GeometryLibrary.normalizeName(trimmed).toLowerCase();
+            if (this.geometryNameLookup.has(key)) {
+                return this.geometryNameLookup.get(key);
+            }
+            return null;
+        }
+
+        if (typeof descriptor === 'object') {
+            if (typeof descriptor.index === 'number') {
+                return this.normalizeGeometryIndex(descriptor.index);
+            }
+            if (descriptor.name) {
+                return this.resolveGeometryDescriptor(descriptor.name);
+            }
+        }
+
+        return null;
+    }
+
+    describeGeometryListInput(list) {
+        if (!list) return '';
+
+        const entries = Array.isArray(list)
+            ? list
+            : (typeof list === 'string' ? list.split(',') : [list]);
+
+        const formatted = entries.map((item) => {
+            if (item === undefined || item === null) return '';
+            if (typeof item === 'number' && Number.isFinite(item)) {
+                return this.getGeometryName(item);
+            }
+            if (typeof item === 'string') {
+                const trimmed = item.trim();
+                if (!trimmed) return '';
+                if (/^-?\d+$/.test(trimmed)) {
+                    return this.getGeometryName(Number(trimmed));
+                }
+                return GeometryLibrary.normalizeName(trimmed);
+            }
+            if (typeof item === 'object') {
+                if (typeof item.index === 'number') {
+                    return this.getGeometryName(item.index);
+                }
+                if (item.name) {
+                    return GeometryLibrary.normalizeName(item.name);
+                }
+            }
+            return '';
+        }).filter(Boolean);
+
+        return formatted.join(', ');
+    }
+
+    renderGeometryAxisOptions(selected) {
+        const normalized = (selected || '').toString().toLowerCase();
+        const options = [
+            { value: '', label: 'Auto (energy mix)' },
+            { value: 'bass', label: 'Bass' },
+            { value: 'mid', label: 'Mid' },
+            { value: 'high', label: 'High' },
+            { value: 'energy', label: 'Energy' }
+        ];
+
+        return options.map(({ value, label }) => {
+            const isSelected = value === '' ? !normalized : normalized === value;
+            return `<option value="${value}" ${isSelected ? 'selected' : ''}>${label}</option>`;
+        }).join('');
+    }
+
+    normalizeGeometryBehaviorValue(value) {
+        if (value === undefined || value === null) {
+            return null;
+        }
+
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return this.normalizeGeometryIndex(value);
+        }
+
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            if (/^-?\d+$/.test(trimmed)) {
+                return this.normalizeGeometryIndex(Number(trimmed));
+            }
+            const lower = trimmed.toLowerCase();
+            if (this.geometryModes.has(lower)) {
+                return lower;
+            }
+            const normalized = GeometryLibrary.normalizeName(trimmed);
+            const index = this.registerGeometryIfNeeded(normalized);
+            if (index !== null && index !== undefined) {
+                return this.getGeometryName(index);
+            }
+            return normalized;
+        }
+
+        if (typeof value === 'object') {
+            if (Array.isArray(value)) {
+                return value.slice();
+            }
+            return { ...value };
+        }
+
+        return value;
+    }
+
+    coerceGeometryIndexDescriptor(value) {
+        if (value === undefined || value === null) {
+            return null;
+        }
+
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return this.normalizeGeometryIndex(value);
+        }
+
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            if (/^-?\d+$/.test(trimmed)) {
+                return this.normalizeGeometryIndex(Number(trimmed));
+            }
+            const normalized = GeometryLibrary.normalizeName(trimmed);
+            const index = this.registerGeometryIfNeeded(normalized);
+            if (index !== null && index !== undefined) {
+                return index;
+            }
+            return null;
+        }
+
+        if (typeof value === 'object') {
+            if (typeof value.index === 'number') {
+                return this.normalizeGeometryIndex(value.index);
+            }
+            if (value.name) {
+                return this.coerceGeometryIndexDescriptor(value.name);
+            }
+        }
+
+        return null;
+    }
+
+    coerceGeometryList(value) {
+        if (value === undefined || value === null || value === '') {
+            return null;
+        }
+
+        let entries;
+        if (Array.isArray(value)) {
+            entries = value;
+        } else if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            entries = trimmed.split(',').map(token => token.trim()).filter(Boolean);
+        } else {
+            entries = [value];
+        }
+
+        const mapped = entries
+            .map(item => this.coerceGeometryIndexDescriptor(item))
+            .filter(idx => idx !== null && idx !== undefined);
+
+        return mapped.length ? mapped : null;
+    }
+
+    scanGeometryDescriptors(sequences) {
+        if (!Array.isArray(sequences)) return;
+
+        let needsRefresh = false;
+
+        const registerName = (candidate) => {
+            if (!candidate) return;
+            const normalized = GeometryLibrary.normalizeName(candidate);
+            if (!normalized) return;
+            const lower = normalized.toLowerCase();
+            if (this.geometryModes.has(lower)) return;
+            if (/^-?\d+$/.test(normalized)) return;
+            if (this.geometryNameLookup && this.geometryNameLookup.has(lower)) return;
+            if (GeometryLibrary.registerGeometry(normalized)) {
+                needsRefresh = true;
+            }
+        };
+
+        const visitDescriptor = (descriptor) => {
+            if (descriptor === undefined || descriptor === null) return;
+            if (Array.isArray(descriptor)) {
+                descriptor.forEach(item => visitDescriptor(item));
+                return;
+            }
+            if (typeof descriptor === 'number') return;
+            if (typeof descriptor === 'string') {
+                registerName(descriptor);
+                return;
+            }
+            if (typeof descriptor === 'object') {
+                if (typeof descriptor.index === 'number') return;
+                if (descriptor.name) {
+                    registerName(descriptor.name);
+                }
+                if (descriptor.list) {
+                    visitDescriptor(descriptor.list);
+                }
+            }
+        };
+
+        sequences.forEach(seq => {
+            const effects = seq.effects || {};
+            visitDescriptor(effects.geometry);
+            visitDescriptor(effects.geometryStart);
+            visitDescriptor(effects.geometryEnd);
+            visitDescriptor(effects.geometryList);
+        });
+
+        if (needsRefresh) {
+            this.refreshGeometryMetadata();
+        }
+    }
+
+    resetGeometryState(preserveLast = false) {
+        const baseIndex = preserveLast && Number.isFinite(this.lastGeometryIndex)
+            ? this.normalizeGeometryIndex(this.lastGeometryIndex)
+            : 0;
+
+        this.lastGeometryIndex = baseIndex;
+        this.geometryState = {
+            activeSequenceId: null,
+            sequenceStartGeometry: baseIndex,
+            lastRandomIndex: baseIndex,
+            lastRandomChangeTime: -Infinity
+        };
+
+        this.updateGeometryReadout(this.lastGeometryIndex);
+    }
+
+    ingestAIChoreography(sequenceData) {
+        try {
+            const normalized = this.dynamicBridge.normalizeSequences(sequenceData);
+            this.sequences = normalized.map(seq => ({
+                time: seq.time,
+                duration: seq.duration,
+                effects: seq.effects
+            }));
+            this.scanGeometryDescriptors(this.sequences);
+            this.resetGeometryState(true);
+            this.renderSequenceList();
+            this.updateStatus(`AI choreography loaded (${this.sequences.length} sequences)`);
+        } catch (error) {
+            console.error('Failed to ingest AI choreography', error);
+            this.updateStatus('AI choreography failed: ' + error.message);
+        }
     }
 
     updateTimeline() {
@@ -635,8 +1602,8 @@ export class MusicVideoChoreographer {
             const reader = new FileReader();
             reader.onload = (event) => {
                 try {
-                    this.sequences = JSON.parse(event.target.result);
-                    this.renderSequenceList();
+                    const data = JSON.parse(event.target.result);
+                    this.ingestAIChoreography(data);
                     console.log('📂 Imported choreography');
                 } catch (error) {
                     console.error('Failed to import choreography:', error);
