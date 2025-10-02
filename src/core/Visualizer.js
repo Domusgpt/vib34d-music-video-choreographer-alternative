@@ -53,7 +53,13 @@ export class IntegratedHolographicVisualizer {
             dimension: 3.5,
             rot4dXW: 0.0,
             rot4dYW: 0.0,
-            rot4dZW: 0.0
+            rot4dZW: 0.0,
+            cameraOrbit: 0.0,
+            bloomStrength: 0.35,
+            glitchFactor: 0.05,
+            particleFlow: 0.15,
+            dimensionWarp: 0.0,
+            chromaticShift: 0.0
         };
         
         // Initialization now happens in ensureCanvasSizedThenInitWebGL after sizing
@@ -183,6 +189,12 @@ uniform float u_rot4dZW;
 uniform float u_mouseIntensity;
 uniform float u_clickIntensity;
 uniform float u_roleIntensity;
+uniform float u_cameraOrbit;
+uniform float u_bloomStrength;
+uniform float u_glitch;
+uniform float u_particleFlow;
+uniform float u_dimensionWarp;
+uniform float u_chromaticShift;
 
 // 4D rotation matrices
 mat4 rotateXW(float theta) {
@@ -287,6 +299,15 @@ void main() {
     float timeSpeed = u_time * 0.0001 * u_speed;
     vec4 pos = vec4(uv * 3.0, sin(timeSpeed * 3.0), cos(timeSpeed * 2.0));
     pos.xy += (u_mouse - 0.5) * u_mouseIntensity * 2.0;
+
+    if (abs(u_cameraOrbit) > 0.0001) {
+        float orbitTime = u_time * 0.0002 * u_speed;
+        pos.xy += vec2(cos(orbitTime), sin(orbitTime)) * u_cameraOrbit;
+        pos.zw += vec2(
+            sin(orbitTime * 0.7 + uv.x * 2.0),
+            cos(orbitTime * 0.6 + uv.y * 2.0)
+        ) * u_cameraOrbit * 0.5;
+    }
     
     // Apply 4D rotations
     pos = rotateXW(u_rot4dXW) * pos;
@@ -295,6 +316,9 @@ void main() {
     
     // Calculate geometry value
     float value = geometryFunction(pos);
+
+    float warpField = sin(length(pos.xyz) * 2.5 + u_time * 0.0004 * u_speed);
+    value += warpField * u_dimensionWarp;
     
     // Apply chaos
     float noise = sin(pos.x * 7.0) * cos(pos.y * 11.0) * sin(pos.z * 13.0);
@@ -303,11 +327,15 @@ void main() {
     // Color based on geometry value and hue with user-controlled intensity/saturation
     float geometryIntensity = 1.0 - clamp(abs(value), 0.0, 1.0);
     geometryIntensity += u_clickIntensity * 0.3;
+
+    float particleSeed = sin((pos.x + pos.y + pos.z) * 12.0 + u_time * 0.0015 * u_speed) * 0.5 + 0.5;
+    float particleGlow = pow(particleSeed, 3.0);
+    geometryIntensity += particleGlow * u_particleFlow;
     
     // Apply user intensity control
     float finalIntensity = geometryIntensity * u_intensity;
     
-    float hue = u_hue / 360.0 + value * 0.1;
+    float hue = u_hue / 360.0 + value * 0.1 + u_chromaticShift * 0.05;
     
     // Create color with saturation control
     vec3 baseColor = vec3(
@@ -319,8 +347,24 @@ void main() {
     // Apply saturation (mix with grayscale)
     float gray = (baseColor.r + baseColor.g + baseColor.b) / 3.0;
     vec3 color = mix(vec3(gray), baseColor, u_saturation) * finalIntensity;
-    
-    gl_FragColor = vec4(color, finalIntensity * u_roleIntensity);
+
+    if (u_glitch > 0.0) {
+        float glitchNoise = fract(sin(dot(pos.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        float glitchMask = step(0.75, glitchNoise);
+        color = mix(color, color.bgr, glitchMask * u_glitch);
+        finalIntensity += (glitchNoise - 0.5) * u_glitch * 0.4;
+    }
+
+    if (u_bloomStrength > 0.0) {
+        vec3 bloom = vec3(finalIntensity) * u_bloomStrength * 0.35;
+        color += bloom;
+    }
+
+    color = clamp(color, 0.0, 1.0);
+    finalIntensity = clamp(finalIntensity, 0.0, 1.5);
+    float alpha = clamp(finalIntensity * u_roleIntensity, 0.0, 1.0);
+
+    gl_FragColor = vec4(color, alpha);
 }`;
         
         this.program = this.createProgram(vertexShaderSource, fragmentShaderSource);
@@ -342,7 +386,13 @@ void main() {
             rot4dZW: this.gl.getUniformLocation(this.program, 'u_rot4dZW'),
             mouseIntensity: this.gl.getUniformLocation(this.program, 'u_mouseIntensity'),
             clickIntensity: this.gl.getUniformLocation(this.program, 'u_clickIntensity'),
-            roleIntensity: this.gl.getUniformLocation(this.program, 'u_roleIntensity')
+            roleIntensity: this.gl.getUniformLocation(this.program, 'u_roleIntensity'),
+            cameraOrbit: this.gl.getUniformLocation(this.program, 'u_cameraOrbit'),
+            bloomStrength: this.gl.getUniformLocation(this.program, 'u_bloomStrength'),
+            glitch: this.gl.getUniformLocation(this.program, 'u_glitch'),
+            particleFlow: this.gl.getUniformLocation(this.program, 'u_particleFlow'),
+            dimensionWarp: this.gl.getUniformLocation(this.program, 'u_dimensionWarp'),
+            chromaticShift: this.gl.getUniformLocation(this.program, 'u_chromaticShift')
         };
     }
     
@@ -617,6 +667,12 @@ void main() {
         this.gl.uniform1f(this.uniforms.mouseIntensity, this.mouseIntensity);
         this.gl.uniform1f(this.uniforms.clickIntensity, this.clickIntensity);
         this.gl.uniform1f(this.uniforms.roleIntensity, roleIntensities[this.role] || 1.0);
+        this.gl.uniform1f(this.uniforms.cameraOrbit, this.params.cameraOrbit || 0);
+        this.gl.uniform1f(this.uniforms.bloomStrength, Math.max(0, this.params.bloomStrength || 0));
+        this.gl.uniform1f(this.uniforms.glitch, Math.max(0, this.params.glitchFactor || 0));
+        this.gl.uniform1f(this.uniforms.particleFlow, Math.max(0, this.params.particleFlow || 0));
+        this.gl.uniform1f(this.uniforms.dimensionWarp, this.params.dimensionWarp || 0);
+        this.gl.uniform1f(this.uniforms.chromaticShift, this.params.chromaticShift || 0);
         
         try {
             this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);

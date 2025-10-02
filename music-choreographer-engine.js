@@ -6,6 +6,8 @@
 import { VIB34DIntegratedEngine } from './src/core/Engine.js';
 import { QuantumEngine } from './src/quantum/QuantumEngine.js';
 import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+import { AdaptiveChoreographyDirector } from './src/ai/AdaptiveChoreographyDirector.js';
+import { VideoExportController } from './src/export/VideoExportController.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -38,6 +40,14 @@ export class MusicVideoChoreographer {
             energyToSpeed: 0.5
         };
 
+        this.director = new AdaptiveChoreographyDirector();
+        this.dynamicParameterDefs = this.director.getParameterDefinitions();
+        this.videoExporter = null;
+        this.audioBufferAnalysis = null;
+        this.audioDuration = 0;
+        this.exportInProgress = false;
+        this.audioElement = this.audio;
+
         this.init();
     }
 
@@ -52,6 +62,8 @@ export class MusicVideoChoreographer {
 
         // Initialize default engine
         await this.switchSystem('faceted');
+        this.registerDynamicParametersOnActiveEngine();
+        this.prepareVideoExporter();
 
         // Setup event listeners
         this.setupEventListeners();
@@ -60,6 +72,8 @@ export class MusicVideoChoreographer {
         if (this.mode === 'choreographed') {
             await this.generateDefaultChoreography();
         }
+
+        this.updateExportUI('ready', 'Load an audio file to enable video export.');
 
         console.log('✅ Choreographer initialized');
     }
@@ -92,6 +106,11 @@ export class MusicVideoChoreographer {
         // Audio events
         this.audio.addEventListener('ended', () => this.stop());
         this.audio.addEventListener('timeupdate', () => this.updateTimeline());
+
+        const exportButton = document.getElementById('export-video-btn');
+        if (exportButton) {
+            exportButton.addEventListener('click', () => this.handleVideoExport());
+        }
     }
 
     async loadAudioFile(file) {
@@ -107,101 +126,49 @@ export class MusicVideoChoreographer {
             this.analyser.connect(this.audioContext.destination);
         }
 
+        this.prepareVideoExporter();
+        if (this.videoExporter) {
+            this.videoExporter.setAudioSource(this.sourceNode, this.audioContext);
+        }
+
         // Enable controls
         document.getElementById('play-btn').disabled = false;
         document.getElementById('pause-btn').disabled = false;
         document.getElementById('stop-btn').disabled = false;
+
+        try {
+            this.updateExportUI('working', 'Analyzing audio & generating choreography...');
+            const arrayBuffer = await file.arrayBuffer();
+            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
+            this.audioDuration = audioBuffer.duration;
+            this.audioBufferAnalysis = this.director.analyzeAudioBuffer(audioBuffer);
+            this.sequences = this.director.generatePlan(audioBuffer.duration, this.audioBufferAnalysis || {});
+            this.renderSequenceList();
+            this.updateExportUI('ready', 'AI choreography ready for export.');
+        } catch (error) {
+            console.error('Audio analysis failed:', error);
+            this.updateExportUI('error', `Audio analysis failed: ${error.message}`);
+        }
 
         this.updateStatus(`Loaded: ${file.name}`);
         console.log('🎵 Audio file loaded:', file.name);
     }
 
     async generateDefaultChoreography() {
-        // Auto-generate choreography sequences WITH SYSTEM SWITCHING
-        this.sequences = [
-            {
-                time: 0,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // Start with Faceted
-                    geometry: 'cycle',
-                    rotation: 'smooth',
-                    chaos: 0.1,
-                    speed: 0.5,
-                    colorShift: 'slow',
-                    densityBoost: 0
-                }
-            },
-            {
-                time: 15,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // Stay on Faceted
-                    geometry: 'morph',
-                    rotation: 'accelerate',
-                    chaos: 0.3,
-                    speed: 1.0,
-                    colorShift: 'medium',
-                    densityBoost: 10
-                }
-            },
-            {
-                time: 30,
-                duration: 20,
-                effects: {
-                    system: 'quantum', // SWITCH to Quantum for drop
-                    geometry: 'random',
-                    rotation: 'chaos',
-                    chaos: 0.8,
-                    speed: 2.0,
-                    colorShift: 'fast',
-                    densityBoost: 20
-                }
-            },
-            {
-                time: 50,
-                duration: 10,
-                effects: {
-                    system: 'holographic', // SWITCH to Holographic
-                    geometry: 'explosive',
-                    rotation: 'extreme',
-                    chaos: 0.9,
-                    speed: 2.5,
-                    colorShift: 'rainbow',
-                    densityBoost: 30
-                }
-            },
-            {
-                time: 60,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // BACK to Faceted for breakdown
-                    geometry: 'hold',
-                    rotation: 'minimal',
-                    chaos: 0.05,
-                    speed: 0.3,
-                    colorShift: 'freeze',
-                    baseHue: 240,
-                    densityBoost: -5
-                }
-            },
-            {
-                time: 75,
-                duration: 999,
-                effects: {
-                    system: 'quantum', // Final drop on Quantum
-                    geometry: 'explosive',
-                    rotation: 'extreme',
-                    chaos: 1.0,
-                    speed: 3.0,
-                    colorShift: 'rainbow',
-                    densityBoost: 40
-                }
+        this.sequences = this.director.generatePlan(90, {
+            averageRMS: 0.28,
+            peak: 0.7,
+            sectionProfile: {
+                intro: 0.35,
+                build: 0.5,
+                drop: 0.82,
+                breakdown: 0.42,
+                finale: 0.88
             }
-        ];
+        });
 
         this.renderSequenceList();
-        console.log('🎬 Generated default choreography with system switching');
+        console.log('🎬 Generated adaptive baseline choreography');
     }
 
     renderSequenceList() {
@@ -261,9 +228,229 @@ export class MusicVideoChoreographer {
                 <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,255,255,0.05); border-radius: 3px;">
                     ℹ️ Audio reactivity is ALWAYS active - these are base values that audio modulates
                 </div>
+                ${this.renderCustomSummary(seq.custom || seq.effects?.custom)}
                 <button onclick="choreographer.deleteSequence(${index})" style="margin-top: 10px; background: #f44; font-size: 10px; padding: 5px;">Delete</button>
             </div>
         `).join('');
+    }
+
+    renderCustomSummary(customConfig) {
+        if (!customConfig || Object.keys(customConfig).length === 0) {
+            return `<div class="custom-summary" style="font-size: 9px; margin-top: 6px; color: #0cf;">AI Director auto-controls advanced parameters.</div>`;
+        }
+
+        const rows = Object.entries(customConfig).map(([name, config]) => {
+            const baseValue = typeof config === 'number' ? config : (config.base ?? 0);
+            const audioMap = (config.audioMap && Object.keys(config.audioMap).length > 0)
+                ? Object.entries(config.audioMap).map(([band, weight]) => `${band}×${weight}`).join(', ')
+                : 'static';
+            return `<div class="custom-summary-row" style="display:flex; gap:6px; font-size:9px; color:#0ff; justify-content:space-between;"><span style="text-transform:uppercase; letter-spacing:0.5px;">${name}</span><span>base ${baseValue.toFixed(2)}</span><span>${audioMap}</span></div>`;
+        }).join('');
+
+        return `<div class="custom-summary" style="margin-top:6px; padding:6px; border:1px solid rgba(0,255,255,0.2); border-radius:4px; background:rgba(0,255,255,0.05);">${rows}</div>`;
+    }
+
+    getActiveParameterManager() {
+        if (!this.currentEngine) {
+            return null;
+        }
+
+        if (this.currentEngine.parameterManager) {
+            return this.currentEngine.parameterManager;
+        }
+
+        if (this.currentEngine.parameters) {
+            return this.currentEngine.parameters;
+        }
+
+        return null;
+    }
+
+    registerDynamicParametersOnActiveEngine() {
+        const manager = this.getActiveParameterManager();
+        if (!manager) {
+            return;
+        }
+
+        this.dynamicParameterDefs.forEach(def => {
+            if (typeof manager.hasParameter === 'function' && manager.hasParameter(def.name)) {
+                if (typeof manager.extendParameterRange === 'function') {
+                    manager.extendParameterRange(def.name, { min: def.min, max: def.max });
+                }
+                return;
+            }
+
+            if (typeof manager.registerParameter === 'function') {
+                manager.registerParameter(def.name, def);
+            } else if (typeof manager.setParameter === 'function') {
+                manager.setParameter(def.name, def.defaultValue ?? 0, { autoRegister: true, skipClamp: true });
+            }
+        });
+    }
+
+    prepareVideoExporter() {
+        const stageResolver = () => document.getElementById('visualizer-container') || document.getElementById('stage-container') || document.body;
+
+        if (!this.videoExporter) {
+            this.videoExporter = new VideoExportController({
+                stageElement: stageResolver(),
+                audioElement: this.audio,
+                getCanvasLayers: () => Array.from((stageResolver() || document.body).querySelectorAll('canvas'))
+            });
+        }
+
+        if (this.videoExporter && this.sourceNode && this.audioContext) {
+            this.videoExporter.setAudioSource(this.sourceNode, this.audioContext);
+        }
+    }
+
+    updateExportUI(state, message) {
+        const statusEl = document.getElementById('export-status');
+        const progressFill = document.getElementById('export-progress-fill');
+        const exportButton = document.getElementById('export-video-btn');
+
+        if (!statusEl || !progressFill || !exportButton) {
+            return;
+        }
+
+        if (state === 'working') {
+            exportButton.disabled = true;
+            statusEl.textContent = message || 'Rendering video...';
+            statusEl.style.color = '#0ff';
+            progressFill.style.width = '5%';
+        } else if (state === 'error') {
+            exportButton.disabled = false;
+            statusEl.textContent = message || 'Export failed.';
+            statusEl.style.color = '#ff6688';
+        } else {
+            exportButton.disabled = state === 'disabled';
+            statusEl.textContent = message || 'Ready to export video.';
+            statusEl.style.color = '#0f0';
+            if (state !== 'working') {
+                progressFill.style.width = '0%';
+            }
+        }
+    }
+
+    updateExportProgress(percent) {
+        const progressFill = document.getElementById('export-progress-fill');
+        const statusEl = document.getElementById('export-status');
+        if (!progressFill) {
+            return;
+        }
+
+        const clamped = Math.max(0, Math.min(100, percent));
+        progressFill.style.width = `${clamped}%`;
+        if (statusEl && this.exportInProgress) {
+            statusEl.textContent = `Rendering... ${clamped.toFixed(0)}%`;
+        }
+    }
+
+    async handleVideoExport() {
+        if (this.exportInProgress) {
+            return;
+        }
+
+        if (!this.videoExporter) {
+            this.prepareVideoExporter();
+        }
+
+        if (!this.videoExporter) {
+            this.updateExportUI('error', 'Video exporter unavailable in this environment.');
+            return;
+        }
+
+        if (!this.audio || !this.audio.src) {
+            this.updateExportUI('error', 'Load an audio file before exporting.');
+            return;
+        }
+
+        if (!this.sequences || this.sequences.length === 0) {
+            this.updateExportUI('error', 'Generate choreography before exporting.');
+            return;
+        }
+
+        this.exportInProgress = true;
+
+        try {
+            this.stop();
+            this.updateExportUI('working', 'Preparing AI choreography playback...');
+            this.audio.currentTime = 0;
+
+            const result = await this.videoExporter.recordTimeline({
+                beforePlayback: async () => {
+                    this.audio.currentTime = 0;
+                    await this.play();
+                },
+                afterPlayback: async () => {
+                    this.stop();
+                },
+                onProgress: (value) => this.updateExportProgress(value),
+                duration: this.audioDuration || this.audio.duration || undefined
+            });
+
+            this.videoExporter.download(result.blob, result.filename);
+            this.updateExportUI('ready', `✅ Saved ${result.filename}`);
+        } catch (error) {
+            console.error('Video export failed:', error);
+            this.updateExportUI('error', `❌ Export failed: ${error.message}`);
+        } finally {
+            this.exportInProgress = false;
+            setTimeout(() => this.updateExportProgress(0), 800);
+        }
+    }
+
+    applyParameter(name, value, options = {}) {
+        const manager = this.getActiveParameterManager();
+        let finalValue = value;
+
+        if (manager && typeof manager.setParameter === 'function') {
+            finalValue = manager.setParameter(name, value, options);
+        }
+
+        if (this.currentEngine?.updateParameter) {
+            this.currentEngine.updateParameter(name, finalValue);
+        } else if (this.currentEngine?.updateParameters) {
+            this.currentEngine.updateParameters({ [name]: finalValue });
+        }
+
+        return finalValue;
+    }
+
+    applyCustomParameters(customConfig, audioData) {
+        if (!customConfig) {
+            return;
+        }
+
+        Object.entries(customConfig).forEach(([name, config]) => {
+            if (config == null) {
+                return;
+            }
+
+            let targetValue;
+            let skipClamp = false;
+
+            if (typeof config === 'number') {
+                targetValue = config;
+            } else {
+                targetValue = config.base ?? 0;
+                if (config.audioMap) {
+                    Object.entries(config.audioMap).forEach(([band, strength]) => {
+                        if (audioData[band] !== undefined) {
+                            targetValue += audioData[band] * strength;
+                        }
+                    });
+                }
+
+                if (config.range) {
+                    targetValue = Math.max(config.range[0], Math.min(config.range[1], targetValue));
+                }
+
+                skipClamp = config.allowOverflow ?? false;
+            }
+
+            this.applyParameter(name, targetValue, { skipClamp });
+        });
     }
 
     updateSequence(index, property, value) {
@@ -300,10 +487,12 @@ export class MusicVideoChoreographer {
 
         // Clear canvases
         const container = document.getElementById('vib34dLayers');
-        container.innerHTML = '';
+        if (container) {
+            container.innerHTML = '';
+        }
 
         // Create canvases based on system requirements
-        if (systemName === 'faceted') {
+        if (container && systemName === 'faceted') {
             const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
             layers.forEach(layer => {
                 const canvas = document.createElement('canvas');
@@ -312,7 +501,7 @@ export class MusicVideoChoreographer {
                 canvas.height = window.innerHeight;
                 container.appendChild(canvas);
             });
-        } else if (systemName === 'quantum') {
+        } else if (container && systemName === 'quantum') {
             const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
             layers.forEach(layer => {
                 const canvas = document.createElement('canvas');
@@ -321,7 +510,7 @@ export class MusicVideoChoreographer {
                 canvas.height = window.innerHeight;
                 container.appendChild(canvas);
             });
-        } else if (systemName === 'holographic') {
+        } else if (container && systemName === 'holographic') {
             for (let i = 0; i < 5; i++) {
                 const canvas = document.createElement('canvas');
                 canvas.id = `holo-layer-${i}`;
@@ -342,6 +531,8 @@ export class MusicVideoChoreographer {
             }
 
             this.currentSystem = systemName;
+            this.registerDynamicParametersOnActiveEngine();
+            this.prepareVideoExporter();
 
             // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
@@ -354,15 +545,17 @@ export class MusicVideoChoreographer {
         }
     }
 
-    play() {
+    async play() {
         if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
+            await this.audioContext.resume();
         }
 
-        this.audio.play();
+        const playPromise = this.audio.play();
         this.isPlaying = true;
         this.startVisualization();
         this.updateStatus('Playing...');
+
+        return playPromise;
     }
 
     pause() {
@@ -446,15 +639,7 @@ export class MusicVideoChoreographer {
      * REACTIVE MODE: Built-in audio reactivity with direct parameter mapping
      */
     applyReactiveMode(audioData) {
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
-        };
+        const setParam = (param, value, options) => this.applyParameter(param, value, options);
 
         // Direct audio-to-parameter mapping
         const densityBase = 15 + audioData.bass * this.reactivitySettings.bassToGridDensity;
@@ -503,15 +688,7 @@ export class MusicVideoChoreographer {
 
         const effects = activeSequence.effects;
 
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
-        };
+        const setParam = (param, value, options) => this.applyParameter(param, value, options);
 
         // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)
         if (effects.system && effects.system !== this.currentSystem) {
@@ -576,23 +753,28 @@ export class MusicVideoChoreographer {
 
         // Color shifting: Choreographed pattern + audio modulation
         let hueValue = 0;
+        const baseHue = effects.baseHue ?? 0;
         if (effects.colorShift === 'rainbow') {
-            hueValue = (currentTime * 60 + audioData.energy * 60) % 360;
+            hueValue = (baseHue + currentTime * 60 + audioData.energy * 60) % 360;
         } else if (effects.colorShift === 'fast') {
-            hueValue = (currentTime * 30 + audioData.bass * 120) % 360;
+            hueValue = (baseHue + currentTime * 30 + audioData.bass * 120) % 360;
         } else if (effects.colorShift === 'medium') {
-            hueValue = (currentTime * 10 + audioData.mid * 60) % 360;
+            hueValue = (baseHue + currentTime * 10 + audioData.mid * 60) % 360;
         } else if (effects.colorShift === 'slow') {
-            hueValue = (currentTime * 5 + audioData.high * 30) % 360;
+            hueValue = (baseHue + currentTime * 5 + audioData.high * 30) % 360;
         } else if (effects.colorShift === 'freeze') {
-            // Even "freeze" gets audio modulation
-            hueValue = (effects.baseHue || 180) + audioData.energy * 30;
+            hueValue = (effects.baseHue || baseHue || 180) + audioData.energy * 30;
+        } else {
+            hueValue = (baseHue + currentTime * 5) % 360;
         }
         setParam('hue', hueValue % 360);
 
         // Intensity & Saturation: ALWAYS audio-reactive
         setParam('intensity', 0.5 + audioData.energy * 0.5);
         setParam('saturation', 0.7 + audioData.bass * 0.3);
+
+        const customConfig = activeSequence.custom || effects.custom;
+        this.applyCustomParameters(customConfig, audioData);
 
         // ENABLE BUILT-IN AUDIO REACTIVITY for engines that have it
         if (this.currentEngine && this.currentEngine.audioEnabled !== undefined) {

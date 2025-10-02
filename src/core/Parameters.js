@@ -9,13 +9,13 @@ export class ParameterManager {
         this.params = {
             // Current variation
             variation: 0,
-            
+
             // 4D Polytopal Mathematics
             rot4dXW: 0.0,      // X-W plane rotation (-2 to 2)
-            rot4dYW: 0.0,      // Y-W plane rotation (-2 to 2) 
+            rot4dYW: 0.0,      // Y-W plane rotation (-2 to 2)
             rot4dZW: 0.0,      // Z-W plane rotation (-2 to 2)
             dimension: 3.5,    // Dimensional level (3.0 to 4.5)
-            
+
             // Holographic Visualization
             gridDensity: 15,   // Geometric detail (4 to 30)
             morphFactor: 1.0,  // Shape transformation (0 to 2)
@@ -24,32 +24,51 @@ export class ParameterManager {
             hue: 200,          // Color rotation (0 to 360)
             intensity: 0.5,    // Visual intensity (0 to 1)
             saturation: 0.8,   // Color saturation (0 to 1)
-            
+
             // Geometry selection
-            geometry: 0        // Current geometry type (0-7)
+            geometry: 0,       // Current geometry type (0-7)
+
+            // Advanced AI/Director parameters (registered by default for compatibility)
+            cameraOrbit: 0.0,
+            bloomStrength: 0.35,
+            glitchFactor: 0.05,
+            particleFlow: 0.15,
+            dimensionWarp: 0.0,
+            chromaticShift: 0.0
         };
-        
+
         // Parameter definitions for validation and UI
         this.parameterDefs = {
-            variation: { min: 0, max: 99, step: 1, type: 'int' },
-            rot4dXW: { min: -2, max: 2, step: 0.01, type: 'float' },
-            rot4dYW: { min: -2, max: 2, step: 0.01, type: 'float' },
-            rot4dZW: { min: -2, max: 2, step: 0.01, type: 'float' },
-            dimension: { min: 3.0, max: 4.5, step: 0.01, type: 'float' },
-            gridDensity: { min: 4, max: 100, step: 0.1, type: 'float' },
-            morphFactor: { min: 0, max: 2, step: 0.01, type: 'float' },
-            chaos: { min: 0, max: 1, step: 0.01, type: 'float' },
-            speed: { min: 0.1, max: 3, step: 0.01, type: 'float' },
-            hue: { min: 0, max: 360, step: 1, type: 'int' },
-            intensity: { min: 0, max: 1, step: 0.01, type: 'float' },
-            saturation: { min: 0, max: 1, step: 0.01, type: 'float' },
-            geometry: { min: 0, max: 7, step: 1, type: 'int' }
+            variation: { min: 0, max: 99, step: 1, type: 'int', allowOverflow: false },
+            rot4dXW: { min: -2, max: 2, step: 0.01, type: 'float', allowOverflow: false },
+            rot4dYW: { min: -2, max: 2, step: 0.01, type: 'float', allowOverflow: false },
+            rot4dZW: { min: -2, max: 2, step: 0.01, type: 'float', allowOverflow: false },
+            dimension: { min: 3.0, max: 4.5, step: 0.01, type: 'float', allowOverflow: false },
+            gridDensity: { min: 4, max: 100, step: 0.1, type: 'float', allowOverflow: false },
+            morphFactor: { min: 0, max: 2, step: 0.01, type: 'float', allowOverflow: false },
+            chaos: { min: 0, max: 1, step: 0.01, type: 'float', allowOverflow: false },
+            speed: { min: 0.1, max: 3, step: 0.01, type: 'float', allowOverflow: false },
+            hue: { min: 0, max: 360, step: 1, type: 'int', allowOverflow: true },
+            intensity: { min: 0, max: 1, step: 0.01, type: 'float', allowOverflow: false },
+            saturation: { min: 0, max: 1, step: 0.01, type: 'float', allowOverflow: false },
+            geometry: { min: 0, max: 7, step: 1, type: 'int', allowOverflow: false },
+
+            // Advanced parameters registered here so engines can opt-in without warnings
+            cameraOrbit: { min: -Math.PI, max: Math.PI, step: 0.001, type: 'float', allowOverflow: true },
+            bloomStrength: { min: 0, max: 3, step: 0.01, type: 'float', allowOverflow: false },
+            glitchFactor: { min: 0, max: 1, step: 0.01, type: 'float', allowOverflow: false },
+            particleFlow: { min: 0, max: 2, step: 0.01, type: 'float', allowOverflow: false },
+            dimensionWarp: { min: -2, max: 2, step: 0.01, type: 'float', allowOverflow: true },
+            chromaticShift: { min: -3, max: 3, step: 0.01, type: 'float', allowOverflow: true }
         };
-        
+
+        // Dynamic parameter registry for AI expansion
+        this.dynamicParameters = new Set();
+
         // Default parameter backup for reset
         this.defaults = { ...this.params };
     }
-    
+
     /**
      * Get all current parameters
      */
@@ -60,26 +79,38 @@ export class ParameterManager {
     /**
      * Set a specific parameter with validation
      */
-    setParameter(name, value) {
-        if (this.parameterDefs[name]) {
-            const def = this.parameterDefs[name];
-            
-            // Clamp value to valid range
-            value = Math.max(def.min, Math.min(def.max, value));
-            
-            // Apply type conversion
-            if (def.type === 'int') {
-                value = Math.round(value);
+    setParameter(name, value, options = {}) {
+        const def = this.parameterDefs[name];
+
+        if (!def) {
+            if (options.autoRegister) {
+                this.registerParameter(name, {
+                    defaultValue: value,
+                    allowOverflow: true,
+                    type: typeof value === 'number' && Number.isInteger(value) ? 'int' : 'float'
+                });
+                return value;
             }
-            
-            this.params[name] = value;
-            return true;
+
+            console.warn(`Unknown parameter: ${name}`);
+            return value;
         }
-        
-        console.warn(`Unknown parameter: ${name}`);
-        return false;
+
+        const skipClamp = options.skipClamp || def.allowOverflow;
+        let finalValue = value;
+
+        if (!skipClamp) {
+            finalValue = Math.max(def.min, Math.min(def.max, finalValue));
+        }
+
+        if (def.type === 'int') {
+            finalValue = Math.round(finalValue);
+        }
+
+        this.params[name] = finalValue;
+        return finalValue;
     }
-    
+
     /**
      * Set multiple parameters at once
      */
@@ -88,7 +119,46 @@ export class ParameterManager {
             this.setParameter(name, value);
         }
     }
-    
+
+    hasParameter(name) {
+        return !!this.parameterDefs[name];
+    }
+
+    registerParameter(name, config = {}) {
+        const {
+            min = Number.isFinite(config.min) ? config.min : -1000,
+            max = Number.isFinite(config.max) ? config.max : 1000,
+            step = config.step ?? 0.01,
+            type = config.type || (Number.isInteger(config.defaultValue) ? 'int' : 'float'),
+            defaultValue = config.defaultValue ?? this.params[name] ?? 0,
+            allowOverflow = config.allowOverflow ?? true
+        } = config;
+
+        this.parameterDefs[name] = { min, max, step, type, allowOverflow };
+
+        if (this.params[name] === undefined) {
+            this.params[name] = defaultValue;
+        }
+
+        this.dynamicParameters.add(name);
+        return this.params[name];
+    }
+
+    extendParameterRange(name, { min, max }) {
+        const def = this.parameterDefs[name];
+        if (!def) {
+            return;
+        }
+
+        if (typeof min === 'number' && Number.isFinite(min)) {
+            def.min = Math.min(def.min, min);
+        }
+
+        if (typeof max === 'number' && Number.isFinite(max)) {
+            def.max = Math.max(def.max, max);
+        }
+    }
+
     /**
      * Get a specific parameter value
      */
