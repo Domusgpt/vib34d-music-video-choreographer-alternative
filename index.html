@@ -972,11 +972,17 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 recorder.ondataavailable = e => {
                     if (e.data && e.data.size > 0) {
                         recordingChunks.push(e.data);
+                        console.log(`🎥 Chunk #${recordingChunks.length} received: ${e.data.size} bytes`);
+                    } else {
+                        console.warn('🎥 Empty chunk received');
                     }
                 };
 
                 recorder.onstop = () => {
-                    console.log('🎥 Recorder stopped, chunks:', recordingChunks.length);
+                    console.log('🎥 ========= RECORDER STOPPED =========');
+                    console.log('🎥 Chunks received:', recordingChunks.length);
+                    console.log('🎥 Chunk sizes:', recordingChunks.map(c => c.size));
+                    console.log('🎥 Total bytes:', recordingChunks.reduce((sum, chunk) => sum + chunk.size, 0));
 
                     // Hide recording controls
                     document.getElementById('recording-controls').style.display = 'none';
@@ -986,28 +992,40 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                     }
 
                     // Clean up audio tap
+                    console.log('🎥 Disconnecting audio tap...');
                     anl.disconnect(exportDest);
 
                     // Reset global state
                     activeRecorder = null;
 
                     if (recordingChunks.length === 0) {
+                        console.log('🎥 ❌ NO CHUNKS - Recording failed or was cancelled');
                         stat('Export cancelled or no data recorded');
                         return;
                     }
 
                     const blob = new Blob(recordingChunks, { type: 'video/webm' });
-                    console.log('🎥 Blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+                    console.log('🎥 Blob created:', {
+                        size: blob.size,
+                        type: blob.type,
+                        sizeMB: (blob.size / 1024 / 1024).toFixed(2) + ' MB'
+                    });
 
                     const url = URL.createObjectURL(blob);
+                    console.log('🎥 Blob URL:', url);
+
                     const a = document.createElement('a');
                     a.href = url;
                     a.download = `vib34d-choreography-${Date.now()}.webm`;
                     document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
 
+                    console.log('🎥 Triggering download:', a.download);
+                    a.click();
+
+                    document.body.removeChild(a);
                     setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+                    console.log('🎥 ✅ EXPORT COMPLETE - File should be downloading');
                     stat('✅ Export complete! Video downloaded');
 
                     recordingChunks = [];
@@ -1020,8 +1038,13 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 };
 
                 // Start recording
-                console.log('🎥 Starting recorder...');
+                console.log('🎥 ========= STARTING EXPORT =========');
+                console.log('🎥 Recorder state:', recorder.state);
+                console.log('🎥 Video tracks:', combinedStream.getVideoTracks().length);
+                console.log('🎥 Audio tracks:', combinedStream.getAudioTracks().length);
+
                 recorder.start(100); // Collect data every 100ms
+                console.log('🎥 Recorder.start() called, state:', recorder.state);
 
                 // Show recording controls
                 document.getElementById('recording-controls').style.display = 'block';
@@ -1033,7 +1056,9 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 aud.currentTime = 0;
                 beatCount = 0;
 
+                console.log('🎥 Starting audio playback...');
                 await aud.play();
+                console.log('🎥 Audio playing, duration:', aud.duration, 'seconds');
                 stat('🔴 Recording... (use controls to stop)');
 
                 // Stop recording when audio ends
