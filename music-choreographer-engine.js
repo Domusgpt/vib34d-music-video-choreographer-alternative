@@ -6,6 +6,8 @@
 import { VIB34DIntegratedEngine } from './src/core/Engine.js';
 import { QuantumEngine } from './src/quantum/QuantumEngine.js';
 import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+import { AIGenerativeChoreographyEngine } from './src/choreography/AIGenerativeChoreographyEngine.js';
+import { VideoExportController } from './src/export/VideoExportController.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -38,6 +40,23 @@ export class MusicVideoChoreographer {
             energyToSpeed: 0.5
         };
 
+        // AI choreography + export systems
+        this.aiChoreographyEngine = new AIGenerativeChoreographyEngine();
+        this.videoExporter = new VideoExportController({
+            canvasSelector: '#vib34dLayers canvas'
+        });
+        this.customParameterState = {};
+        this.customParameterDefinitions = {};
+        this.isExporting = false;
+
+        this.exportUi = {
+            button: document.getElementById('export-video-btn'),
+            status: document.getElementById('export-status-text'),
+            progress: document.getElementById('export-progress-fill')
+        };
+
+        this.effectOverlay = null;
+
         this.init();
     }
 
@@ -55,6 +74,8 @@ export class MusicVideoChoreographer {
 
         // Setup event listeners
         this.setupEventListeners();
+        this.createEffectOverlay();
+        this.refreshTransportAvailability();
 
         // Initialize mode-specific features
         if (this.mode === 'choreographed') {
@@ -74,6 +95,9 @@ export class MusicVideoChoreographer {
         document.getElementById('play-btn').addEventListener('click', () => this.play());
         document.getElementById('pause-btn').addEventListener('click', () => this.pause());
         document.getElementById('stop-btn').addEventListener('click', () => this.stop());
+        if (this.exportUi.button) {
+            this.exportUi.button.addEventListener('click', () => this.exportVideo());
+        }
 
         // Timeline seeking
         document.getElementById('timeline').addEventListener('click', (e) => {
@@ -107,177 +131,171 @@ export class MusicVideoChoreographer {
             this.analyser.connect(this.audioContext.destination);
         }
 
+        if (!this.exportDestination) {
+            this.exportDestination = this.audioContext.createMediaStreamDestination();
+            this.sourceNode.connect(this.exportDestination);
+        }
+
         // Enable controls
-        document.getElementById('play-btn').disabled = false;
-        document.getElementById('pause-btn').disabled = false;
-        document.getElementById('stop-btn').disabled = false;
+        this.refreshTransportAvailability();
 
         this.updateStatus(`Loaded: ${file.name}`);
+        this.updateExportStatus(`Loaded ${file.name}. Ready to export.`);
+        this.updateExportProgress(0);
         console.log('🎵 Audio file loaded:', file.name);
     }
 
     async generateDefaultChoreography() {
-        // Auto-generate choreography sequences WITH SYSTEM SWITCHING
-        this.sequences = [
-            {
-                time: 0,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // Start with Faceted
-                    geometry: 'cycle',
-                    rotation: 'smooth',
-                    chaos: 0.1,
-                    speed: 0.5,
-                    colorShift: 'slow',
-                    densityBoost: 0
-                }
-            },
-            {
-                time: 15,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // Stay on Faceted
-                    geometry: 'morph',
-                    rotation: 'accelerate',
-                    chaos: 0.3,
-                    speed: 1.0,
-                    colorShift: 'medium',
-                    densityBoost: 10
-                }
-            },
-            {
-                time: 30,
-                duration: 20,
-                effects: {
-                    system: 'quantum', // SWITCH to Quantum for drop
-                    geometry: 'random',
-                    rotation: 'chaos',
-                    chaos: 0.8,
-                    speed: 2.0,
-                    colorShift: 'fast',
-                    densityBoost: 20
-                }
-            },
-            {
-                time: 50,
-                duration: 10,
-                effects: {
-                    system: 'holographic', // SWITCH to Holographic
-                    geometry: 'explosive',
-                    rotation: 'extreme',
-                    chaos: 0.9,
-                    speed: 2.5,
-                    colorShift: 'rainbow',
-                    densityBoost: 30
-                }
-            },
-            {
-                time: 60,
-                duration: 15,
-                effects: {
-                    system: 'faceted', // BACK to Faceted for breakdown
-                    geometry: 'hold',
-                    rotation: 'minimal',
-                    chaos: 0.05,
-                    speed: 0.3,
-                    colorShift: 'freeze',
-                    baseHue: 240,
-                    densityBoost: -5
-                }
-            },
-            {
-                time: 75,
-                duration: 999,
-                effects: {
-                    system: 'quantum', // Final drop on Quantum
-                    geometry: 'explosive',
-                    rotation: 'extreme',
-                    chaos: 1.0,
-                    speed: 3.0,
-                    colorShift: 'rainbow',
-                    densityBoost: 40
-                }
-            }
-        ];
+        const timeline = this.aiChoreographyEngine.generateInitialTimeline({
+            duration: 90,
+            systems: ['faceted', 'quantum', 'holographic']
+        });
 
+        this.sequences = timeline;
         this.renderSequenceList();
-        console.log('🎬 Generated default choreography with system switching');
+        console.log('🤖 Generated AI choreography timeline with', this.sequences.length, 'segments');
     }
 
     renderSequenceList() {
         const list = document.getElementById('sequence-list');
         if (!list) return;
 
-        list.innerHTML = this.sequences.map((seq, index) => `
-            <div class="sequence-item">
-                <h4>Sequence ${index + 1} (${seq.time}s - ${seq.time + seq.duration}s)</h4>
-                <div class="sequence-controls">
-                    <label>Start Time (s)</label>
-                    <input type="number" value="${seq.time}" onchange="choreographer.updateSequence(${index}, 'time', this.value)">
+        list.innerHTML = this.sequences.map((seq, index) => {
+            const effects = seq.effects || {};
+            const start = Number(seq.time ?? 0);
+            const end = start + Number(seq.duration ?? 0);
+            const isAI = this.aiChoreographyEngine.isAISchema(seq);
 
-                    <label>Duration (s)</label>
-                    <input type="number" value="${seq.duration}" onchange="choreographer.updateSequence(${index}, 'duration', this.value)">
+            if (isAI) {
+                const primarySystem = this.extractPrimarySystem(effects);
+                const geometryMode = typeof effects.geometry === 'string' ? effects.geometry : (effects.geometry?.mode ?? 'ai-dynamic');
+                const summary = effects.metaSummary || [];
+                return `
+                    <div class="sequence-item ai-sequence">
+                        <h4>AI Sequence ${index + 1} (${start.toFixed(1)}s → ${end.toFixed(1)}s)</h4>
+                        <div class="ai-sequence-meta">
+                            <div><strong>Systems:</strong> ${this.describeSystem(effects)}</div>
+                            <div><strong>Geometry Flow:</strong> ${geometryMode}</div>
+                        </div>
+                        <div class="sequence-controls compact">
+                            <label>Start Time (s)</label>
+                            <input type="number" value="${start}" step="0.1" onchange="choreographer.updateSequence(${index}, 'time', this.value)">
+                            <label>Duration (s)</label>
+                            <input type="number" value="${seq.duration}" step="0.1" onchange="choreographer.updateSequence(${index}, 'duration', this.value)">
+                            <label>Primary System</label>
+                            <select onchange="choreographer.updateSequence(${index}, 'system', this.value)">
+                                ${['faceted','quantum','holographic'].map(system => `<option value="${system}" ${system === primarySystem ? 'selected' : ''}>${system.toUpperCase()}</option>`).join('')}
+                            </select>
+                        </div>
+                        ${summary.length ? `<ul class="ai-sequence-summary">${summary.map(item => `<li>${item}</li>`).join('')}</ul>` : ''}
+                        <button onclick="choreographer.deleteSequence(${index})" class="danger-btn">Delete</button>
+                    </div>
+                `;
+            }
 
-                    <label>🎨 System</label>
-                    <select onchange="choreographer.updateSequence(${index}, 'system', this.value)" style="grid-column: span 2;">
-                        <option value="faceted" ${seq.effects.system === 'faceted' ? 'selected' : ''}>🔷 Faceted</option>
-                        <option value="quantum" ${seq.effects.system === 'quantum' ? 'selected' : ''}>🌌 Quantum</option>
-                        <option value="holographic" ${seq.effects.system === 'holographic' ? 'selected' : ''}>✨ Holographic</option>
-                    </select>
+            return `
+                <div class="sequence-item">
+                    <h4>Sequence ${index + 1} (${start}s - ${end}s)</h4>
+                    <div class="sequence-controls">
+                        <label>Start Time (s)</label>
+                        <input type="number" value="${start}" onchange="choreographer.updateSequence(${index}, 'time', this.value)">
 
-                    <label>Geometry</label>
-                    <select onchange="choreographer.updateSequence(${index}, 'geometry', this.value)">
-                        <option value="hold" ${seq.effects.geometry === 'hold' ? 'selected' : ''}>Hold</option>
-                        <option value="cycle" ${seq.effects.geometry === 'cycle' ? 'selected' : ''}>Cycle</option>
-                        <option value="morph" ${seq.effects.geometry === 'morph' ? 'selected' : ''}>Morph</option>
-                        <option value="random" ${seq.effects.geometry === 'random' ? 'selected' : ''}>Random</option>
-                        <option value="explosive" ${seq.effects.geometry === 'explosive' ? 'selected' : ''}>Explosive</option>
-                    </select>
+                        <label>Duration (s)</label>
+                        <input type="number" value="${seq.duration}" onchange="choreographer.updateSequence(${index}, 'duration', this.value)">
 
-                    <label>Rotation</label>
-                    <select onchange="choreographer.updateSequence(${index}, 'rotation', this.value)">
-                        <option value="minimal" ${seq.effects.rotation === 'minimal' ? 'selected' : ''}>Minimal</option>
-                        <option value="smooth" ${seq.effects.rotation === 'smooth' ? 'selected' : ''}>Smooth</option>
-                        <option value="accelerate" ${seq.effects.rotation === 'accelerate' ? 'selected' : ''}>Accelerate</option>
-                        <option value="chaos" ${seq.effects.rotation === 'chaos' ? 'selected' : ''}>Chaos</option>
-                        <option value="extreme" ${seq.effects.rotation === 'extreme' ? 'selected' : ''}>Extreme</option>
-                    </select>
+                        <label>🎨 System</label>
+                        <select onchange="choreographer.updateSequence(${index}, 'system', this.value)" style="grid-column: span 2;">
+                            <option value="faceted" ${effects.system === 'faceted' ? 'selected' : ''}>🔷 Faceted</option>
+                            <option value="quantum" ${effects.system === 'quantum' ? 'selected' : ''}>🌌 Quantum</option>
+                            <option value="holographic" ${effects.system === 'holographic' ? 'selected' : ''}>✨ Holographic</option>
+                        </select>
 
-                    <label>Chaos Base</label>
-                    <input type="number" step="0.1" min="0" max="1" value="${seq.effects.chaos || 0.5}" onchange="choreographer.updateSequence(${index}, 'chaos', this.value)">
+                        <label>Geometry</label>
+                        <select onchange="choreographer.updateSequence(${index}, 'geometry', this.value)">
+                            <option value="hold" ${effects.geometry === 'hold' ? 'selected' : ''}>Hold</option>
+                            <option value="cycle" ${effects.geometry === 'cycle' ? 'selected' : ''}>Cycle</option>
+                            <option value="morph" ${effects.geometry === 'morph' ? 'selected' : ''}>Morph</option>
+                            <option value="random" ${effects.geometry === 'random' ? 'selected' : ''}>Random</option>
+                            <option value="explosive" ${effects.geometry === 'explosive' ? 'selected' : ''}>Explosive</option>
+                        </select>
 
-                    <label>Speed Base</label>
-                    <input type="number" step="0.1" min="0.1" max="3" value="${seq.effects.speed || 1.0}" onchange="choreographer.updateSequence(${index}, 'speed', this.value)">
+                        <label>Rotation</label>
+                        <select onchange="choreographer.updateSequence(${index}, 'rotation', this.value)">
+                            <option value="minimal" ${effects.rotation === 'minimal' ? 'selected' : ''}>Minimal</option>
+                            <option value="smooth" ${effects.rotation === 'smooth' ? 'selected' : ''}>Smooth</option>
+                            <option value="accelerate" ${effects.rotation === 'accelerate' ? 'selected' : ''}>Accelerate</option>
+                            <option value="chaos" ${effects.rotation === 'chaos' ? 'selected' : ''}>Chaos</option>
+                            <option value="extreme" ${effects.rotation === 'extreme' ? 'selected' : ''}>Extreme</option>
+                        </select>
 
-                    <label>Color Shift</label>
-                    <select onchange="choreographer.updateSequence(${index}, 'colorShift', this.value)">
-                        <option value="freeze" ${seq.effects.colorShift === 'freeze' ? 'selected' : ''}>Freeze</option>
-                        <option value="slow" ${seq.effects.colorShift === 'slow' ? 'selected' : ''}>Slow</option>
-                        <option value="medium" ${seq.effects.colorShift === 'medium' ? 'selected' : ''}>Medium</option>
-                        <option value="fast" ${seq.effects.colorShift === 'fast' ? 'selected' : ''}>Fast</option>
-                        <option value="rainbow" ${seq.effects.colorShift === 'rainbow' ? 'selected' : ''}>Rainbow</option>
-                    </select>
+                        <label>Chaos Base</label>
+                        <input type="number" step="0.1" min="0" max="1" value="${effects.chaos || 0.5}" onchange="choreographer.updateSequence(${index}, 'chaos', this.value)">
+
+                        <label>Speed Base</label>
+                        <input type="number" step="0.1" min="0.1" max="3" value="${effects.speed || 1.0}" onchange="choreographer.updateSequence(${index}, 'speed', this.value)">
+
+                        <label>Color Shift</label>
+                        <select onchange="choreographer.updateSequence(${index}, 'colorShift', this.value)">
+                            <option value="freeze" ${effects.colorShift === 'freeze' ? 'selected' : ''}>Freeze</option>
+                            <option value="slow" ${effects.colorShift === 'slow' ? 'selected' : ''}>Slow</option>
+                            <option value="medium" ${effects.colorShift === 'medium' ? 'selected' : ''}>Medium</option>
+                            <option value="fast" ${effects.colorShift === 'fast' ? 'selected' : ''}>Fast</option>
+                            <option value="rainbow" ${effects.colorShift === 'rainbow' ? 'selected' : ''}>Rainbow</option>
+                        </select>
+                    </div>
+                    <div class="sequence-hint">ℹ️ Audio reactivity is ALWAYS active - these are base values that audio modulates</div>
+                    <button onclick="choreographer.deleteSequence(${index})" class="danger-btn">Delete</button>
                 </div>
-                <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,255,255,0.05); border-radius: 3px;">
-                    ℹ️ Audio reactivity is ALWAYS active - these are base values that audio modulates
-                </div>
-                <button onclick="choreographer.deleteSequence(${index})" style="margin-top: 10px; background: #f44; font-size: 10px; padding: 5px;">Delete</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+    }
+
+    extractPrimarySystem(effects) {
+        if (typeof effects.system === 'string') {
+            return effects.system;
+        }
+        if (effects.system?.playlist?.length) {
+            return effects.system.playlist[0];
+        }
+        return this.currentSystem;
+    }
+
+    describeSystem(effects) {
+        if (typeof effects.system === 'string') {
+            return effects.system.toUpperCase();
+        }
+        if (effects.system?.playlist?.length) {
+            return effects.system.playlist.map(system => system.toUpperCase()).join(' → ');
+        }
+        return this.currentSystem.toUpperCase();
     }
 
     updateSequence(index, property, value) {
         const seq = this.sequences[index];
         if (!seq) return;
 
+        const effects = seq.effects || {};
+        const isAI = this.aiChoreographyEngine.isAISchema(seq);
+
         if (property === 'time' || property === 'duration') {
             seq[property] = parseFloat(value);
+        } else if (isAI) {
+            if (property === 'system') {
+                if (typeof effects.system === 'string') {
+                    effects.system = value;
+                } else {
+                    const playlist = [value, ...(effects.system?.playlist || []).filter(item => item !== value)];
+                    effects.system = { ...(effects.system || {}), playlist };
+                }
+            }
         } else if (property === 'chaos' || property === 'speed') {
-            seq.effects[property] = parseFloat(value);
+            effects[property] = parseFloat(value);
         } else {
-            seq.effects[property] = value;
+            effects[property] = value;
         }
 
+        seq.effects = effects;
+        this.renderSequenceList();
         console.log(`Updated sequence ${index}:`, seq);
     }
 
@@ -342,6 +360,7 @@ export class MusicVideoChoreographer {
             }
 
             this.currentSystem = systemName;
+            this.syncCustomParametersToEngine();
 
             // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
@@ -359,16 +378,22 @@ export class MusicVideoChoreographer {
             this.audioContext.resume();
         }
 
-        this.audio.play();
+        const playPromise = this.audio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(error => console.warn('Audio playback interrupted:', error));
+        }
         this.isPlaying = true;
         this.startVisualization();
         this.updateStatus('Playing...');
+        this.refreshTransportAvailability();
+        return playPromise;
     }
 
     pause() {
         this.audio.pause();
         this.isPlaying = false;
         this.updateStatus('Paused');
+        this.refreshTransportAvailability();
     }
 
     stop() {
@@ -376,6 +401,8 @@ export class MusicVideoChoreographer {
         this.audio.currentTime = 0;
         this.isPlaying = false;
         this.updateStatus('Stopped');
+        this.refreshTransportAvailability();
+        this.handleInactiveChoreographyState({ bass: 0, mid: 0, high: 0, energy: 0 }, 0);
     }
 
     startVisualization() {
@@ -446,15 +473,7 @@ export class MusicVideoChoreographer {
      * REACTIVE MODE: Built-in audio reactivity with direct parameter mapping
      */
     applyReactiveMode(audioData) {
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
-        };
+        const setParam = (param, value) => this.setParameterOnEngine(param, value);
 
         // Direct audio-to-parameter mapping
         const densityBase = 15 + audioData.bass * this.reactivitySettings.bassToGridDensity;
@@ -494,34 +513,107 @@ export class MusicVideoChoreographer {
     applyChoreography(audioData) {
         const currentTime = this.audio.currentTime;
 
-        // Find active sequence
-        const activeSequence = this.sequences.find(seq =>
+        const activeIndex = this.sequences.findIndex(seq =>
             currentTime >= seq.time && currentTime < seq.time + seq.duration
         );
 
-        if (!activeSequence) return;
+        if (activeIndex === -1) {
+            this.handleInactiveChoreographyState(audioData, currentTime);
+            return;
+        }
 
-        const effects = activeSequence.effects;
+        const activeSequence = this.sequences[activeIndex];
+        const relativeTime = currentTime - activeSequence.time;
+        const progress = activeSequence.duration > 0 ? relativeTime / activeSequence.duration : 0;
 
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
+        const evaluation = this.aiChoreographyEngine.evaluate(activeSequence, {
+            audio: audioData,
+            absoluteTime: currentTime,
+            progress,
+            currentSystem: this.currentSystem,
+            bpm: this.detectedBPM || 120
+        });
+
+        if (evaluation?.handled) {
+            this.applyEvaluationResult(evaluation, {
+                audioData,
+                currentTime,
+                relativeTime,
+                progress,
+                sequenceIndex: activeIndex
+            });
+            return;
+        }
+
+        this.updateCustomParameterState({});
+        this.syncCustomParametersToEngine();
+        this.applyLegacyChoreography(activeSequence, audioData, currentTime);
+    }
+
+    applyEvaluationResult(evaluation, context) {
+        const setParam = (param, value) => this.setParameterOnEngine(param, value);
+
+        if (evaluation.system && evaluation.system !== this.currentSystem) {
+            console.log(`🤖 AI choreography requesting ${evaluation.system} system at ${context.currentTime?.toFixed(1) ?? 0}s`);
+            this.switchSystem(evaluation.system);
+        }
+
+        if (evaluation.parameterRanges && this.currentEngine?.parameterManager) {
+            Object.entries(evaluation.parameterRanges).forEach(([name, range]) => {
+                this.currentEngine.parameterManager.extendParameterRange(name, range);
+            });
+        }
+
+        if (evaluation.parameters) {
+            Object.entries(evaluation.parameters).forEach(([param, value]) => setParam(param, value));
+        }
+
+        const newCustomValues = {};
+        if (evaluation.customParameters) {
+            Object.entries(evaluation.customParameters).forEach(([name, info]) => {
+                const definition = info.definition || { min: null, max: null, step: 0.01, type: 'float' };
+                const value = info.value ?? 0;
+                this.customParameterDefinitions[name] = definition;
+                if (this.currentEngine?.parameterManager) {
+                    this.currentEngine.parameterManager.registerParameter(name, definition, value);
+                }
+                newCustomValues[name] = value;
+            });
+        }
+
+        this.updateCustomParameterState(newCustomValues);
+        this.syncCustomParametersToEngine(setParam);
+
+        if (typeof context.sequenceIndex === 'number') {
+            const target = this.sequences[context.sequenceIndex];
+            if (target) {
+                target.effects = {
+                    ...(target.effects || {}),
+                    metaSummary: evaluation.summary || target.effects?.metaSummary
+                };
             }
-        };
+        }
 
-        // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)
+        this.applyExtendedEffects(evaluation.extended || {}, context);
+
+        if (this.currentEngine && this.currentEngine.audioEnabled !== undefined) {
+            this.currentEngine.audioEnabled = true;
+        }
+    }
+
+    applyLegacyChoreography(sequence, audioData, currentTime) {
+        const effects = sequence.effects || {};
+        const setParam = (param, value) => this.setParameterOnEngine(param, value);
+
         if (effects.system && effects.system !== this.currentSystem) {
             console.log(`🎬 Choreography: Switching to ${effects.system} system at ${currentTime.toFixed(1)}s`);
             this.switchSystem(effects.system);
         }
 
-        // Geometry choreography
+        const progress = sequence.duration > 0 ? (currentTime - sequence.time) / sequence.duration : 0;
+
         if (effects.geometry === 'cycle') {
-            const geomIndex = Math.floor((currentTime - activeSequence.time) / 2) % 9;
+            const geomIndex = Math.floor((currentTime - sequence.time) / 2) % 9;
             setParam('geometry', geomIndex);
         } else if (effects.geometry === 'random' && audioData.energy > 0.6) {
             const geomIndex = Math.floor(Math.random() * 9);
@@ -531,13 +623,11 @@ export class MusicVideoChoreographer {
             setParam('geometry', geomIndex);
         }
 
-        // Rotation choreography (WITH audio overlay)
         if (effects.rotation === 'chaos') {
             setParam('rot4dXW', Math.sin(currentTime * 2) * Math.PI * audioData.bass);
             setParam('rot4dYW', Math.cos(currentTime * 1.5) * Math.PI * audioData.mid);
             setParam('rot4dZW', Math.sin(currentTime * 3) * Math.PI * audioData.high);
         } else if (effects.rotation === 'smooth') {
-            // Base smooth rotation + audio influence
             setParam('rot4dXW', Math.sin(currentTime * 0.5 + audioData.bass * 2) * Math.PI);
             setParam('rot4dYW', Math.cos(currentTime * 0.3 + audioData.mid * 2) * Math.PI);
             setParam('rot4dZW', Math.sin(currentTime * 0.4 + audioData.high * 2) * Math.PI * 0.5);
@@ -546,35 +636,27 @@ export class MusicVideoChoreographer {
             setParam('rot4dYW', Math.cos(currentTime * 4) * Math.PI * (1 + audioData.bass));
             setParam('rot4dZW', Math.sin(currentTime * 6) * Math.PI * (1 + audioData.high));
         } else if (effects.rotation === 'accelerate') {
-            const accel = (currentTime - activeSequence.time) / activeSequence.duration;
+            const accel = (currentTime - sequence.time) / sequence.duration;
             setParam('rot4dXW', Math.sin(currentTime * (0.5 + accel * 2 + audioData.bass)) * Math.PI);
             setParam('rot4dYW', Math.cos(currentTime * (0.3 + accel * 1.5 + audioData.mid)) * Math.PI);
         } else if (effects.rotation === 'minimal') {
-            // Minimal rotation BUT still audio reactive
             setParam('rot4dXW', audioData.bass * Math.PI * 0.3);
             setParam('rot4dYW', audioData.mid * Math.PI * 0.3);
             setParam('rot4dZW', audioData.high * Math.PI * 0.2);
         }
 
-        // AUDIO REACTIVITY ALWAYS ACTIVE - overlays on choreographed base values
-
-        // Chaos: Base from sequence + audio boost
         const chaosBase = effects.chaos || 0.5;
         setParam('chaos', chaosBase + audioData.energy * 0.4);
 
-        // Speed: Base from sequence + audio multiplier
         const speedBase = effects.speed || 1.0;
         setParam('speed', speedBase * (1 + audioData.energy * 0.6));
 
-        // Morph Factor: Audio-reactive morphing
         const morphBase = effects.rotation === 'chaos' ? 1.5 : 1.0;
         setParam('morphFactor', morphBase + audioData.mid * 0.7);
 
-        // Grid Density: ALWAYS audio-reactive
         const densityBase = 15 + (effects.densityBoost || 0);
         setParam('gridDensity', Math.floor(densityBase + audioData.bass * 35));
 
-        // Color shifting: Choreographed pattern + audio modulation
         let hueValue = 0;
         if (effects.colorShift === 'rainbow') {
             hueValue = (currentTime * 60 + audioData.energy * 60) % 360;
@@ -585,16 +667,15 @@ export class MusicVideoChoreographer {
         } else if (effects.colorShift === 'slow') {
             hueValue = (currentTime * 5 + audioData.high * 30) % 360;
         } else if (effects.colorShift === 'freeze') {
-            // Even "freeze" gets audio modulation
             hueValue = (effects.baseHue || 180) + audioData.energy * 30;
         }
         setParam('hue', hueValue % 360);
 
-        // Intensity & Saturation: ALWAYS audio-reactive
         setParam('intensity', 0.5 + audioData.energy * 0.5);
         setParam('saturation', 0.7 + audioData.bass * 0.3);
 
-        // ENABLE BUILT-IN AUDIO REACTIVITY for engines that have it
+        this.applyExtendedEffects({}, { audioData, currentTime, progress });
+
         if (this.currentEngine && this.currentEngine.audioEnabled !== undefined) {
             this.currentEngine.audioEnabled = true;
         }
@@ -610,8 +691,264 @@ export class MusicVideoChoreographer {
         document.getElementById('energy-info').textContent = `Energy: ${(audioData.energy * 100).toFixed(0)}% | Bass: ${(audioData.bass * 100).toFixed(0)}%`;
     }
 
+    refreshTransportAvailability() {
+        const hasAudio = !!this.audio?.src;
+        ['play-btn', 'pause-btn', 'stop-btn'].forEach(id => {
+            const button = document.getElementById(id);
+            if (!button) return;
+            button.disabled = !hasAudio || this.isExporting;
+        });
+
+        if (this.exportUi.button) {
+            this.exportUi.button.disabled = !hasAudio || this.isExporting;
+        }
+    }
+
     updateStatus(message) {
         document.getElementById('status').textContent = message;
+    }
+
+    setExportingState(state) {
+        this.isExporting = state;
+        this.refreshTransportAvailability();
+    }
+
+    updateExportStatus(message) {
+        if (this.exportUi.status) {
+            this.exportUi.status.textContent = message;
+        }
+        if (message) {
+            this.updateStatus(message);
+        }
+    }
+
+    updateExportProgress(progress) {
+        if (this.exportUi.progress) {
+            const safeProgress = Math.max(0, Math.min(1, progress || 0));
+            this.exportUi.progress.style.width = `${Math.round(safeProgress * 100)}%`;
+        }
+    }
+
+    async exportVideo() {
+        if (!this.audio?.src) {
+            this.updateExportStatus('❗ Load an audio file before exporting video.');
+            return;
+        }
+        if (this.isExporting) return;
+
+        this.setExportingState(true);
+        this.updateExportStatus('Preparing video export...');
+        this.updateExportProgress(0);
+
+        try {
+            await this.videoExporter.export({
+                audioElement: this.audio,
+                audioStream: this.exportDestination?.stream,
+                onBeforeStart: async () => {
+                    this.stop();
+                    this.audio.currentTime = 0;
+                    await this.play();
+                },
+                onAfterStop: async () => {
+                    this.stop();
+                },
+                onProgress: progress => this.updateExportProgress(progress),
+                onStatus: status => this.updateExportStatus(status)
+            });
+        } catch (error) {
+            console.error('Video export failed:', error);
+            this.updateExportStatus(`Export failed: ${error.message}`);
+        } finally {
+            this.setExportingState(false);
+            setTimeout(() => this.updateExportProgress(0), 500);
+        }
+    }
+
+    setParameterOnEngine(name, value) {
+        if (this.currentEngine?.parameterManager) {
+            this.currentEngine.parameterManager.setParameter(name, value);
+        } else if (this.currentEngine?.updateParameter) {
+            this.currentEngine.updateParameter(name, value);
+        } else if (this.currentEngine?.updateParameters) {
+            this.currentEngine.updateParameters({ [name]: value });
+        }
+    }
+
+    updateCustomParameterState(newValues = {}) {
+        const keys = new Set([
+            ...Object.keys(this.customParameterState),
+            ...Object.keys(newValues)
+        ]);
+
+        if (!keys.size) return;
+
+        const damping = 0.85;
+        keys.forEach(key => {
+            if (Object.prototype.hasOwnProperty.call(newValues, key)) {
+                this.customParameterState[key] = newValues[key];
+            } else {
+                const previous = this.customParameterState[key] ?? 0;
+                const decayed = Math.abs(previous) < 0.0001 ? 0 : previous * damping;
+                this.customParameterState[key] = decayed;
+            }
+        });
+    }
+
+    syncCustomParametersToEngine(setter = (name, value) => this.setParameterOnEngine(name, value)) {
+        if (!Object.keys(this.customParameterDefinitions).length) return;
+
+        Object.entries(this.customParameterDefinitions).forEach(([name, definition]) => {
+            const value = this.customParameterState[name] ?? 0;
+            const safeValue = Number.isFinite(value) ? value : 0;
+
+            if (this.currentEngine?.parameterManager) {
+                const defs = this.currentEngine.parameterManager.parameterDefs || {};
+                if (!defs[name]) {
+                    this.currentEngine.parameterManager.registerParameter(name, definition, safeValue);
+                } else {
+                    this.currentEngine.parameterManager.extendParameterRange(name, definition);
+                }
+            }
+
+            setter(name, safeValue);
+            this.customParameterState[name] = safeValue;
+        });
+    }
+
+    handleInactiveChoreographyState(audioData, currentTime) {
+        if (!Object.keys(this.customParameterDefinitions).length && !Object.keys(this.customParameterState).length) {
+            return;
+        }
+
+        this.updateCustomParameterState({});
+        this.syncCustomParametersToEngine();
+        this.applyExtendedEffects({}, { audioData, currentTime, progress: 0 });
+    }
+
+    applyExtendedEffects(extended = {}, context = {}) {
+        const container = document.getElementById('vib34dLayers');
+        if (!container) return;
+        const overlay = this.createEffectOverlay();
+
+        const energyLevel = context?.audioData?.energy ?? 0;
+        const timelineProgress = context?.progress ?? 0;
+
+        const cameraOrbit = extended.cameraOrbit;
+        const rollOffset = this.customParameterState.ai_cameraRoll ?? 0;
+
+        if (cameraOrbit) {
+            const xDeg = (cameraOrbit.y ?? 0) * -0.12;
+            const yDeg = (cameraOrbit.x ?? 0) * 0.12;
+            const roll = (cameraOrbit.roll ?? 0) + rollOffset;
+            const zoom = 1 + (((cameraOrbit.zoom ?? 1) - 1) * 0.4);
+            container.style.transform = `perspective(2000px) rotateX(${xDeg.toFixed(3)}deg) rotateY(${yDeg.toFixed(3)}deg) rotateZ(${roll.toFixed(3)}deg) scale(${zoom.toFixed(3)})`;
+        } else {
+            container.style.transform = '';
+        }
+
+        const bloom = this.customParameterState.ai_layerBloom ?? 0;
+        const displacement = this.customParameterState.ai_displacementWarp ?? 0;
+
+        const filterParts = [];
+        if (extended.layerPulse) {
+            const pulse = extended.layerPulse;
+            const brightness = (pulse.content + bloom).toFixed(3);
+            const saturation = (pulse.highlight + bloom * 0.4).toFixed(3);
+            filterParts.push(`brightness(${brightness})`, `saturate(${saturation})`);
+            if (overlay) {
+                const accent = pulse.accent ?? 1;
+                const timelineBoost = 1 + timelineProgress * 0.2;
+                const overlayOpacity = Math.min(1, (0.2 + (accent - 1) * 0.5 + bloom * 0.2) * timelineBoost);
+                overlay.style.opacity = overlayOpacity.toFixed(3);
+                overlay.style.backdropFilter = `blur(${(pulse.blur + displacement * 4).toFixed(1)}px)`;
+            }
+        } else {
+            if (overlay) {
+                const ambientOpacity = Math.min(0.35, energyLevel * 0.18 + bloom * 0.12);
+                overlay.style.opacity = ambientOpacity.toFixed(3);
+                overlay.style.backdropFilter = `blur(${(2 + displacement * 2).toFixed(1)}px)`;
+            }
+        }
+
+        if (extended.glitch) {
+            const glitchIntensity = extended.glitch.intensity ?? 0;
+            const combined = glitchIntensity + displacement * 0.5;
+            filterParts.push(`contrast(${(1 + combined * 0.3).toFixed(3)})`);
+            container.style.setProperty('--ai-glitch-intensity', combined.toFixed(3));
+            if (overlay) {
+                overlay.style.mixBlendMode = glitchIntensity > 0.25 ? 'screen' : 'normal';
+            }
+        } else {
+            container.style.removeProperty('--ai-glitch-intensity');
+            if (!extended.layerPulse) {
+                container.style.filter = '';
+            }
+        }
+
+        if (!filterParts.length) {
+            const baseline = 1 + energyLevel * 0.08 + bloom * 0.05;
+            filterParts.push(`brightness(${baseline.toFixed(3)})`);
+        }
+
+        container.style.filter = filterParts.join(' ');
+
+        if (extended.vignette && overlay) {
+            const rgb = this.hslToRgb(extended.vignette.hue ?? 220, 0.7, 0.55);
+            overlay.style.background = `radial-gradient(circle at center, rgba(${rgb}, ${Math.max(0, 0.12 - (extended.vignette.strength ?? 0) * 0.08)}), rgba(0,0,0,${Math.min(0.85, (extended.vignette.strength ?? 0) + 0.2)}))`;
+        } else if (overlay) {
+            overlay.style.background = '';
+        }
+    }
+
+    createEffectOverlay() {
+        if (this.effectOverlay) {
+            return this.effectOverlay;
+        }
+
+        const container = document.getElementById('visualizer-container');
+        if (!container) return null;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'ai-effect-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.transition = 'opacity 0.4s ease, backdrop-filter 0.4s ease';
+        overlay.style.opacity = '0';
+        overlay.style.mixBlendMode = 'screen';
+        container.appendChild(overlay);
+        this.effectOverlay = overlay;
+        return overlay;
+    }
+
+    hslToRgb(h, s, l) {
+        const hue = ((h % 360) + 360) % 360 / 360;
+        const sat = Math.max(0, Math.min(1, s));
+        const light = Math.max(0, Math.min(1, l));
+
+        if (sat === 0) {
+            const val = Math.round(light * 255);
+            return `${val},${val},${val}`;
+        }
+
+        const q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat;
+        const p = 2 * light - q;
+        const hue2rgb = t => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+            return p;
+        };
+
+        const r = Math.round(hue2rgb(hue + 1 / 3) * 255);
+        const g = Math.round(hue2rgb(hue) * 255);
+        const b = Math.round(hue2rgb(hue - 1 / 3) * 255);
+        return `${r},${g},${b}`;
     }
 
     exportChoreography() {
