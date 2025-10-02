@@ -1003,6 +1003,9 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                     exportingVideo = false;
                     preExportParams = null;
 
+                    // Disable export mode in CanvasManager (allow normal canvas destruction again)
+                    mgr.setExportMode(false);
+
                     if (recordingChunks.length === 0) {
                         console.log('🎥 ❌ NO CHUNKS - Recording failed or was cancelled');
                         stat('Export cancelled or no data recorded');
@@ -1061,6 +1064,9 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 exportingVideo = true;
                 preExportParams = {...baseParams};
                 console.log('🎥 Saved current parameters for export');
+
+                // CRITICAL: Enable export mode in CanvasManager (prevents canvas destruction during system switches)
+                mgr.setExportMode(true);
 
                 // Restart audio from beginning
                 aud.currentTime = 0;

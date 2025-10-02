@@ -7,11 +7,42 @@ export class CanvasManager {
   constructor() {
     this.currentSystem = null;
     this.currentEngine = null;
+    this.isExporting = false; // Flag to prevent canvas destruction during export
   }
 
   async switchToSystem(systemName, engineClasses) {
     console.log(`🔄 DESTROY OLD → CREATE NEW: ${systemName}`);
-    
+
+    // CRITICAL: During export, DON'T destroy canvases (breaks MediaRecorder stream)
+    if (this.isExporting) {
+      console.warn('⚠️  EXPORT IN PROGRESS - Skipping canvas destruction');
+      console.log('🎥 Will hide old canvas and show new one WITHOUT destroying');
+
+      // Just hide/show canvases, don't destroy them
+      const oldCanvases = document.querySelectorAll(`canvas[data-system="${this.currentSystem}"]`);
+      const newCanvases = document.querySelectorAll(`canvas[data-system="${systemName}"]`);
+
+      oldCanvases.forEach(c => c.style.display = 'none');
+      newCanvases.forEach(c => c.style.display = 'block');
+
+      // Destroy old engine but keep canvas alive
+      if (this.currentEngine && this.currentEngine.destroy) {
+        this.currentEngine.destroy();
+      }
+
+      // Create new engine on existing canvas
+      const engine = await this.createFreshEngine(systemName, engineClasses);
+      if (engine && engine.setActive) {
+        engine.setActive(true);
+      }
+
+      this.currentSystem = systemName;
+      this.currentEngine = engine;
+      console.log(`✅ Switched to ${systemName} (export mode - canvas preserved)`);
+      return engine;
+    }
+
+    // NORMAL MODE: Full destruction and recreation
     // STEP 1: DESTROY current engine completely
     if (this.currentEngine) {
       if (this.currentEngine.setActive) {
@@ -22,25 +53,83 @@ export class CanvasManager {
       }
       console.log('💥 Old engine destroyed');
     }
-    
-    // STEP 2: DESTROY old WebGL contexts 
+
+    // STEP 2: DESTROY old WebGL contexts
     this.destroyOldWebGLContexts();
-    
+
     // STEP 3: DESTROY all canvases + CREATE 5 fresh ones
     this.destroyAllCanvasesAndCreateFresh(systemName);
-    
+
     // STEP 4: CREATE fresh engine
     const engine = await this.createFreshEngine(systemName, engineClasses);
-    
+
     // STEP 5: Start new engine
     if (engine && engine.setActive) {
       engine.setActive(true);
     }
-    
+
     this.currentSystem = systemName;
     this.currentEngine = engine;
     console.log(`✅ DESTROY → CREATE complete: ${systemName} ready`);
     return engine;
+  }
+
+  setExportMode(isExporting) {
+    this.isExporting = isExporting;
+    console.log(`🎥 Export mode: ${isExporting ? 'ENABLED (preserve canvases)' : 'DISABLED (normal destruction)'}`);
+
+    // If enabling export mode, pre-create canvases for ALL systems
+    if (isExporting) {
+      this.prepareAllSystemsForExport();
+    }
+  }
+
+  prepareAllSystemsForExport() {
+    console.log('🎥 Pre-creating canvases for ALL systems (for sequence switching during export)');
+
+    const systems = ['faceted', 'quantum', 'holographic'];
+    systems.forEach(systemName => {
+      // Skip current system (already has canvases)
+      if (systemName === this.currentSystem) return;
+
+      const targetId = systemName === 'faceted' ? 'vib34dLayers' : `${systemName}Layers`;
+      const targetContainer = document.getElementById(targetId);
+
+      if (!targetContainer) {
+        console.error(`❌ Container ${targetId} not found`);
+        return;
+      }
+
+      // Check if canvases already exist
+      const existing = targetContainer.querySelectorAll('canvas');
+      if (existing.length > 0) {
+        console.log(`  ✅ ${systemName}: Already has ${existing.length} canvases`);
+        return;
+      }
+
+      // Create canvases for this system
+      const canvasIds = this.getCanvasIdsForSystem(systemName);
+
+      canvasIds.forEach((canvasId, index) => {
+        const canvas = document.createElement('canvas');
+        canvas.id = canvasId;
+        canvas.dataset.system = systemName;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.zIndex = String(index);
+        targetContainer.appendChild(canvas);
+      });
+
+      // Hide this container (will be shown when system switches)
+      targetContainer.style.display = 'none';
+
+      console.log(`  ✅ ${systemName}: Created ${canvasIds.length} canvases (hidden, ready for switching)`);
+    });
+
+    console.log('🎥 All systems prepared for export - canvases will persist during system switches');
   }
 
   destroyOldWebGLContexts() {
