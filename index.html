@@ -255,6 +255,8 @@
         let recordingStartTime = 0;
         let recordingChunks = [];
         let recordingInterval = null;
+        let exportingVideo = false;
+        let preExportParams = null;
 
         const cls = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
 
@@ -866,7 +868,9 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 // LOG PARSED SEQUENCES
                 console.log(`🎬 PARSED ${sequences.length} SEQUENCES:`);
                 sequences.forEach((seq, i) => {
-                    console.log(`  ${i + 1}. ${seq.name} (${seq.time}s-${seq.time + seq.dur}s) [${seq.sys || 'faceted'}]`);
+                    const startTime = Number(seq.time) || 0;
+                    const duration = Number(seq.dur) || 10;
+                    console.log(`  ${i + 1}. ${seq.name} (${startTime.toFixed(1)}s-${(startTime + duration).toFixed(1)}s) [${seq.sys || 'faceted'}]`);
                     console.log(`     - Parameters: ${Object.keys(seq.par || {}).length} params`, seq.par);
                     console.log(`     - densityPulse: ${seq.densityPulse ? `[${seq.densityPulse.slice(0, 4).join(', ')}...]` : 'MISSING ❌'}`);
                     console.log(`     - colorPulse: ${seq.colorPulse ? `[${seq.colorPulse.slice(0, 4).join(', ')}...]` : 'MISSING ❌'}`);
@@ -956,10 +960,11 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                     ...exportDest.stream.getAudioTracks()
                 ]);
 
-                // Create MediaRecorder
+                // Create MediaRecorder with optimized settings
                 const recorder = new MediaRecorder(combinedStream, {
                     mimeType: mimeType,
-                    videoBitsPerSecond: 8000000
+                    videoBitsPerSecond: 2500000,  // Reduced from 8Mbps to 2.5Mbps (smaller files)
+                    audioBitsPerSecond: 128000     // 128kbps audio (good quality, reasonable size)
                 });
 
                 // Store recorder globally for manual control
@@ -993,8 +998,10 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                     console.log('🎥 Disconnecting audio tap...');
                     anl.disconnect(exportDest);
 
-                    // Reset global state
+                    // Reset export state
                     activeRecorder = null;
+                    exportingVideo = false;
+                    preExportParams = null;
 
                     if (recordingChunks.length === 0) {
                         console.log('🎥 ❌ NO CHUNKS - Recording failed or was cancelled');
@@ -1050,9 +1057,17 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 // Update UI every 100ms
                 recordingInterval = setInterval(updateRecordingUI, 100);
 
+                // Save current parameters before export (prevents color change)
+                exportingVideo = true;
+                preExportParams = {...baseParams};
+                console.log('🎥 Saved current parameters for export');
+
                 // Restart audio from beginning
                 aud.currentTime = 0;
                 beatCount = 0;
+
+                // Restore parameters immediately after reset
+                baseParams = {...preExportParams};
 
                 console.log('🎥 Starting audio playback...');
                 await aud.play();
