@@ -903,29 +903,33 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
 
             stat('Preparing export...');
 
-            // Get the currently VISIBLE canvas
-            const allCanvases = Array.from(document.querySelectorAll('canvas'));
-            console.log('🎥 Found canvases:', allCanvases.map(c => ({
-                id: c.id,
-                visible: c.offsetParent !== null,
-                width: c.offsetWidth,
-                height: c.offsetHeight
-            })));
+            // SMART SOLUTION: Create composite canvas that continuously copies from active system
+            // This persists even when system canvases are destroyed/recreated during switches
+            const compositeCanvas = document.createElement('canvas');
+            compositeCanvas.width = window.innerWidth * Math.min(window.devicePixelRatio || 1, 2);
+            compositeCanvas.height = window.innerHeight * Math.min(window.devicePixelRatio || 1, 2);
+            const compositeCtx = compositeCanvas.getContext('2d');
 
-            const visibleCanvas = allCanvases.find(c => c.offsetParent !== null && c.offsetWidth > 0);
+            console.log('🎥 Created composite canvas:', compositeCanvas.width, 'x', compositeCanvas.height);
 
-            if (!visibleCanvas) {
-                alert('❌ No visible canvas found! Switch to a system first (Faceted/Quantum/Holographic).');
-                return;
-            }
+            // Function to continuously copy from currently visible system canvas
+            let exportAnimationFrame;
+            const copyActiveCanvasToComposite = () => {
+                // Find currently visible canvas
+                const allCanvases = Array.from(document.querySelectorAll('canvas'));
+                const activeCanvas = allCanvases.find(c => c.offsetParent !== null && c.offsetWidth > 0);
 
-            console.log('🎥 Recording canvas:', visibleCanvas.id, visibleCanvas.width, 'x', visibleCanvas.height);
+                if (activeCanvas) {
+                    // Copy to composite - this continues even when systems switch
+                    compositeCtx.drawImage(activeCanvas, 0, 0, compositeCanvas.width, compositeCanvas.height);
+                }
 
-            // Check canvas has content
-            if (visibleCanvas.width === 0 || visibleCanvas.height === 0) {
-                alert('❌ Canvas has no content. Make sure visualization is running.');
-                return;
-            }
+                exportAnimationFrame = requestAnimationFrame(copyActiveCanvasToComposite);
+            };
+
+            // Start copying loop
+            copyActiveCanvasToComposite();
+            console.log('🎥 Composite canvas copying started - will survive system switches');
 
             // Try different MediaRecorder mimeTypes for compatibility
             let mimeType = 'video/webm;codecs=vp9';
@@ -945,8 +949,8 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
             console.log('🎥 Using mimeType:', mimeType);
 
             try {
-                // Capture canvas stream at 60fps
-                const videoStream = visibleCanvas.captureStream(60);
+                // Capture COMPOSITE canvas stream at 60fps (survives system switches)
+                const videoStream = compositeCanvas.captureStream(60);
 
                 // Create destination to tap audio from EXISTING audio context
                 const exportDest = ctx.createMediaStreamDestination();
@@ -994,6 +998,13 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                         recordingInterval = null;
                     }
 
+                    // Stop composite canvas copying
+                    if (exportAnimationFrame) {
+                        cancelAnimationFrame(exportAnimationFrame);
+                        exportAnimationFrame = null;
+                        console.log('🎥 Stopped composite canvas copying');
+                    }
+
                     // Clean up audio tap
                     console.log('🎥 Disconnecting audio tap...');
                     anl.disconnect(exportDest);
@@ -1002,9 +1013,6 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                     activeRecorder = null;
                     exportingVideo = false;
                     preExportParams = null;
-
-                    // Disable export mode in CanvasManager (allow normal canvas destruction again)
-                    mgr.setExportMode(false);
 
                     if (recordingChunks.length === 0) {
                         console.log('🎥 ❌ NO CHUNKS - Recording failed or was cancelled');
@@ -1064,9 +1072,6 @@ Return ONLY the JSON array with 20-30 sequences. EVERY sequence MUST have intric
                 exportingVideo = true;
                 preExportParams = {...baseParams};
                 console.log('🎥 Saved current parameters for export');
-
-                // CRITICAL: Enable export mode in CanvasManager (prevents canvas destruction during system switches)
-                mgr.setExportMode(true);
 
                 // Restart audio from beginning
                 aud.currentTime = 0;
