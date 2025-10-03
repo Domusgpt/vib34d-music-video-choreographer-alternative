@@ -5,24 +5,124 @@
  */
 
 export class GeometryLibrary {
+    static baseGeometries = [
+        'TETRAHEDRON',
+        'HYPERCUBE',
+        'SPHERE',
+        'TORUS',
+        'KLEIN BOTTLE',
+        'FRACTAL',
+        'WAVE',
+        'CRYSTAL'
+    ];
+
+    static customGeometries = [];
+
+    static listeners = new Set();
+    static version = 0;
+
     static getGeometryNames() {
-        return [
-            'TETRAHEDRON',
-            'HYPERCUBE', 
-            'SPHERE',
-            'TORUS',
-            'KLEIN BOTTLE',
-            'FRACTAL',
-            'WAVE',
-            'CRYSTAL'
-        ];
+        return [...this.baseGeometries, ...this.customGeometries];
     }
-    
+
     static getGeometryName(type) {
         const names = this.getGeometryNames();
         return names[type] || 'UNKNOWN';
     }
-    
+
+    static normalizeName(name) {
+        if (typeof name !== 'string') {
+            return '';
+        }
+        return name.trim().replace(/\s+/g, ' ');
+    }
+
+    static hasGeometry(name) {
+        const normalized = this.normalizeName(name).toUpperCase();
+        if (!normalized) return false;
+        return this.getGeometryNames().some(item => item.toUpperCase() === normalized);
+    }
+
+    static registerGeometry(name) {
+        const normalized = this.normalizeName(name);
+        if (!normalized) {
+            return false;
+        }
+
+        if (this.hasGeometry(normalized)) {
+            return false;
+        }
+
+        this.customGeometries.push(normalized.toUpperCase());
+        this.version += 1;
+        this.notifyListeners();
+        return true;
+    }
+
+    static clearCustomGeometries() {
+        if (!this.customGeometries.length) {
+            return;
+        }
+
+        this.customGeometries = [];
+        this.version += 1;
+        this.notifyListeners();
+    }
+
+    static replaceCustomGeometries(list = []) {
+        const normalized = Array.isArray(list) ? list : [list];
+        const newEntries = normalized
+            .map(name => this.normalizeName(name))
+            .filter(Boolean)
+            .map(name => name.toUpperCase());
+
+        const changed = newEntries.length !== this.customGeometries.length
+            || newEntries.some((entry, index) => entry !== this.customGeometries[index]);
+
+        if (!changed) {
+            return false;
+        }
+
+        this.customGeometries = newEntries;
+        this.version += 1;
+        this.notifyListeners();
+        return true;
+    }
+
+    static subscribe(listener) {
+        if (typeof listener !== 'function') {
+            return () => {};
+        }
+
+        this.listeners.add(listener);
+        try {
+            listener({
+                names: this.getGeometryNames(),
+                version: this.version
+            });
+        } catch (err) {
+            console.warn('[GeometryLibrary] listener threw during subscribe', err);
+        }
+
+        return () => {
+            this.listeners.delete(listener);
+        };
+    }
+
+    static notifyListeners() {
+        const payload = {
+            names: this.getGeometryNames(),
+            version: this.version
+        };
+        this.listeners.forEach(listener => {
+            try {
+                listener(payload);
+            } catch (err) {
+                console.warn('[GeometryLibrary] listener failed', err);
+            }
+        });
+    }
+
     /**
      * Get variation parameters for specific geometry and level
      */
