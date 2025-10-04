@@ -30,7 +30,7 @@ export class VIB34DIntegratedEngine {
         
         // Current state
         this.currentVariation = 0;
-        this.totalVariations = 100; // 30 default + 70 custom
+        this.totalVariations = this.variationManager?.totalVariations || 0;
         
         // Mouse interaction state
         this.mouseX = 0.5;
@@ -519,7 +519,11 @@ export class VIB34DIntegratedEngine {
                 visualizer.destroy();
             }
         });
-        
+
+        if (this.variationManager?.destroy) {
+            this.variationManager.destroy();
+        }
+
         console.log('🔄 VIB34D Engine destroyed');
     }
 }

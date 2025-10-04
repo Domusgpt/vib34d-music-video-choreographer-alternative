@@ -3,8 +3,13 @@
  * Unified parameter control for both holographic and polytopal systems
  */
 
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+
 export class ParameterManager {
     constructor() {
+        const geometryNames = GeometryLibrary.getGeometryNames();
+        const defaultGeometryIndex = geometryNames.length > 0 ? 0 : -1;
+
         // Default parameter set combining both systems
         this.params = {
             // Current variation
@@ -26,9 +31,9 @@ export class ParameterManager {
             saturation: 0.8,   // Color saturation (0 to 1)
             
             // Geometry selection
-            geometry: 0        // Current geometry type (0-7)
+            geometry: Math.max(0, defaultGeometryIndex)        // Current geometry type (0-n)
         };
-        
+
         // Parameter definitions for validation and UI
         this.parameterDefs = {
             variation: { min: 0, max: 99, step: 1, type: 'int' },
@@ -43,11 +48,84 @@ export class ParameterManager {
             hue: { min: 0, max: 360, step: 1, type: 'int' },
             intensity: { min: 0, max: 1, step: 0.01, type: 'float' },
             saturation: { min: 0, max: 1, step: 0.01, type: 'float' },
-            geometry: { min: 0, max: 7, step: 1, type: 'int' }
+            geometry: { min: 0, max: Math.max(geometryNames.length - 1, 0), step: 1, type: 'int' }
         };
         
+        // Track parameters that were introduced dynamically
+        this.dynamicParameters = new Set();
+
+        // Variation metadata updated by VariationManager
+        this.defaultVariationDefinitions = [];
+        this.customVariationCount = 70;
+        this.totalVariationCount = (this.parameterDefs.variation?.max ?? 99) + 1;
+
         // Default parameter backup for reset
         this.defaults = { ...this.params };
+    }
+
+    updateGeometryRange(geometryCount = GeometryLibrary.getGeometryNames().length) {
+        const maxIndex = Math.max(geometryCount - 1, 0);
+        if (!this.parameterDefs.geometry) {
+            this.parameterDefs.geometry = { min: 0, max: maxIndex, step: 1, type: 'int' };
+        } else {
+            this.parameterDefs.geometry.min = 0;
+            this.parameterDefs.geometry.max = maxIndex;
+            this.parameterDefs.geometry.step = 1;
+            this.parameterDefs.geometry.type = 'int';
+        }
+
+        if (this.params.geometry > maxIndex) {
+            this.params.geometry = maxIndex;
+        }
+    }
+
+    updateVariationMetadata({ defaults = [], customCount, totalVariations } = {}) {
+        if (Array.isArray(defaults)) {
+            this.defaultVariationDefinitions = defaults.map(definition => ({
+                geometryIndex: typeof definition.geometryIndex === 'number' ? definition.geometryIndex : 0,
+                level: typeof definition.level === 'number' ? definition.level : 0,
+                label: definition.label || '',
+                displayLabel: definition.displayLabel || definition.label || '',
+                shortLabel: definition.shortLabel || '',
+                cssClass: definition.cssClass || 'geometry'
+            }));
+        }
+
+        if (typeof customCount === 'number') {
+            this.customVariationCount = Math.max(0, customCount);
+        }
+
+        if (typeof totalVariations === 'number') {
+            this.totalVariationCount = Math.max(0, totalVariations);
+        } else {
+            this.totalVariationCount = this.defaultVariationDefinitions.length + this.customVariationCount;
+        }
+
+        this.updateVariationRange(this.totalVariationCount);
+        this.updateVariationInfo();
+    }
+
+    updateVariationRange(totalVariations = this.totalVariationCount) {
+        const maxIndex = Math.max((typeof totalVariations === 'number' ? totalVariations : this.totalVariationCount) - 1, 0);
+
+        if (!this.parameterDefs.variation) {
+            this.parameterDefs.variation = { min: 0, max: maxIndex, step: 1, type: 'int' };
+        } else {
+            this.parameterDefs.variation.min = 0;
+            this.parameterDefs.variation.max = maxIndex;
+            this.parameterDefs.variation.step = 1;
+            this.parameterDefs.variation.type = 'int';
+        }
+
+        const slider = typeof document !== 'undefined'
+            ? document.getElementById('variationSlider')
+            : null;
+
+        if (slider) {
+            slider.min = 0;
+            slider.max = maxIndex;
+            slider.step = 1;
+        }
     }
     
     /**
@@ -63,19 +141,24 @@ export class ParameterManager {
     setParameter(name, value) {
         if (this.parameterDefs[name]) {
             const def = this.parameterDefs[name];
-            
+
+            if (def.allowOverflow) {
+                this.params[name] = value;
+                return true;
+            }
+
             // Clamp value to valid range
             value = Math.max(def.min, Math.min(def.max, value));
-            
+
             // Apply type conversion
             if (def.type === 'int') {
                 value = Math.round(value);
             }
-            
+
             this.params[name] = value;
             return true;
         }
-        
+
         console.warn(`Unknown parameter: ${name}`);
         return false;
     }
@@ -94,6 +177,91 @@ export class ParameterManager {
      */
     getParameter(name) {
         return this.params[name];
+    }
+
+    /**
+     * Alias used by new choreography bridge
+     */
+    getParameterValue(name) {
+        return this.getParameter(name);
+    }
+
+    /**
+     * Register parameters introduced by AI choreography or external systems
+     */
+    registerDynamicParameter(name, definition = {}) {
+        if (!name) {
+            return;
+        }
+
+        let minValue = definition.min;
+        let maxValue = definition.max;
+
+        if (Array.isArray(definition.range)) {
+            const [rangeMin, rangeMax] = definition.range;
+            if (minValue === undefined) minValue = rangeMin;
+            if (maxValue === undefined) maxValue = rangeMax;
+        } else if (definition.range && typeof definition.range === 'object') {
+            if (minValue === undefined) {
+                minValue = definition.range.min ?? definition.range.lower;
+            }
+            if (maxValue === undefined) {
+                maxValue = definition.range.max ?? definition.range.upper;
+            }
+        }
+
+        const {
+            type = 'float',
+            defaultValue = 0,
+            allowOverflow = true
+        } = definition;
+
+        const step = type === 'int' ? 1 : (definition.step ?? 0.01);
+        const min = minValue ?? Number.NEGATIVE_INFINITY;
+        const max = maxValue ?? Number.POSITIVE_INFINITY;
+
+        if (!(name in this.params)) {
+            this.params[name] = defaultValue;
+        }
+
+        this.parameterDefs[name] = {
+            min,
+            max,
+            step,
+            type,
+            allowOverflow
+        };
+
+        this.dynamicParameters.add(name);
+    }
+
+    /**
+     * External writers can opt into overflow behaviour or register new params
+     */
+    setParameterExternal(name, value, options = {}) {
+        const {
+            allowOverflow = false,
+            register = false,
+            definition = {},
+            defaultValue = 0
+        } = options;
+
+        if (register && !this.parameterDefs[name]) {
+            this.registerDynamicParameter(name, {
+                ...definition,
+                defaultValue,
+                allowOverflow: allowOverflow || definition.allowOverflow
+            });
+        } else if (allowOverflow && this.parameterDefs[name] && !this.parameterDefs[name].allowOverflow) {
+            this.parameterDefs[name].allowOverflow = true;
+        }
+
+        if (allowOverflow || (this.parameterDefs[name] && this.parameterDefs[name].allowOverflow)) {
+            this.params[name] = value;
+            return true;
+        }
+
+        return this.setParameter(name, value);
     }
     
     /**
@@ -177,23 +345,29 @@ export class ParameterManager {
     }
     
     updateVariationInfo() {
-        const variationDisplay = document.getElementById('currentVariationDisplay');
-        if (variationDisplay) {
-            const geometryNames = [
-                'TETRAHEDRON LATTICE', 'HYPERCUBE LATTICE', 'SPHERE LATTICE', 'TORUS LATTICE',
-                'KLEIN BOTTLE LATTICE', 'FRACTAL LATTICE', 'WAVE LATTICE', 'CRYSTAL LATTICE'
-            ];
-            
-            const geometryType = Math.floor(this.params.variation / 4);
-            const geometryLevel = (this.params.variation % 4) + 1;
-            const geometryName = geometryNames[geometryType] || 'CUSTOM VARIATION';
-            
-            variationDisplay.textContent = `${this.params.variation + 1} - ${geometryName}`;
-            
-            if (this.params.variation < 30) {
-                variationDisplay.textContent += ` ${geometryLevel}`;
-            }
+        const variationDisplay = typeof document !== 'undefined'
+            ? document.getElementById('currentVariationDisplay')
+            : null;
+
+        if (!variationDisplay) {
+            return;
         }
+
+        const variationIndex = this.params.variation ?? 0;
+        const defaultCount = this.defaultVariationDefinitions.length;
+        let label;
+
+        if (variationIndex < defaultCount) {
+            const definition = this.defaultVariationDefinitions[variationIndex];
+            label = definition?.displayLabel || definition?.label || `Variation ${variationIndex + 1}`;
+        } else if (variationIndex < this.totalVariationCount) {
+            const customIndex = variationIndex - defaultCount;
+            label = `Custom Variation ${customIndex + 1}`;
+        } else {
+            label = 'Variation';
+        }
+
+        variationDisplay.textContent = `${variationIndex + 1} - ${label}`;
     }
     
     updateGeometryButtons() {
@@ -258,29 +432,43 @@ export class ParameterManager {
      * Generate variation-specific parameters
      */
     generateVariationParameters(variationIndex) {
-        if (variationIndex < 30) {
-            // Default variations with consistent patterns
-            const geometryType = Math.floor(variationIndex / 4);
-            const level = variationIndex % 4;
-            
-            return {
-                geometry: geometryType,
-                gridDensity: 8 + (level * 4),
-                morphFactor: 0.5 + (level * 0.3),
-                chaos: level * 0.15,
-                speed: 0.8 + (level * 0.2),
-                hue: (geometryType * 45 + level * 15) % 360,
-                rot4dXW: (level - 1.5) * 0.5,
-                rot4dYW: (geometryType % 2) * 0.3,
-                rot4dZW: ((geometryType + level) % 3) * 0.2,
-                dimension: 3.2 + (level * 0.2)
-            };
-        } else {
-            // Custom variations - return current parameters
-            return { ...this.params };
+        if (variationIndex < this.defaultVariationDefinitions.length) {
+            const definition = this.defaultVariationDefinitions[variationIndex];
+            if (definition) {
+                const geometryIndex = definition.geometryIndex ?? 0;
+                const level = definition.level ?? 0;
+                const baseParams = GeometryLibrary.getVariationParameters(geometryIndex, level);
+                const rotations = this.computeDefaultRotations(geometryIndex, level);
+
+                return {
+                    geometry: geometryIndex,
+                    gridDensity: baseParams.gridDensity,
+                    morphFactor: baseParams.morphFactor,
+                    chaos: baseParams.chaos,
+                    speed: baseParams.speed,
+                    hue: baseParams.hue,
+                    rot4dXW: rotations.rot4dXW,
+                    rot4dYW: rotations.rot4dYW,
+                    rot4dZW: rotations.rot4dZW,
+                    dimension: 3.0 + (level * 0.25)
+                };
+            }
         }
+
+        return { ...this.params };
     }
-    
+
+    computeDefaultRotations(geometryIndex, level) {
+        const normalizedLevel = typeof level === 'number' ? level : 0;
+        const centeredLevel = normalizedLevel - 1.5;
+
+        return {
+            rot4dXW: centeredLevel * 0.45,
+            rot4dYW: ((geometryIndex % 3) - 1) * 0.35,
+            rot4dZW: (((geometryIndex + normalizedLevel) % 4) - 1.5) * 0.28
+        };
+    }
+
     /**
      * Apply variation to current parameters
      */
