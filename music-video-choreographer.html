@@ -662,6 +662,12 @@
         // Initialize choreographer
         const choreographer = new MusicVideoChoreographer();
 
+        window.addEventListener('beforeunload', () => {
+            if (choreographer && typeof choreographer.destroy === 'function') {
+                choreographer.destroy();
+            }
+        });
+
         // Handle window resize
         window.addEventListener('resize', () => {
             document.querySelectorAll('canvas').forEach(canvas => {
