@@ -417,8 +417,9 @@
         <div class="section">
             <h3>🔷 Geometry</h3>
             <div class="param-row">
-                <label>Type <span class="param-value" id="v-geometry">0</span></label>
-                <input type="range" id="geometry" min="0" max="7" value="0" oninput="window.updateParam('geometry', this.value)">
+                <label>Type <span class="param-value" id="v-geometry">--</span></label>
+                <input type="range" id="geometry" min="0" max="0" value="0" oninput="window.updateParam('geometry', this.value)">
+                <div class="geometry-legend" id="geometry-legend" style="margin-top:6px;font-size:10px;line-height:1.4;display:flex;flex-wrap:wrap;gap:4px;opacity:0.8;"></div>
             </div>
         </div>
 
@@ -528,6 +529,7 @@
         import { QuantumEngine } from './src/quantum/QuantumEngine.js';
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
         import { CanvasManager } from './src/core/CanvasManager.js';
+        import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
 
         // System state
         let canvasManager = new CanvasManager();
@@ -552,10 +554,98 @@
 
         let reactivity = { bassDensity: 50, midMorph: 50, highChaos: 60 };
         let sequences = [];
+        let geometryNames = GeometryLibrary.getGeometryNames();
+        let unsubscribeGeometry = null;
+
+        function geometryCount() {
+            geometryNames = GeometryLibrary.getGeometryNames();
+            return geometryNames.length;
+        }
+
+        function clampGeometry(index) {
+            const count = geometryCount();
+            if (count === 0) return 0;
+
+            const numeric = Number(index);
+            const value = Number.isFinite(numeric) ? numeric : 0;
+            return Math.max(0, Math.min(count - 1, Math.round(value)));
+        }
+
+        function geometryLabel(index) {
+            if (!geometryNames.length) {
+                return `${index ?? 0}`;
+            }
+            const normalized = clampGeometry(index ?? 0);
+            const name = geometryNames[normalized];
+            return name ? `${normalized} · ${name}` : `${normalized}`;
+        }
+
+        function updateGeometryReadout(index) {
+            const readout = document.getElementById('v-geometry');
+            if (!readout) return;
+
+            if (index === undefined || index === null || Number.isNaN(index)) {
+                readout.textContent = '--';
+                return;
+            }
+
+            readout.textContent = geometryLabel(index);
+        }
+
+        function updateGeometryLegend() {
+            const legend = document.getElementById('geometry-legend');
+            if (!legend) return;
+
+            if (!geometryNames.length) {
+                legend.innerHTML = '<span style="opacity:0.6;">No geometries available</span>';
+                return;
+            }
+
+            legend.innerHTML = geometryNames
+                .map((name, idx) => `<span style="background:rgba(0,255,255,0.08);padding:2px 4px;border-radius:3px;">${idx}: ${name}</span>`)
+                .join('');
+        }
+
+        function refreshGeometryControls() {
+            geometryCount();
+            const slider = document.getElementById('geometry');
+            const normalized = clampGeometry(params.geometry ?? 0);
+            params.geometry = normalized;
+
+            if (slider) {
+                const maxIndex = Math.max(geometryNames.length - 1, 0);
+                slider.max = maxIndex;
+                slider.value = normalized;
+            }
+
+            updateGeometryReadout(normalized);
+            updateGeometryLegend();
+        }
+
+        function geometryRangeHint() {
+            const count = geometryCount();
+            if (count <= 1) return '0 (register new shapes as needed)';
+            return `0-${count - 1}`;
+        }
 
         const engineClasses = { VIB34DIntegratedEngine, QuantumEngine, RealHolographicSystem };
 
         // Initialize
+        unsubscribeGeometry = GeometryLibrary.subscribe(({ names }) => {
+            geometryNames = Array.isArray(names) ? names : GeometryLibrary.getGeometryNames();
+            refreshGeometryControls();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (typeof unsubscribeGeometry === 'function') {
+                try { unsubscribeGeometry(); }
+                catch (err) { console.warn('Geometry unsubscribe failed', err); }
+                unsubscribeGeometry = null;
+            }
+        });
+
+        refreshGeometryControls();
+
         (async function() {
             currentEngine = await canvasManager.switchToSystem('faceted', engineClasses);
             document.getElementById('audio-file').addEventListener('change', loadAudio);
@@ -563,6 +653,7 @@
             audio.addEventListener('ended', () => window.stop());
             startVisual();
             setStatus('Ready');
+            applyAllParams();
         })();
 
         function setStatus(msg) {
@@ -573,14 +664,25 @@
             currentEngine = await canvasManager.switchToSystem(sys, engineClasses);
             currentSystem = sys;
             document.querySelectorAll('.system-pill').forEach(p => p.classList.toggle('active', p.dataset.system === sys));
+            refreshGeometryControls();
             applyAllParams();
             setStatus(`Switched to ${sys.toUpperCase()}`);
         };
 
         window.updateParam = function(param, val) {
+            if (param === 'geometry') {
+                const normalized = clampGeometry(parseFloat(val));
+                params.geometry = normalized;
+                const slider = document.getElementById('geometry');
+                if (slider) slider.value = normalized;
+                updateGeometryReadout(normalized);
+                applyParam(param, normalized);
+                return;
+            }
+
             params[param] = parseFloat(val);
             document.getElementById('v-' + param).textContent = param === 'hue' ? val + '°' :
-                param === 'geometry' || param === 'gridDensity' ? parseInt(val) : parseFloat(val).toFixed(2);
+                (param === 'gridDensity' ? parseInt(val) : parseFloat(val).toFixed(2));
             applyParam(param, params[param]);
         };
 
@@ -603,7 +705,10 @@
         window.randomize = function() {
             Object.keys(params).forEach(p => {
                 let val;
-                if (p === 'geometry') val = Math.floor(Math.random() * 8);
+                if (p === 'geometry') {
+                    const count = Math.max(geometryNames.length, 1);
+                    val = Math.floor(Math.random() * count);
+                }
                 else if (p.startsWith('rot4d')) val = Math.random() * 12.56 - 6.28;
                 else if (p === 'gridDensity') val = 5 + Math.random() * 95;
                 else if (p === 'morphFactor') val = Math.random() * 2;
@@ -750,13 +855,14 @@
 
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const geometryRange = geometryRangeHint();
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{
                             parts: [{
-                                text: `You control a 4D holographic music visualization system. Create a visual choreography for: "${prompt}"\n\nGenerate 3-5 sequences with these parameters:\n- time (seconds from start)\n- duration (seconds)\n- system (faceted, quantum, or holographic)\n- geometry (0-7)\n- rot4dXW, rot4dYW, rot4dZW (-6.28 to 6.28)\n- gridDensity (5-100), morphFactor (0-2), chaos (0-1), speed (0.1-3)\n- hue (0-360), intensity (0-1), saturation (0-1)\n\nReturn only valid JSON array.`
+                                text: `You control a 4D holographic music visualization system. Create a visual choreography for: "${prompt}"\n\nGenerate 3-5 sequences with these parameters:\n- time (seconds from start)\n- duration (seconds)\n- system (faceted, quantum, or holographic)\n- geometry index (${geometryRange}, auto-expand with GeometryLibrary.registerGeometry when inventing new shapes)\n- rot4dXW, rot4dYW, rot4dZW (-6.28 to 6.28)\n- gridDensity (5-100), morphFactor (0-2), chaos (0-1), speed (0.1-3)\n- hue (0-360), intensity (0-1), saturation (0-1)\n\nReturn only valid JSON array.`
                             }]
                         }]
                     })
