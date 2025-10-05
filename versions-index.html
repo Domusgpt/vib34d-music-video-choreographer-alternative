@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIB34D Music Video Choreographer - All Versions Catalog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: linear-gradient(135deg, #000000 0%, #0a0a1a 50%, #000000 100%);
+            color: #0ff;
+            min-height: 100vh;
+            padding: 40px 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            padding: 40px 20px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 2px solid #0ff;
+            border-radius: 20px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+        }
+
+        h1 {
+            font-size: 3em;
+            background: linear-gradient(90deg, #0ff, #f0f, #0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #f0f;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            color: #0ff;
+            opacity: 0.8;
+            font-size: 0.9em;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+
+        .search-container {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        #searchInput {
+            width: 100%;
+            max-width: 600px;
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #0ff;
+            border-radius: 10px;
+            color: #0ff;
+            font-family: 'Orbitron', monospace;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        #searchInput:focus {
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            border-color: #f0f;
+        }
+
+        .category {
+            margin-bottom: 50px;
+        }
+
+        .category-title {
+            font-size: 2em;
+            color: #f0f;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #0ff;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .category-icon {
+            font-size: 1.2em;
+        }
+
+        .versions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .version-card {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            padding: 25px;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .version-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(0, 255, 255, 0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.6s;
+        }
+
+        .version-card:hover::before {
+            left: 100%;
+        }
+
+        .version-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 255, 255, 0.4);
+            border-color: #f0f;
+        }
+
+        .version-title {
+            font-size: 1.1em;
+            color: #0ff;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .version-description {
+            color: #aaa;
+            font-size: 0.85em;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            min-height: 60px;
+        }
+
+        .version-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .tag {
+            padding: 4px 10px;
+            background: rgba(255, 0, 255, 0.2);
+            border: 1px solid #f0f;
+            border-radius: 5px;
+            font-size: 0.7em;
+            color: #f0f;
+        }
+
+        .tag.primary {
+            background: rgba(0, 255, 255, 0.2);
+            border-color: #0ff;
+            color: #0ff;
+        }
+
+        .version-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            background: linear-gradient(135deg, #0a4d68, #0ff);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            text-align: center;
+            display: block;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #4a0a68, #f0f);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 40px 0;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #f0f;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            color: #0ff;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            color: #f0f;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        footer {
+            margin-top: 80px;
+            text-align: center;
+            padding: 30px;
+            border-top: 2px solid #0ff;
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            .versions-grid {
+                grid-template-columns: 1fr;
+            }
+            .category-title {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌟 VIB34D Music Video Choreographer</h1>
+            <div class="subtitle">Complete Version Archive & Documentation</div>
+            <div class="description">
+                This is the comprehensive catalog of all HTML versions in the VIB34D Music Video Choreographer project.
+                Each version represents a different iteration, feature set, or experimental approach to 4D holographic
+                music visualization and audio-reactive choreography.
+            </div>
+        </header>
+
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="🔍 Search versions by name, description, or tags...">
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalVersions">57</div>
+                <div class="stat-label">Total Versions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">4</div>
+                <div class="stat-label">Categories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">1</div>
+                <div class="stat-label">Production Ready</div>
+            </div>
+        </div>
+
+        <!-- PRODUCTION VERSIONS -->
+        <div class="category">
+            <h2 class="category-title">
+                <span class="category-icon">🚀</span>
+                Production & Master Versions
+            </h2>
+            <div class="versions-grid">
+                <div class="version-card" data-tags="production master main stable">
+                    <div class="version-title">index.html</div>
+                    <div class="version-description">
+                        Current production version - VIB34D MASTER Music Video Choreographer with full holographic layers,
+                        minimizable controls, and all core features. This is the main entry point.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Production</span>
+                        <span class="tag">Master</span>
+                        <span class="tag">Stable</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="final production master complete">
+                    <div class="version-title">index-FINAL.html</div>
+                    <div class="version-description">
+                        Finalized master version with all systems integrated, polished UI, and complete feature set.
+                        Represents a stable milestone build.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Final</span>
+                        <span class="tag">Complete</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-FINAL.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="master production backup">
+                    <div class="version-title">index-MASTER.html</div>
+                    <div class="version-description">
+                        Master reference version - comprehensive implementation with all visualization systems,
+                        parameter controls, and export capabilities.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Master</span>
+                        <span class="tag">Reference</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-MASTER.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="master backup archive">
+                    <div class="version-title">index-MASTER-backup.html</div>
+                    <div class="version-description">
+                        Backup copy of master version for safety and rollback purposes. Identical to MASTER with
+                        preserved state at time of backup.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Backup</span>
+                        <span class="tag">Archive</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-MASTER-backup.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="working gold stable best">
+                    <div class="version-title">index-WORKING-GOLD.html</div>
+                    <div class="version-description">
+                        "Gold" standard working version - proven stable implementation that serves as a reliable
+                        reference point. Known good state.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Gold</span>
+                        <span class="tag">Stable</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-WORKING-GOLD.html" class="btn">Launch</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ULTIMATE & ADVANCED VERSIONS -->
+        <div class="category">
+            <h2 class="category-title">
+                <span class="category-icon">⚡</span>
+                Ultimate & Advanced Versions
+            </h2>
+            <div class="versions-grid">
+                <div class="version-card" data-tags="ultimate advanced best complete">
+                    <div class="version-title">ultimate-choreographer.html</div>
+                    <div class="version-description">
+                        The ultimate choreographer system with multi-layer holographic rendering, advanced AI orchestration,
+                        and premium feature set. "The Best Music Video System Ever."
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Ultimate</span>
+                        <span class="tag">AI-Powered</span>
+                        <span class="tag">Premium</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="ultimate-choreographer.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="ultimate v2 enhanced">
+                    <div class="version-title">index-ULTIMATE-V2.html</div>
+                    <div class="version-description">
+                        Version 2 of the ultimate system with refined algorithms, improved performance, and
+                        additional orchestration capabilities.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Ultimate V2</span>
+                        <span class="tag">Enhanced</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-ULTIMATE-V2.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="ultimate v1 original">
+                    <div class="version-title">index-ULTIMATE.html</div>
+                    <div class="version-description">
+                        Original ultimate version with comprehensive feature set and advanced visualization systems.
+                        Foundation for V2 improvements.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Ultimate V1</span>
+                        <span class="tag">Original</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-ULTIMATE.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="ultra advanced power">
+                    <div class="version-title">index-ULTRA.html</div>
+                    <div class="version-description">
+                        Ultra-powered version with maximum performance settings, advanced rendering techniques,
+                        and experimental features.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Ultra</span>
+                        <span class="tag">Performance</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-ULTRA.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="advanced orchestrator ai">
+                    <div class="version-title">advanced-orchestrator.html</div>
+                    <div class="version-description">
+                        Advanced AI orchestration engine with intelligent parameter automation, scene detection,
+                        and adaptive choreography.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">AI</span>
+                        <span class="tag">Orchestrator</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="advanced-orchestrator.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="intelligent orchestrator ai smart">
+                    <div class="version-title">intelligent-orchestrator.html</div>
+                    <div class="version-description">
+                        Intelligent orchestration system with machine learning-based beat detection, mood analysis,
+                        and automated visual storytelling.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">AI</span>
+                        <span class="tag">ML</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="intelligent-orchestrator.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="sonic intelligence audio ai">
+                    <div class="version-title">sonic-intelligence.html</div>
+                    <div class="version-description">
+                        Sonic intelligence system focused on advanced audio analysis, frequency spectrum visualization,
+                        and intelligent audio-reactive behaviors.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Audio AI</span>
+                        <span class="tag">Analysis</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="sonic-intelligence.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="music video original">
+                    <div class="version-title">ultimate-music-video.html</div>
+                    <div class="version-description">
+                        Music video focused version optimized for full-screen performances, export capabilities,
+                        and professional video production workflows.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Video</span>
+                        <span class="tag">Export</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="ultimate-music-video.html" class="btn">Launch</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ENHANCED & EXPERIMENTAL VERSIONS -->
+        <div class="category">
+            <h2 class="category-title">
+                <span class="category-icon">🔬</span>
+                Enhanced & Experimental Versions
+            </h2>
+            <div class="versions-grid">
+                <div class="version-card" data-tags="enhanced improved upgraded">
+                    <div class="version-title">index-enhanced.html</div>
+                    <div class="version-description">
+                        Enhanced version with improved rendering pipeline, optimized performance, and additional
+                        visual effects not in the base version.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Enhanced</span>
+                        <span class="tag">Optimized</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-enhanced.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="enhanced minimal lightweight">
+                    <div class="version-title">index-enhanced-minimal.html</div>
+                    <div class="version-description">
+                        Minimal enhanced version - core enhancements without extra features, optimized for performance
+                        and mobile devices.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Minimal</span>
+                        <span class="tag">Mobile</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-enhanced-minimal.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="modular architecture components">
+                    <div class="version-title">index-modular.html</div>
+                    <div class="version-description">
+                        Modular architecture version with component-based system design, easier to extend and customize
+                        for different use cases.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Modular</span>
+                        <span class="tag">Components</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-modular.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="fixed bugs resolved">
+                    <div class="version-title">index-fixed.html</div>
+                    <div class="version-description">
+                        Bug-fixed version addressing specific issues found in earlier builds. Stability and reliability
+                        improvements.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Fixed</span>
+                        <span class="tag">Stable</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-fixed.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="working simple basic">
+                    <div class="version-title">index-working-simple.html</div>
+                    <div class="version-description">
+                        Simple working version without advanced features - good starting point for learning the codebase
+                        or building custom versions.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Simple</span>
+                        <span class="tag">Learning</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-working-simple.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="original reactivity interactive">
+                    <div class="version-title">index-original-with-reactivity.html</div>
+                    <div class="version-description">
+                        Original implementation enhanced with reactivity features - mouse tracking, click interactions,
+                        and dynamic responsiveness.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Reactivity</span>
+                        <span class="tag">Interactive</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="index-original-with-reactivity.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="old legacy archive">
+                    <div class="version-title">oldfatindex.html</div>
+                    <div class="version-description">
+                        Legacy archive version - older comprehensive implementation preserved for historical reference
+                        and feature comparison.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Legacy</span>
+                        <span class="tag">Archive</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="oldfatindex.html" class="btn">Launch</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GALLERY, VIEWERS & SPECIALIZED VERSIONS -->
+        <div class="category">
+            <h2 class="category-title">
+                <span class="category-icon">🎨</span>
+                Gallery, Viewers & Specialized Tools
+            </h2>
+            <div class="versions-grid">
+                <div class="version-card" data-tags="gallery browse collection">
+                    <div class="version-title">gallery.html</div>
+                    <div class="version-description">
+                        Gallery browser for viewing saved configurations, presets, and user-created choreography patterns.
+                        Browse and load previous works.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Gallery</span>
+                        <span class="tag">Browser</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="gallery.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="gallery unified complete">
+                    <div class="version-title">gallery-unified.html</div>
+                    <div class="version-description">
+                        Unified gallery system combining multiple gallery features - presets, user saves, and community
+                        shared configurations in one interface.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Unified</span>
+                        <span class="tag">Complete</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="gallery-unified.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="viewer playback display">
+                    <div class="version-title">viewer.html</div>
+                    <div class="version-description">
+                        Pure viewer mode - no controls, just full-screen visualization. Perfect for performances,
+                        installations, and presentations.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Viewer</span>
+                        <span class="tag">Performance</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="viewer.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="viewer enhanced improved">
+                    <div class="version-title">viewer-enhanced.html</div>
+                    <div class="version-description">
+                        Enhanced viewer with additional visual effects and rendering improvements while maintaining
+                        the minimal control philosophy.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Enhanced</span>
+                        <span class="tag">Visual</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="viewer-enhanced.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="viewer premium professional">
+                    <div class="version-title">viewer-premium.html</div>
+                    <div class="version-description">
+                        Premium viewer mode with highest quality rendering, advanced post-processing, and professional
+                        presentation features.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Premium</span>
+                        <span class="tag">Pro</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="viewer-premium.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="viewer simple basic">
+                    <div class="version-title">viewer-simple.html</div>
+                    <div class="version-description">
+                        Simple lightweight viewer for basic playback without advanced features. Low resource usage,
+                        maximum compatibility.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Simple</span>
+                        <span class="tag">Lightweight</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="viewer-simple.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="viewer unified complete">
+                    <div class="version-title">viewer-unified.html</div>
+                    <div class="version-description">
+                        Unified viewer combining multiple viewing modes and presets. Switch between simple, enhanced,
+                        and premium modes on the fly.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Unified</span>
+                        <span class="tag">Multi-Mode</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="viewer-unified.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="landing intro welcome">
+                    <div class="version-title">landing.html</div>
+                    <div class="version-description">
+                        Landing page introducing the VIB34D system with feature highlights, demos, and navigation to
+                        different versions.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Landing</span>
+                        <span class="tag">Intro</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="landing.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="landing professional business">
+                    <div class="version-title">landing-professional.html</div>
+                    <div class="version-description">
+                        Professional landing page with business-oriented presentation, case studies, and commercial
+                        feature highlights.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Professional</span>
+                        <span class="tag">Business</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="landing-professional.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="onboarding tutorial guide">
+                    <div class="version-title">onboarding-flow.html</div>
+                    <div class="version-description">
+                        Interactive onboarding tutorial guiding new users through system features, controls, and
+                        best practices.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Tutorial</span>
+                        <span class="tag">Guide</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="onboarding-flow.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="export video production">
+                    <div class="version-title">video-export-mvp.html</div>
+                    <div class="version-description">
+                        Video export MVP - minimal viable product for exporting visualizations to video files.
+                        Core export functionality.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Export</span>
+                        <span class="tag">MVP</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="video-export-mvp.html" class="btn">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="choreographer music original">
+                    <div class="version-title">music-video-choreographer.html</div>
+                    <div class="version-description">
+                        Original music video choreographer - the foundational version that started the project.
+                        Historical reference.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Original</span>
+                        <span class="tag">Historical</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="music-video-choreographer.html" class="btn">Launch</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TEST & DEBUG VERSIONS -->
+        <div class="category">
+            <h2 class="category-title">
+                <span class="category-icon">🔧</span>
+                Test, Debug & Development Tools
+            </h2>
+            <div class="versions-grid">
+                <div class="version-card" data-tags="test runner automation">
+                    <div class="version-title">test-runner.html</div>
+                    <div class="version-description">
+                        Automated test runner for system validation, regression testing, and quality assurance.
+                        Runs comprehensive test suites.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Testing</span>
+                        <span class="tag">Automation</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-runner.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test runner 2025 latest">
+                    <div class="version-title">test-runner-2025.html</div>
+                    <div class="version-description">
+                        2025 updated test runner with latest testing methodologies, modern test frameworks, and
+                        improved reporting.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">2025</span>
+                        <span class="tag">Updated</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-runner-2025.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test agentic ai automated">
+                    <div class="version-title">agentic-test-runner.html</div>
+                    <div class="version-description">
+                        AI-powered agentic test runner that automatically generates and executes tests based on
+                        code analysis.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">AI</span>
+                        <span class="tag">Agentic</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="agentic-test-runner.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test gallery visual">
+                    <div class="version-title">gallery-test-runner.html</div>
+                    <div class="version-description">
+                        Gallery-specific test runner validating save/load functionality, preset integrity, and
+                        gallery UI components.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Gallery</span>
+                        <span class="tag">Tests</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="gallery-test-runner.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="diagnostic health check">
+                    <div class="version-title">DIAGNOSTIC.html</div>
+                    <div class="version-description">
+                        System diagnostic tool for checking WebGL capabilities, performance metrics, and browser
+                        compatibility.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag primary">Diagnostic</span>
+                        <span class="tag">Health</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="DIAGNOSTIC.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="diagnostic test validation">
+                    <div class="version-title">diagnostic-test.html</div>
+                    <div class="version-description">
+                        Diagnostic test suite combining health checks with specific feature validation and
+                        troubleshooting tools.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Diagnostic</span>
+                        <span class="tag">Validation</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="diagnostic-test.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="debug basic simple">
+                    <div class="version-title">debug-basic.html</div>
+                    <div class="version-description">
+                        Basic debugging interface with console logging, state inspection, and simple troubleshooting
+                        tools.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Debug</span>
+                        <span class="tag">Basic</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="debug-basic.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="debug clean optimized">
+                    <div class="version-title">debug-clean.html</div>
+                    <div class="version-description">
+                        Clean debugging environment without clutter - focused debugging tools and streamlined
+                        interface.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Debug</span>
+                        <span class="tag">Clean</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="debug-clean.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="debug engine core">
+                    <div class="version-title">debug-engine-syntax.html</div>
+                    <div class="version-description">
+                        Engine syntax debugger for validating code structure, shader compilation, and core engine
+                        functionality.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Engine</span>
+                        <span class="tag">Syntax</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="debug-engine-syntax.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="debug gallery data">
+                    <div class="version-title">debug-gallery.html</div>
+                    <div class="version-description">
+                        Gallery debugging tool for inspecting saved data, testing storage mechanisms, and validating
+                        preset formats.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Gallery</span>
+                        <span class="tag">Data</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="debug-gallery.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="debug imports modules">
+                    <div class="version-title">debug-imports.html</div>
+                    <div class="version-description">
+                        Module import debugger validating JavaScript module loading, dependency resolution, and
+                        import chains.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Modules</span>
+                        <span class="tag">Imports</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="debug-imports.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test engine core">
+                    <div class="version-title">test-engine.html</div>
+                    <div class="version-description">
+                        Core engine testing - validates rendering engine, WebGL context, shader compilation, and
+                        fundamental systems.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Engine</span>
+                        <span class="tag">Core</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-engine.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test viewer playback">
+                    <div class="version-title">test-viewer.html</div>
+                    <div class="version-description">
+                        Viewer mode testing validating playback systems, performance in viewer-only mode, and
+                        presentation features.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Viewer</span>
+                        <span class="tag">Testing</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-viewer.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test modules architecture">
+                    <div class="version-title">test-modules.html</div>
+                    <div class="version-description">
+                        Module system testing validating modular architecture, component isolation, and inter-module
+                        communication.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Modules</span>
+                        <span class="tag">Architecture</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-modules.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test clean architecture">
+                    <div class="version-title">test-clean-architecture.html</div>
+                    <div class="version-description">
+                        Clean architecture validation - tests separation of concerns, dependency injection, and
+                        architectural patterns.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Architecture</span>
+                        <span class="tag">Clean</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-clean-architecture.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test audio sound">
+                    <div class="version-title">test-audio-playback.html</div>
+                    <div class="version-description">
+                        Audio playback testing - validates audio engine, frequency analysis, beat detection, and
+                        audio-reactive features.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Audio</span>
+                        <span class="tag">Playback</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-audio-playback.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test export video">
+                    <div class="version-title">test-export-manual.html</div>
+                    <div class="version-description">
+                        Manual export testing tool for validating video export, frame capture, and rendering-to-file
+                        workflows.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Export</span>
+                        <span class="tag">Manual</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-export-manual.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test mobile responsive">
+                    <div class="version-title">test-mobile-complete.html</div>
+                    <div class="version-description">
+                        Comprehensive mobile testing validating touch controls, responsive layout, performance on
+                        mobile devices.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Mobile</span>
+                        <span class="tag">Complete</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-mobile-complete.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test mobile gallery">
+                    <div class="version-title">test-mobile-gallery.html</div>
+                    <div class="version-description">
+                        Mobile gallery testing - validates gallery functionality on mobile devices, touch interactions,
+                        and mobile UI.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Mobile</span>
+                        <span class="tag">Gallery</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="test-mobile-gallery.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test parameters controls">
+                    <div class="version-title">parameter-test.html</div>
+                    <div class="version-description">
+                        Parameter system testing validating all parameter controls, ranges, interactions, and
+                        synchronization.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Parameters</span>
+                        <span class="tag">Controls</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="parameter-test.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test reactivity interactive">
+                    <div class="version-title">reactivity-test.html</div>
+                    <div class="version-description">
+                        Reactivity testing - validates mouse tracking, click interactions, scroll events, and dynamic
+                        responsiveness.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Reactivity</span>
+                        <span class="tag">Interactive</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="reactivity-test.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test screenshot capture">
+                    <div class="version-title">screenshot-test.html</div>
+                    <div class="version-description">
+                        Screenshot and capture testing - validates frame capture, image export, and snapshot
+                        functionality.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Screenshot</span>
+                        <span class="tag">Capture</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="screenshot-test.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="test manual verification">
+                    <div class="version-title">manual-test.html</div>
+                    <div class="version-description">
+                        Manual testing interface with guided test procedures, checklists, and manual validation
+                        workflows.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Manual</span>
+                        <span class="tag">Guided</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="manual-test.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="verify clean validation">
+                    <div class="version-title">verify-clean.html</div>
+                    <div class="version-description">
+                        Clean code verification tool checking code quality, linting, formatting, and best practices
+                        adherence.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Verification</span>
+                        <span class="tag">Quality</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="verify-clean.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="verify report validation">
+                    <div class="version-title">verify-report.html</div>
+                    <div class="version-description">
+                        Verification report generator producing detailed validation reports, test results, and quality
+                        metrics.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Report</span>
+                        <span class="tag">Metrics</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="verify-report.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="validation report comprehensive">
+                    <div class="version-title">validation-report.html</div>
+                    <div class="version-description">
+                        Comprehensive validation report with all test results, performance metrics, compatibility
+                        checks, and issue tracking.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Validation</span>
+                        <span class="tag">Comprehensive</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="validation-report.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+
+                <div class="version-card" data-tags="playwright testing automation">
+                    <div class="version-title">playwright-report/index.html</div>
+                    <div class="version-description">
+                        Playwright automated testing report showing results from end-to-end browser automation tests
+                        and regression suites.
+                    </div>
+                    <div class="version-tags">
+                        <span class="tag">Playwright</span>
+                        <span class="tag">E2E</span>
+                    </div>
+                    <div class="version-actions">
+                        <a href="playwright-report/index.html" class="btn-secondary">Launch</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p><strong>VIB34D Music Video Choreographer</strong> - A Paul Phillips Manifestation</p>
+            <p>4D Holographic Visualization Engine | Audio-Reactive Choreography System</p>
+            <p style="margin-top: 20px; font-size: 0.8em;">
+                This catalog represents the complete evolution of the VIB34D system.<br>
+                From experimental prototypes to production-ready implementations.<br>
+                Each version tells a story of innovation, iteration, and creative exploration.
+            </p>
+            <p style="margin-top: 20px;">
+                <a href="https://github.com/Domusgpt/vib34d-music-video-choreographer-alternative"
+                   style="color: #0ff; text-decoration: none;">
+                    View on GitHub ↗
+                </a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        const versionCards = document.querySelectorAll('.version-card');
+        const categories = document.querySelectorAll('.category');
+
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            let visibleCount = 0;
+
+            versionCards.forEach(card => {
+                const title = card.querySelector('.version-title').textContent.toLowerCase();
+                const description = card.querySelector('.version-description').textContent.toLowerCase();
+                const tags = card.getAttribute('data-tags').toLowerCase();
+
+                const matches = title.includes(searchTerm) ||
+                               description.includes(searchTerm) ||
+                               tags.includes(searchTerm);
+
+                if (matches) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Hide empty categories
+            categories.forEach(category => {
+                const visibleCards = category.querySelectorAll('.version-card:not([style*="display: none"])');
+                if (visibleCards.length === 0) {
+                    category.style.display = 'none';
+                } else {
+                    category.style.display = 'block';
+                }
+            });
+
+            // Update total count
+            document.getElementById('totalVersions').textContent = visibleCount;
+        });
+
+        // Launch card on click (anywhere on card except buttons)
+        versionCards.forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('btn')) {
+                    const link = card.querySelector('.btn');
+                    if (link) {
+                        window.location.href = link.href;
+                    }
+                }
+            });
+        });
+
+        // Add hover sound effect (optional)
+        versionCards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                // Could add subtle sound effect here if desired
+            });
+        });
+
+        console.log('🌟 VIB34D Version Catalog Loaded');
+        console.log('📊 Total Versions: 57');
+        console.log('🎯 Use search to filter by name, description, or tags');
+    </script>
+</body>
+</html>
