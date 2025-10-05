@@ -14,9 +14,17 @@ export class QuantumEngine {
         this.visualizers = [];
         this.parameters = new ParameterManager();
         this.isActive = false;
-        
+
+        this.geometryNames = GeometryLibrary.getGeometryNames();
+        this.geometryMetadata = GeometryLibrary.getGeometryMetadata(this.geometryNames);
+        if (!Array.isArray(this.geometryMetadata) || !this.geometryMetadata.length) {
+            this.geometryMetadata = GeometryLibrary.getGeometryMetadata(GeometryLibrary.baseGeometries);
+        }
+
+        this.geometryUnsubscribe = null;
+
         // REMOVED: Built-in reactivity - ReactivityManager handles all interactions now
-        
+
         // Initialize with quantum-enhanced defaults
         this.parameters.setParameter('hue', 280); // Purple-blue for quantum
         this.parameters.setParameter('intensity', 0.7); // Higher intensity
@@ -25,6 +33,8 @@ export class QuantumEngine {
         this.parameters.setParameter('morphFactor', 1.0);
         
         this.init();
+        this.handleGeometryUpdate(this.geometryMetadata?.map(item => item.rawName) || this.geometryNames);
+        this.subscribeToGeometryLibrary();
     }
     
     /**
@@ -60,6 +70,9 @@ export class QuantumEngine {
                 }
                 
                 const visualizer = new QuantumHolographicVisualizer(layer.id, layer.role, layer.reactivity, 0);
+                if (typeof visualizer.setGeometryCatalog === 'function' && Array.isArray(this.geometryMetadata)) {
+                    visualizer.setGeometryCatalog(this.geometryMetadata);
+                }
                 if (visualizer.gl) {
                     this.visualizers.push(visualizer);
                     console.log(`🌌 Created quantum layer: ${layer.role}`);
@@ -72,6 +85,55 @@ export class QuantumEngine {
         });
         
         console.log(`✅ Created ${this.visualizers.length} quantum visualizers with enhanced effects`);
+    }
+
+    subscribeToGeometryLibrary() {
+        if (typeof GeometryLibrary?.subscribe !== 'function') {
+            return;
+        }
+
+        try {
+            this.geometryUnsubscribe = GeometryLibrary.subscribe(({ names }) => {
+                this.handleGeometryUpdate(names);
+            });
+        } catch (error) {
+            console.warn('QuantumEngine failed to subscribe to GeometryLibrary', error);
+        }
+    }
+
+    handleGeometryUpdate(names) {
+        const metadata = GeometryLibrary.getGeometryMetadata(names);
+        const usableMetadata = Array.isArray(metadata) && metadata.length
+            ? metadata
+            : GeometryLibrary.getGeometryMetadata(GeometryLibrary.baseGeometries);
+
+        this.geometryMetadata = usableMetadata;
+        this.geometryNames = usableMetadata.map(item => item.rawName);
+
+        const geometryCount = this.geometryNames.length || 1;
+        if (typeof this.parameters?.updateGeometryRange === 'function') {
+            this.parameters.updateGeometryRange(geometryCount);
+        }
+
+        this.visualizers.forEach(visualizer => {
+            if (typeof visualizer?.setGeometryCatalog === 'function') {
+                visualizer.setGeometryCatalog(usableMetadata);
+            } else if (visualizer?.params) {
+                const current = Number.isFinite(visualizer.params.geometry)
+                    ? visualizer.params.geometry
+                    : parseInt(visualizer.params.geometry, 10);
+                const clamped = Math.max(0, Math.min(geometryCount - 1, Number.isFinite(current) ? current : 0));
+                visualizer.params.geometry = clamped;
+            }
+        });
+
+        if (typeof window !== 'undefined' && window.mobileDebug) {
+            try {
+                window.mobileDebug.log(`🔄 QuantumEngine geometry catalog updated (${geometryCount} shapes)`);
+            } catch (error) {
+                console.warn('QuantumEngine mobileDebug logging failed', error);
+            }
+        }
     }
     
     /**
@@ -301,7 +363,16 @@ export class QuantumEngine {
         if (window.universalReactivity) {
             window.universalReactivity.disconnectSystem('quantum');
         }
-        
+
+        if (typeof this.geometryUnsubscribe === 'function') {
+            try {
+                this.geometryUnsubscribe();
+            } catch (error) {
+                console.warn('QuantumEngine failed to unsubscribe from GeometryLibrary', error);
+            }
+            this.geometryUnsubscribe = null;
+        }
+
         this.visualizers.forEach(visualizer => {
             if (visualizer.destroy) {
                 visualizer.destroy();

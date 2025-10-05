@@ -361,15 +361,7 @@
         <div class="section">
             <h3>🔮 GEOMETRY</h3>
             <div class="param-group">
-                <select id="geometry" onchange="choreographer.setParam('geometry', parseInt(this.value))">
-                    <option value="0">Tetrahedron</option>
-                    <option value="1" selected>Hypercube</option>
-                    <option value="2">Sphere</option>
-                    <option value="3">Torus</option>
-                    <option value="4">Klein Bottle</option>
-                    <option value="5">Fractal</option>
-                    <option value="6">Wave</option>
-                    <option value="7">Crystal</option>
+                <select id="geometry" onchange="choreographer.setParam('geometry', Number(this.value))">
                 </select>
             </div>
             <div class="param-group">
@@ -461,6 +453,18 @@
         import { VIB34DIntegratedEngine } from './src/core/Engine.js';
         import { QuantumEngine } from './src/quantum/QuantumEngine.js';
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
+        import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
+
+        const DEFAULT_GEOMETRY_NAMES = [
+            'Tetrahedron',
+            'Hypercube',
+            'Sphere',
+            'Torus',
+            'Klein Bottle',
+            'Fractal',
+            'Wave',
+            'Crystal'
+        ];
 
         window.togglePanel = function() {
             document.getElementById('panel').classList.toggle('open');
@@ -482,15 +486,15 @@
                 this.currentSystem = 'faceted';
                 this.isPlaying = false;
 
-                // Geometry names
-                this.geometryNames = [
-                    'Tetrahedron', 'Hypercube', 'Sphere', 'Torus',
-                    'Klein Bottle', 'Fractal', 'Wave', 'Crystal'
-                ];
+                this.geometrySubscriptionCleanup = null;
+                this.geometryNames = this.buildGeometryList(GeometryLibrary.getGeometryNames());
+                if (!this.geometryNames.length) {
+                    this.geometryNames = [...DEFAULT_GEOMETRY_NAMES];
+                }
 
                 // Base parameters (user-set, NOT affected by audio)
                 this.baseParams = {
-                    geometry: 1,
+                    geometry: this.resolveGeometryIndex(1),
                     gridDensity: 15,
                     morphFactor: 1.0,
                     chaos: 0.2,
@@ -502,6 +506,9 @@
                     rot4dYW: 0.0,
                     rot4dZW: 0.0
                 };
+
+                this.subscribeToGeometryLibrary();
+                this.refreshGeometryUI();
 
                 // Audio reactivity settings
                 this.audioReactivityEnabled = true;
@@ -519,6 +526,184 @@
                 this.kickHistory = [];
 
                 this.init();
+            }
+
+            buildGeometryList(source = []) {
+                const list = Array.isArray(source) ? source : [];
+                const deduped = [];
+                const seen = new Set();
+
+                list.forEach(name => {
+                    const normalized = GeometryLibrary.normalizeName(name);
+                    if (!normalized) return;
+                    const key = normalized.toUpperCase();
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    deduped.push(this.formatGeometryName(normalized));
+                });
+
+                return deduped;
+            }
+
+            formatGeometryName(name) {
+                const normalized = GeometryLibrary.normalizeName(name);
+                if (!normalized) return 'Unknown';
+
+                if (normalized === normalized.toUpperCase()) {
+                    return normalized
+                        .toLowerCase()
+                        .split(' ')
+                        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                        .join(' ');
+                }
+
+                return normalized;
+            }
+
+            escapeGeometryLabel(name) {
+                return String(name)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            geometryListsEqual(a = [], b = []) {
+                if (a.length !== b.length) {
+                    return false;
+                }
+
+                for (let i = 0; i < a.length; i += 1) {
+                    if (a[i] !== b[i]) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            getFallbackGeometryNames() {
+                return [...DEFAULT_GEOMETRY_NAMES];
+            }
+
+            resolveGeometryIndex(value) {
+                const names = this.geometryNames.length ? this.geometryNames : this.getFallbackGeometryNames();
+                if (!names.length) {
+                    return 0;
+                }
+
+                if (typeof value === 'string') {
+                    const normalized = GeometryLibrary.normalizeName(value);
+                    if (normalized) {
+                        const searchKey = normalized.toUpperCase();
+                        const foundIndex = names.findIndex(name => GeometryLibrary.normalizeName(name).toUpperCase() === searchKey);
+                        if (foundIndex !== -1) {
+                            return foundIndex;
+                        }
+                    }
+
+                    const parsed = Number(value);
+                    if (Number.isFinite(parsed)) {
+                        return this.resolveGeometryIndex(parsed);
+                    }
+
+                    return 0;
+                }
+
+                let numeric = Number(value);
+                if (!Number.isFinite(numeric)) {
+                    numeric = 0;
+                }
+
+                numeric = Math.round(numeric);
+                if (numeric < 0) {
+                    numeric = 0;
+                }
+                if (numeric >= names.length) {
+                    numeric = names.length - 1;
+                }
+
+                return numeric;
+            }
+
+            getGeometryCount() {
+                return this.geometryNames.length ? this.geometryNames.length : this.getFallbackGeometryNames().length;
+            }
+
+            refreshGeometryUI() {
+                const select = document.getElementById('geometry');
+                const label = document.getElementById('geometry-name');
+                const activeIndex = this.resolveGeometryIndex(this.baseParams.geometry);
+                const names = this.geometryNames.length ? this.geometryNames : this.getFallbackGeometryNames();
+
+                if (!this.geometryNames.length && names.length) {
+                    this.geometryNames = [...names];
+                }
+
+                if (select) {
+                    const optionsNeedUpdate = select.options.length !== names.length ||
+                        Array.from(select.options).some((option, index) => option.textContent !== names[index]);
+
+                    if (optionsNeedUpdate) {
+                        select.innerHTML = names
+                            .map((name, index) => `<option value="${index}">${this.escapeGeometryLabel(name)}</option>`)
+                            .join('');
+                    }
+
+                    select.value = String(activeIndex);
+                }
+
+                if (label) {
+                    label.textContent = names[activeIndex] || 'Unknown';
+                }
+            }
+
+            syncGeometrySelector(index) {
+                const select = document.getElementById('geometry');
+                if (select && select.value !== String(index)) {
+                    select.value = String(index);
+                }
+            }
+
+            subscribeToGeometryLibrary() {
+                if (typeof GeometryLibrary?.subscribe !== 'function') {
+                    return;
+                }
+
+                const handleUpdate = ({ names }) => {
+                    const nextNames = this.buildGeometryList(Array.isArray(names) ? names : []);
+                    const finalNames = nextNames.length ? nextNames : this.getFallbackGeometryNames();
+
+                    if (!this.geometryListsEqual(this.geometryNames, finalNames)) {
+                        this.geometryNames = finalNames;
+                        const clamped = this.resolveGeometryIndex(this.baseParams.geometry);
+                        if (clamped !== this.baseParams.geometry) {
+                            this.baseParams.geometry = clamped;
+                        }
+                        this.refreshGeometryUI();
+                        this.applyBaseParameters();
+                    } else {
+                        this.refreshGeometryUI();
+                    }
+                };
+
+                try {
+                    this.geometrySubscriptionCleanup = GeometryLibrary.subscribe(handleUpdate);
+                } catch (error) {
+                    console.warn('Failed to subscribe to GeometryLibrary', error);
+                }
+            }
+
+            destroy() {
+                if (typeof this.geometrySubscriptionCleanup === 'function') {
+                    try {
+                        this.geometrySubscriptionCleanup();
+                    } catch (error) {
+                        console.warn('Failed to dispose geometry subscription', error);
+                    }
+                    this.geometrySubscriptionCleanup = null;
+                }
             }
 
             async init() {
@@ -675,21 +860,28 @@
             }
 
             setParam(param, value) {
+                let nextValue = value;
+
+                if (param === 'geometry') {
+                    nextValue = this.resolveGeometryIndex(value);
+                }
+
                 // Store in BASE parameters (user-set values)
-                this.baseParams[param] = value;
+                this.baseParams[param] = nextValue;
 
                 // Apply to all engines
                 this.applyBaseParameters();
 
-                // Update UI
-                const valSpan = document.getElementById(`${param}-val`);
-                if (valSpan) {
-                    valSpan.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+                if (param === 'geometry') {
+                    this.syncGeometrySelector(nextValue);
+                    this.refreshGeometryUI();
+                    return;
                 }
 
-                // Update geometry name
-                if (param === 'geometry') {
-                    document.getElementById('geometry-name').textContent = this.geometryNames[value];
+                // Update UI readouts for non-geometry params
+                const valSpan = document.getElementById(`${param}-val`);
+                if (valSpan) {
+                    valSpan.textContent = typeof nextValue === 'number' ? nextValue.toFixed(2) : nextValue;
                 }
             }
 
@@ -850,9 +1042,12 @@
             onKick(audioData) {
                 // Heavy kicks can trigger geometry change
                 if (audioData.bass > 0.85 && Math.random() < 0.3) {
-                    const nextGeom = (this.baseParams.geometry + 1) % 8;
-                    this.setParam('geometry', nextGeom);
-                    document.getElementById('geometry').value = nextGeom;
+                    const count = this.getGeometryCount();
+                    if (count > 0) {
+                        const current = this.resolveGeometryIndex(this.baseParams.geometry);
+                        const nextGeom = (current + 1) % count;
+                        this.setParam('geometry', nextGeom);
+                    }
                 }
             }
 
@@ -1002,7 +1197,10 @@
             }
 
             randomize() {
-                this.setParam('geometry', Math.floor(Math.random() * 8));
+                const geometryCount = this.getGeometryCount();
+                if (geometryCount > 0) {
+                    this.setParam('geometry', Math.floor(Math.random() * geometryCount));
+                }
                 this.setParam('gridDensity', Math.floor(5 + Math.random() * 95));
                 this.setParam('morphFactor', Math.random() * 3);
                 this.setParam('chaos', Math.random());
@@ -1016,7 +1214,7 @@
             }
 
             reset() {
-                this.setParam('geometry', 1);
+                this.setParam('geometry', this.geometryNames.length > 1 ? 1 : 0);
                 this.setParam('gridDensity', 15);
                 this.setParam('morphFactor', 1.0);
                 this.setParam('chaos', 0.2);
@@ -1039,12 +1237,18 @@
                     if (slider) slider.value = value;
                     if (valSpan) valSpan.textContent = typeof value === 'number' ? value.toFixed(2) : value;
                 });
+
+                this.refreshGeometryUI();
             }
         }
 
         // Initialize
         const choreographer = new UltimateChoreographer();
         window.choreographer = choreographer;
+
+        window.addEventListener('beforeunload', () => {
+            choreographer.destroy();
+        }, { once: true });
     </script>
 
     <!-- Signature -->

@@ -67,8 +67,117 @@ export class QuantumHolographicVisualizer {
             rot4dYW: 0.0,
             rot4dZW: 0.0
         };
-        
+
+        const initialCatalog = GeometryLibrary.getGeometryMetadata();
+        this.geometryCatalog = [];
+        this.setGeometryCatalog(initialCatalog);
+
         this.init();
+    }
+
+    normalizeGeometryIndex(index) {
+        if (!Array.isArray(this.geometryCatalog) || !this.geometryCatalog.length) {
+            const fallback = GeometryLibrary.getGeometryMetadata(GeometryLibrary.baseGeometries);
+            if (Array.isArray(fallback) && fallback.length) {
+                this.geometryCatalog = fallback.map((entry, catalogIndex) => ({
+                    ...entry,
+                    geometryIndex: catalogIndex
+                }));
+            } else {
+                this.geometryCatalog = [{
+                    key: 'DEFAULT',
+                    rawName: 'DEFAULT',
+                    displayName: 'Default Geometry',
+                    cssClass: 'geometry-default',
+                    geometryIndex: 0,
+                    levels: 1
+                }];
+            }
+        }
+
+        const count = this.geometryCatalog.length || 1;
+        let numeric = typeof index === 'number' ? index : parseInt(index, 10);
+        if (!Number.isFinite(numeric)) {
+            numeric = 0;
+        }
+
+        numeric = Math.round(numeric);
+        if (numeric < 0) {
+            numeric = 0;
+        }
+        if (numeric > count - 1) {
+            numeric = count - 1;
+        }
+        return numeric;
+    }
+
+    setGeometryCatalog(metadata) {
+        const fallback = GeometryLibrary.getGeometryMetadata(GeometryLibrary.baseGeometries);
+        const candidates = Array.isArray(metadata) && metadata.length ? metadata : fallback;
+
+        const seen = new Set();
+        const catalog = [];
+
+        if (Array.isArray(candidates)) {
+            candidates.forEach((item, idx) => {
+                if (!item) {
+                    return;
+                }
+
+                const normalizedName = GeometryLibrary.normalizeName(item.rawName || item.displayName || item.key);
+                const key = (item.key || (normalizedName && normalizedName.toUpperCase()) || `GEOMETRY_${idx}`).toUpperCase();
+                if (seen.has(key)) {
+                    return;
+                }
+
+                seen.add(key);
+                const displaySource = normalizedName || item.displayName || key;
+                catalog.push({
+                    key,
+                    rawName: normalizedName || key,
+                    displayName: item.displayName || GeometryLibrary.formatDisplayName(displaySource),
+                    cssClass: item.cssClass || GeometryLibrary.formatCssClass(key, idx),
+                    geometryIndex: catalog.length,
+                    levels: typeof item.levels === 'number' ? item.levels : GeometryLibrary.getLevelCountForKey(key)
+                });
+            });
+        }
+
+        if (!catalog.length) {
+            catalog.push({
+                key: 'DEFAULT',
+                rawName: 'DEFAULT',
+                displayName: 'Default Geometry',
+                cssClass: 'geometry-default',
+                geometryIndex: 0,
+                levels: 1
+            });
+        }
+
+        this.geometryCatalog = catalog;
+        const normalized = this.normalizeGeometryIndex(this.params.geometry);
+        if (normalized !== this.params.geometry) {
+            this.params.geometry = normalized;
+        }
+
+        if (typeof window !== 'undefined' && window.mobileDebug) {
+            try {
+                const names = this.geometryCatalog.map(entry => entry.displayName).join(', ');
+                window.mobileDebug.log(`📚 QuantumVisualizer geometry catalog set: ${names}`);
+            } catch (error) {
+                console.warn('QuantumVisualizer mobileDebug logging failed', error);
+            }
+        }
+
+        return this.geometryCatalog;
+    }
+
+    getActiveGeometryMetadata() {
+        if (!Array.isArray(this.geometryCatalog) || !this.geometryCatalog.length) {
+            return null;
+        }
+        const index = this.normalizeGeometryIndex(this.params.geometry);
+        return this.geometryCatalog[index] || null;
     }
     
     /**
@@ -836,8 +945,18 @@ void main() {
      * Update visualization parameters with immediate GPU sync
      */
     updateParameters(params) {
-        this.params = { ...this.params, ...params };
-        
+        if (!params || typeof params !== 'object') {
+            return;
+        }
+
+        const next = { ...this.params, ...params };
+
+        if (Object.prototype.hasOwnProperty.call(params, 'geometry')) {
+            next.geometry = this.normalizeGeometryIndex(params.geometry);
+        }
+
+        this.params = next;
+
         // Don't call render() here - engine will call it to prevent infinite loop
     }
     
@@ -871,7 +990,9 @@ void main() {
         
         // Mobile optimization: Log render parameters once per canvas (console only)
         if (!this._renderParamsLogged) {
-            console.log(`[Mobile] ${this.canvas?.id}: Render params - geometry=${this.params.geometry}, gridDensity=${this.params.gridDensity}, intensity=${this.params.intensity}`);
+            const activeGeometry = this.getActiveGeometryMetadata();
+            const geometryLabel = activeGeometry?.displayName || `Geometry ${this.params.geometry}`;
+            console.log(`[Mobile] ${this.canvas?.id}: Render params - geometry=${this.params.geometry} (${geometryLabel}), gridDensity=${this.params.gridDensity}, intensity=${this.params.intensity}`);
             this._renderParamsLogged = true;
         }
         
