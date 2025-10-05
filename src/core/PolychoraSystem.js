@@ -1,6 +1,6 @@
 /**
  * Polychora System - 5-Layer Glassmorphic 4D Polytope Renderer
- * 
+ *
  * Features:
  * - 5 layered canvases (background, shadow, content, highlight, accent)
  * - Real 4D polytope mathematics with proper distance functions
@@ -8,6 +8,8 @@
  * - Layer-specific scaling and translucency based on polytope geometry
  * - Unique color magnetism and glass effects
  */
+
+import { computePolychoraReactivity } from './ReactiveParameterMapper.mjs';
 
 /**
  * PolychoraVisualizer - Individual layer renderer for 4D polytopes
@@ -387,21 +389,18 @@ class PolychoraVisualizer {
         this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         
-        // 🎵 POLYCHORA AUDIO REACTIVITY - 4D audio-reactive polytopes
-        let rot4dXW = parameters.rot4dXW || 0;
-        let rot4dYW = parameters.rot4dYW || 0;
-        let rot4dZW = parameters.rot4dZW || 0;
-        let dimension = parameters.dimension || 3.8;
-        let hue = parameters.hue || 280;
-        
-        if (window.audioEnabled && window.audioReactive) {
-            // Polychora audio mapping: Bass drives 4D rotation, Mid affects cross-section, High affects glow
-            rot4dXW += window.audioReactive.bass * 3.0;        // Bass rotates through XW plane
-            rot4dYW += window.audioReactive.mid * 2.5;         // Mid rotates through YW plane  
-            rot4dZW += window.audioReactive.high * 2.0;        // High rotates through ZW plane
-            dimension += window.audioReactive.energy * 0.5;    // Energy affects 4D cross-section depth
-            hue += window.audioReactive.bass * 60;             // Bass affects polytope color
-        }
+        const reactiveValues = computePolychoraReactivity(
+            {
+                rot4dXW: parameters.rot4dXW,
+                rot4dYW: parameters.rot4dYW,
+                rot4dZW: parameters.rot4dZW,
+                dimension: parameters.dimension,
+                hue: parameters.hue
+            },
+            window.audioEnabled && window.audioReactive ? window.audioReactive : null
+        ).values;
+
+        const { rot4dXW, rot4dYW, rot4dZW, dimension, hue } = reactiveValues;
         
         // Set uniforms with audio-reactive 4D rotation and advanced glass effects
         const uniforms = {

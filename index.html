@@ -472,6 +472,10 @@
         };
 
         async function initChoreographer(mode) {
+            if (choreographer && typeof choreographer.destroy === 'function') {
+                choreographer.destroy();
+            }
+
             const { MusicVideoChoreographer } = await import('./music-choreographer-engine.js');
             choreographer = new MusicVideoChoreographer(mode);
             window.choreographer = choreographer;
@@ -502,6 +506,12 @@
             if (!choreographer) return;
             choreographer.importChoreography();
         };
+
+        window.addEventListener('beforeunload', () => {
+            if (choreographer && typeof choreographer.destroy === 'function') {
+                choreographer.destroy();
+            }
+        });
     </script>
 </body>
 </html>

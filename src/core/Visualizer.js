@@ -4,6 +4,7 @@
  */
 
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import { computeBaseVisualizerReactivity } from './ReactiveParameterMapper.mjs';
 
 export class IntegratedHolographicVisualizer {
     constructor(canvasId, role, reactivity, variant) {
@@ -592,23 +593,23 @@ void main() {
         this.gl.uniform2f(this.uniforms.mouse, this.mouseX, this.mouseY);
         this.gl.uniform1f(this.uniforms.geometry, this.params.geometry);
         // 🎵 DIRECT AUDIO REACTIVITY - Simple and works
-        let gridDensity = this.params.gridDensity;
-        let hue = this.params.hue;
-        let intensity = this.params.intensity;
-        
-        if (window.audioEnabled && window.audioReactive) {
-            // Faceted audio mapping: Bass affects grid density, Mid affects hue, High affects intensity
-            gridDensity += window.audioReactive.bass * 30;  // Bass makes patterns denser
-            hue += window.audioReactive.mid * 60;           // Mid frequencies shift colors
-            intensity += window.audioReactive.high * 0.4;   // High frequencies brighten
-        }
-        
-        this.gl.uniform1f(this.uniforms.gridDensity, Math.min(100, gridDensity));
+        const reactiveResult = computeBaseVisualizerReactivity(
+            {
+                gridDensity: this.params.gridDensity,
+                hue: this.params.hue,
+                intensity: this.params.intensity
+            },
+            window.audioEnabled && window.audioReactive ? window.audioReactive : null
+        );
+
+        const { gridDensity, hue, intensity } = reactiveResult.values;
+
+        this.gl.uniform1f(this.uniforms.gridDensity, gridDensity);
         this.gl.uniform1f(this.uniforms.morphFactor, this.params.morphFactor);
         this.gl.uniform1f(this.uniforms.chaos, this.params.chaos);
         this.gl.uniform1f(this.uniforms.speed, this.params.speed);
-        this.gl.uniform1f(this.uniforms.hue, hue % 360);
-        this.gl.uniform1f(this.uniforms.intensity, Math.min(1, intensity));
+        this.gl.uniform1f(this.uniforms.hue, hue);
+        this.gl.uniform1f(this.uniforms.intensity, intensity);
         this.gl.uniform1f(this.uniforms.saturation, this.params.saturation);
         this.gl.uniform1f(this.uniforms.dimension, this.params.dimension);
         this.gl.uniform1f(this.uniforms.rot4dXW, this.params.rot4dXW);

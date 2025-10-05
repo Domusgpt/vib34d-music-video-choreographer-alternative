@@ -1,3 +1,12 @@
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import { computeHolographicReactivity } from '../core/ReactiveParameterMapper.mjs';
+import {
+    DEFAULT_VARIATION_TARGET,
+    resolveVariantCatalog,
+    normalizeVariantIndex,
+    buildVariantParams
+} from './VariantCatalog.js';
+
 /**
  * Core Holographic Visualizer - Clean WebGL rendering engine
  * Extracted from working system, no debugging mess
@@ -8,6 +17,9 @@ export class HolographicVisualizer {
         this.role = role;
         this.reactivity = reactivity;
         this.variant = variant;
+        this.variantTarget = DEFAULT_VARIATION_TARGET;
+        this.variantDefinitions = [];
+        this.geometryUnsubscribe = null;
         
         // CRITICAL FIX: Define contextOptions as instance property to match SmartCanvasPool
         this.contextOptions = {
@@ -41,9 +53,18 @@ export class HolographicVisualizer {
             this.showWebGLError();
             throw new Error(`WebGL not supported for ${canvasId}`);
         }
-        
-        this.variantParams = this.generateVariantParams(variant);
+
+        this.refreshVariantDefinitions();
+        this.variant = normalizeVariantIndex(this.variant, this.variantDefinitions);
+        this.variantParams = this.generateVariantParams(this.variant);
         this.roleParams = this.generateRoleParams(role);
+
+        this.geometryUnsubscribe = GeometryLibrary.subscribe((payload) => {
+            this.refreshVariantDefinitions(payload?.names);
+            this.variant = normalizeVariantIndex(this.variant, this.variantDefinitions);
+            this.variantParams = this.generateVariantParams(this.variant);
+            this.roleParams = this.generateRoleParams(this.role);
+        });
         
         // Initialize state
         this.mouseX = 0.5;
@@ -83,54 +104,37 @@ export class HolographicVisualizer {
         this.resize();
     }
     
+    refreshVariantDefinitions(names) {
+        const { definitions } = resolveVariantCatalog(this.variantTarget, names);
+        if (definitions.length) {
+            this.variantDefinitions = definitions;
+        } else if (!this.variantDefinitions.length) {
+            this.variantDefinitions = [{
+                geometryIndex: 0,
+                geometryKey: 'TETRAHEDRON',
+                cssClass: 'tetrahedron',
+                displayName: 'Tetrahedron',
+                displayLabel: 'Tetrahedron Lattice 1',
+                level: 0
+            }];
+        }
+    }
+
+    ensureVariantDefinitions() {
+        if (!Array.isArray(this.variantDefinitions) || !this.variantDefinitions.length) {
+            this.refreshVariantDefinitions();
+        }
+    }
+
+    getVariantCount() {
+        this.ensureVariantDefinitions();
+        return this.variantDefinitions.length;
+    }
+
     generateVariantParams(variant) {
-        const vib3Geometries = [
-            'TETRAHEDRON', 'HYPERCUBE', 'SPHERE', 'TORUS', 
-            'KLEIN BOTTLE', 'FRACTAL', 'WAVE', 'CRYSTAL'
-        ];
-        
-        const geometryMap = [
-            0, 0, 0, 0,  // 0-3: TETRAHEDRON variations
-            1, 1, 1, 1,  // 4-7: HYPERCUBE variations
-            2, 2, 2, 2,  // 8-11: SPHERE variations
-            3, 3, 3, 3,  // 12-15: TORUS variations
-            4, 4, 4, 4,  // 16-19: KLEIN BOTTLE variations
-            5, 5, 5,     // 20-22: FRACTAL variations
-            6, 6, 6,     // 23-25: WAVE variations
-            7, 7, 7, 7   // 26-29: CRYSTAL variations
-        ];
-        
-        const baseGeometry = geometryMap[variant] || 0;
-        const variationLevel = variant % 4;
-        const geometryName = vib3Geometries[baseGeometry];
-        
-        const suffixes = [' LATTICE', ' FIELD', ' MATRIX', ' RESONANCE'];
-        const finalName = geometryName + suffixes[variationLevel];
-        
-        const geometryConfigs = {
-            0: { density: 0.8 + variationLevel * 0.2, speed: 0.3 + variationLevel * 0.1, chaos: variationLevel * 0.1, morph: 0.0 + variationLevel * 0.2 },
-            1: { density: 1.0 + variationLevel * 0.3, speed: 0.5 + variationLevel * 0.1, chaos: variationLevel * 0.15, morph: variationLevel * 0.2 },
-            2: { density: 1.2 + variationLevel * 0.4, speed: 0.4 + variationLevel * 0.2, chaos: 0.1 + variationLevel * 0.1, morph: 0.3 + variationLevel * 0.2 },
-            3: { density: 0.9 + variationLevel * 0.3, speed: 0.6 + variationLevel * 0.2, chaos: 0.2 + variationLevel * 0.2, morph: 0.5 + variationLevel * 0.1 },
-            4: { density: 1.4 + variationLevel * 0.5, speed: 0.7 + variationLevel * 0.1, chaos: 0.3 + variationLevel * 0.2, morph: 0.7 + variationLevel * 0.1 },
-            5: { density: 1.8 + variationLevel * 0.3, speed: 0.5 + variationLevel * 0.3, chaos: 0.5 + variationLevel * 0.2, morph: 0.8 + variationLevel * 0.05 },
-            6: { density: 0.6 + variationLevel * 0.4, speed: 0.8 + variationLevel * 0.4, chaos: 0.4 + variationLevel * 0.3, morph: 0.6 + variationLevel * 0.2 },
-            7: { density: 1.6 + variationLevel * 0.2, speed: 0.2 + variationLevel * 0.1, chaos: 0.1 + variationLevel * 0.1, morph: 0.2 + variationLevel * 0.2 }
-        };
-        
-        const config = geometryConfigs[baseGeometry];
-        
-        return {
-            geometryType: baseGeometry,
-            name: finalName,
-            density: config.density,
-            speed: config.speed,
-            hue: (variant * 12.27) % 360,
-            saturation: 0.8 + (variationLevel * 0.05), // Add saturation parameter
-            intensity: 0.5 + (variationLevel * 0.1),
-            chaos: config.chaos,
-            morph: config.morph
-        };
+        this.ensureVariantDefinitions();
+        const index = normalizeVariantIndex(variant, this.variantDefinitions);
+        return buildVariantParams(this.variantDefinitions[index]);
     }
     
     generateRoleParams(role) {
@@ -783,27 +787,21 @@ export class HolographicVisualizer {
         this.gl.uniform1f(this.uniforms.colorScrollShift, this.colorScrollShift);
         
         // 🎵 HOLOGRAPHIC AUDIO REACTIVITY - Direct and beautiful
-        let audioDensity = 0, audioMorph = 0, audioSpeed = 0, audioChaos = 0, audioColor = 0;
-        
-        if (window.audioEnabled && window.audioReactive) {
-            // Holographic audio mapping: Rich volumetric effects
-            audioDensity = window.audioReactive.bass * 1.5;     // Bass creates density in holographic layers
-            audioMorph = window.audioReactive.mid * 1.2;        // Mid frequencies morph the hologram
-            audioSpeed = window.audioReactive.high * 0.8;       // High frequencies speed up animation
-            audioChaos = window.audioReactive.energy * 0.6;     // Energy creates chaotic holographic distortion
-            audioColor = window.audioReactive.bass * 45;        // Bass affects holographic color shifts
-            
-            // Debug logging every 10 seconds to verify holographic audio reactivity
-            if (Date.now() % 10000 < 16) {
-                console.log(`✨ Holographic audio reactivity: Density+${audioDensity.toFixed(2)} Morph+${audioMorph.toFixed(2)} Speed+${audioSpeed.toFixed(2)} Chaos+${audioChaos.toFixed(2)} Color+${audioColor.toFixed(1)}`);
-            }
+        const holographicReactivity = computeHolographicReactivity(
+            window.audioEnabled && window.audioReactive ? window.audioReactive : null
+        );
+
+        if (holographicReactivity.active && window.audioEnabled && window.audioReactive && Date.now() % 10000 < 16) {
+            console.log(
+                `✨ Holographic audio reactivity: Density+${holographicReactivity.values.audioDensity.toFixed(2)} Morph+${holographicReactivity.values.audioMorph.toFixed(2)} Speed+${holographicReactivity.values.audioSpeed.toFixed(2)} Chaos+${holographicReactivity.values.audioChaos.toFixed(2)} Color+${holographicReactivity.values.audioColor.toFixed(1)}`
+            );
         }
-        
-        this.gl.uniform1f(this.uniforms.audioDensityBoost, audioDensity);
-        this.gl.uniform1f(this.uniforms.audioMorphBoost, audioMorph);
-        this.gl.uniform1f(this.uniforms.audioSpeedBoost, audioSpeed);
-        this.gl.uniform1f(this.uniforms.audioChaosBoost, audioChaos);
-        this.gl.uniform1f(this.uniforms.audioColorShift, audioColor);
+
+        this.gl.uniform1f(this.uniforms.audioDensityBoost, holographicReactivity.values.audioDensity);
+        this.gl.uniform1f(this.uniforms.audioMorphBoost, holographicReactivity.values.audioMorph);
+        this.gl.uniform1f(this.uniforms.audioSpeedBoost, holographicReactivity.values.audioSpeed);
+        this.gl.uniform1f(this.uniforms.audioChaosBoost, holographicReactivity.values.audioChaos);
+        this.gl.uniform1f(this.uniforms.audioColorShift, holographicReactivity.values.audioColor);
         
         // 4D rotation uniforms
         this.gl.uniform1f(this.uniforms.rot4dXW, this.variantParams.rot4dXW || 0.0);
@@ -897,7 +895,7 @@ export class HolographicVisualizer {
             'gridDensity': 'density',
             'morphFactor': 'morph',
             'rot4dXW': 'rot4dXW',
-            'rot4dYW': 'rot4dYW', 
+            'rot4dYW': 'rot4dYW',
             'rot4dZW': 'rot4dZW',
             'hue': 'hue',
             'intensity': 'intensity',
@@ -907,5 +905,19 @@ export class HolographicVisualizer {
             'geometry': 'geometryType'
         };
         return paramMap[globalParam] || globalParam;
+    }
+
+    destroy() {
+        if (typeof this.geometryUnsubscribe === 'function') {
+            this.geometryUnsubscribe();
+            this.geometryUnsubscribe = null;
+        }
+
+        if (this.gl && this.program) {
+            this.gl.deleteProgram(this.program);
+        }
+        if (this.gl && this.buffer) {
+            this.gl.deleteBuffer(this.buffer);
+        }
     }
 }

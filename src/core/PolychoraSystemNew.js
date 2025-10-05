@@ -12,6 +12,7 @@
  */
 
 import { ParameterManager } from './Parameters.js';
+import { computePolychoraDNAReactivity } from './ReactiveParameterMapper.mjs';
 
 /**
  * True4DPolychoraVisualizer - Individual layer renderer for 4D polytopes
@@ -608,22 +609,23 @@ export class NewPolychoraEngine {
                 intensity: this.parameters.getParameter('intensity'),
                 saturation: this.parameters.getParameter('saturation')
             };
-            
-            // Audio-reactive 4D rotation enhancement
-            if (window.audioReactive) {
-                // Bass drives 4D rotation through XW plane
-                params.rot4dXW += window.audioReactive.bass * 2.0;
-                // Mid drives YW plane rotation
-                params.rot4dYW += window.audioReactive.mid * 1.5;
-                // High drives ZW plane rotation
-                params.rot4dZW += window.audioReactive.high * 1.0;
-                
-                // Audio affects polytope morphing
-                params.morphFactor += window.audioReactive.bass * 0.5;
-                
-                // Color shifting based on audio
-                params.hue += (window.audioReactive.mid + window.audioReactive.high) * 30;
-            }
+
+            const reactiveValues = computePolychoraDNAReactivity(
+                {
+                    rot4dXW: params.rot4dXW,
+                    rot4dYW: params.rot4dYW,
+                    rot4dZW: params.rot4dZW,
+                    morphFactor: params.morphFactor,
+                    hue: params.hue
+                },
+                window.audioReactive
+            ).values;
+
+            params.rot4dXW = reactiveValues.rot4dXW;
+            params.rot4dYW = reactiveValues.rot4dYW;
+            params.rot4dZW = reactiveValues.rot4dZW;
+            params.morphFactor = reactiveValues.morphFactor;
+            params.hue = reactiveValues.hue;
             
             // Render all layers - DNA pattern
             this.visualizers.forEach(visualizer => {

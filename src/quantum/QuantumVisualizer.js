@@ -5,6 +5,7 @@
  */
 
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import { computeQuantumReactivity } from '../core/ReactiveParameterMapper.mjs';
 
 export class QuantumHolographicVisualizer {
     constructor(canvasId, role, reactivity, variant) {
@@ -67,7 +68,13 @@ export class QuantumHolographicVisualizer {
             rot4dYW: 0.0,
             rot4dZW: 0.0
         };
-        
+
+        const initialCatalog = this.buildGeometryList(GeometryLibrary.getGeometryNames());
+        this.geometryNames = initialCatalog.length ? initialCatalog : this.getFallbackGeometryNames();
+        this.geometryMetadata = GeometryLibrary.getGeometryMetadata(this.geometryNames);
+        this.params.geometry = this.resolveGeometryIndex(this.params.geometry);
+        this.activeGeometryName = this.geometryNames[this.params.geometry] || 'Unknown';
+
         this.init();
     }
     
@@ -831,13 +838,133 @@ void main() {
             ctx.fillText('Please enable WebGL in your browser', this.canvas.width / 2, this.canvas.height / 2 + 25);
         }
     }
-    
+
+    buildGeometryList(source = []) {
+        const list = Array.isArray(source) ? source : [];
+        const deduped = [];
+        const seen = new Set();
+
+        list.forEach((name) => {
+            const normalized = GeometryLibrary.normalizeName(name);
+            if (!normalized) {
+                return;
+            }
+
+            const key = normalized.toUpperCase();
+            if (seen.has(key)) {
+                return;
+            }
+
+            seen.add(key);
+            deduped.push(GeometryLibrary.formatDisplayName(normalized));
+        });
+
+        return deduped;
+    }
+
+    getFallbackGeometryNames() {
+        if (Array.isArray(GeometryLibrary?.baseGeometries) && GeometryLibrary.baseGeometries.length) {
+            return this.buildGeometryList(GeometryLibrary.baseGeometries);
+        }
+
+        return [
+            'Tetrahedron',
+            'Hypercube',
+            'Sphere',
+            'Torus',
+            'Klein Bottle',
+            'Fractal',
+            'Wave',
+            'Crystal'
+        ];
+    }
+
+    resolveGeometryIndex(value) {
+        const catalog = this.geometryNames && this.geometryNames.length
+            ? this.geometryNames
+            : this.getFallbackGeometryNames();
+
+        if (!catalog.length) {
+            return 0;
+        }
+
+        if (typeof value === 'string') {
+            const normalized = GeometryLibrary.normalizeName(value);
+            if (normalized) {
+                const searchKey = normalized.toUpperCase();
+                const foundIndex = catalog.findIndex(
+                    (name) => GeometryLibrary.normalizeName(name).toUpperCase() === searchKey
+                );
+
+                if (foundIndex !== -1) {
+                    return foundIndex;
+                }
+            }
+
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) {
+                return this.resolveGeometryIndex(parsed);
+            }
+
+            return 0;
+        }
+
+        let numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            numeric = 0;
+        }
+
+        numeric = Math.round(numeric);
+        if (numeric < 0) {
+            numeric = 0;
+        }
+
+        if (numeric >= catalog.length) {
+            numeric = catalog.length - 1;
+        }
+
+        return numeric;
+    }
+
+    updateGeometryMetadata(names = [], metadata = null) {
+        const nextCatalog = this.buildGeometryList(names);
+        if (nextCatalog.length) {
+            this.geometryNames = nextCatalog;
+        }
+
+        if (Array.isArray(metadata) && metadata.length) {
+            this.geometryMetadata = metadata;
+        } else {
+            this.geometryMetadata = GeometryLibrary.getGeometryMetadata(this.geometryNames);
+        }
+
+        const activeIndex = this.resolveGeometryIndex(this.params.geometry);
+        this.params.geometry = activeIndex;
+        this.activeGeometryName = this.geometryNames[activeIndex] || this.activeGeometryName || 'Unknown';
+
+        // Re-log render parameters with the new geometry context
+        this._renderParamsLogged = false;
+    }
+
     /**
      * Update visualization parameters with immediate GPU sync
      */
     updateParameters(params) {
-        this.params = { ...this.params, ...params };
-        
+        if (!params || typeof params !== 'object') {
+            return;
+        }
+
+        const merged = { ...this.params, ...params };
+
+        if (Object.prototype.hasOwnProperty.call(params, 'geometry')) {
+            merged.geometry = this.resolveGeometryIndex(params.geometry);
+        }
+
+        this.params = merged;
+        this.activeGeometryName = this.geometryNames[this.params.geometry]
+            || this.activeGeometryName
+            || 'Unknown';
+
         // Don't call render() here - engine will call it to prevent infinite loop
     }
     
@@ -869,9 +996,17 @@ void main() {
         this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         
+        const geometryIndex = this.resolveGeometryIndex(this.params.geometry);
+        if (geometryIndex !== this.params.geometry) {
+            this.params.geometry = geometryIndex;
+        }
+
+        const geometryLabel = this.geometryNames[geometryIndex] || this.activeGeometryName || 'Unknown';
+        this.activeGeometryName = geometryLabel;
+
         // Mobile optimization: Log render parameters once per canvas (console only)
         if (!this._renderParamsLogged) {
-            console.log(`[Mobile] ${this.canvas?.id}: Render params - geometry=${this.params.geometry}, gridDensity=${this.params.gridDensity}, intensity=${this.params.intensity}`);
+            console.log(`[Mobile] ${this.canvas?.id}: Render params - geometry=${geometryIndex} (${geometryLabel}), gridDensity=${this.params.gridDensity}, intensity=${this.params.intensity}`);
             this._renderParamsLogged = true;
         }
         
@@ -890,29 +1025,29 @@ void main() {
         this.gl.uniform2f(this.uniforms.resolution, this.canvas.width, this.canvas.height);
         this.gl.uniform1f(this.uniforms.time, time);
         this.gl.uniform2f(this.uniforms.mouse, this.mouseX, this.mouseY);
-        this.gl.uniform1f(this.uniforms.geometry, this.params.geometry);
+        this.gl.uniform1f(this.uniforms.geometry, geometryIndex);
         // 🎵 QUANTUM AUDIO REACTIVITY - Direct and effective
-        let gridDensity = this.params.gridDensity;
-        let morphFactor = this.params.morphFactor;
-        let hue = this.params.hue;
-        let chaos = this.params.chaos;
-        
-        if (window.audioEnabled && window.audioReactive) {
-            // Quantum audio mapping: Enhanced complex lattice response
-            gridDensity += window.audioReactive.bass * 40;      // Bass creates dense lattice structures
-            morphFactor += window.audioReactive.mid * 1.2;      // Mid frequencies morph the geometry
-            hue += window.audioReactive.high * 120;             // High frequencies shift colors dramatically
-            chaos += window.audioReactive.energy * 0.6;         // Overall energy adds chaos/complexity
-            
-            // Debug logging every 10 seconds to verify audio reactivity is working
-            if (Date.now() % 10000 < 16) {
-                console.log(`🌌 Quantum audio reactivity: Density+${(window.audioReactive.bass * 40).toFixed(1)} Morph+${(window.audioReactive.mid * 1.2).toFixed(2)} Hue+${(window.audioReactive.high * 120).toFixed(1)} Chaos+${(window.audioReactive.energy * 0.6).toFixed(2)}`);
-            }
+        const reactiveResult = computeQuantumReactivity(
+            {
+                gridDensity: this.params.gridDensity,
+                morphFactor: this.params.morphFactor,
+                hue: this.params.hue,
+                chaos: this.params.chaos
+            },
+            window.audioEnabled && window.audioReactive ? window.audioReactive : null
+        );
+
+        if (reactiveResult.active && window.audioEnabled && window.audioReactive && Date.now() % 10000 < 16) {
+            console.log(
+                `🌌 Quantum audio reactivity: Density+${reactiveResult.deltas.gridDensity.toFixed(1)} Morph+${reactiveResult.deltas.morphFactor.toFixed(2)} Hue+${reactiveResult.deltas.hue.toFixed(1)} Chaos+${reactiveResult.deltas.chaos.toFixed(2)}`
+            );
         }
-        
-        this.gl.uniform1f(this.uniforms.gridDensity, Math.min(100, gridDensity));
-        this.gl.uniform1f(this.uniforms.morphFactor, Math.min(2, morphFactor));
-        this.gl.uniform1f(this.uniforms.chaos, Math.min(1, chaos));
+
+        const { gridDensity, morphFactor, hue, chaos } = reactiveResult.values;
+
+        this.gl.uniform1f(this.uniforms.gridDensity, gridDensity);
+        this.gl.uniform1f(this.uniforms.morphFactor, morphFactor);
+        this.gl.uniform1f(this.uniforms.chaos, chaos);
         this.gl.uniform1f(this.uniforms.speed, this.params.speed);
         // Hue now used as global intensity modifier for extreme layer system
         this.gl.uniform1f(this.uniforms.hue, (hue % 360) / 360.0); // Normalize to 0-1
