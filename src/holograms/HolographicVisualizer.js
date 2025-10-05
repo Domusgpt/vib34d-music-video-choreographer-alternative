@@ -1,4 +1,5 @@
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import { ReactiveVisualizerInspector } from '../diagnostics/ReactiveVisualizerInspector.js';
 import {
     DEFAULT_VARIATION_TARGET,
     resolveVariantCatalog,
@@ -812,6 +813,18 @@ export class HolographicVisualizer {
         this.gl.uniform1f(this.uniforms.rot4dXW, this.variantParams.rot4dXW || 0.0);
         this.gl.uniform1f(this.uniforms.rot4dYW, this.variantParams.rot4dYW || 0.0);
         this.gl.uniform1f(this.uniforms.rot4dZW, this.variantParams.rot4dZW || 0.0);
+
+        ReactiveVisualizerInspector.inspectAndReport('holographic', {
+            rot4dXW: this.variantParams.rot4dXW || 0.0,
+            rot4dYW: this.variantParams.rot4dYW || 0.0,
+            rot4dZW: this.variantParams.rot4dZW || 0.0
+        }, {
+            audioReactive: typeof window !== 'undefined' ? window.audioReactive : null,
+            geometryIndex: this.variantParams.geometryType ?? this.variant ?? 0,
+            geometryLabel: GeometryLibrary?.getGeometryName?.(this.variantParams.geometryType ?? this.variant ?? 0) || null,
+            canvasId: this.canvas?.id,
+            variant: this.variantTarget?.id || this.variant
+        });
         
         this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
     }
