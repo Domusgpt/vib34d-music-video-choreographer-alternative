@@ -6,6 +6,9 @@
 
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
 
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const lerp = (current, target, factor) => current + (target - current) * factor;
+
 export class QuantumHolographicVisualizer {
     constructor(canvasId, role, reactivity, variant) {
         this.canvas = document.getElementById(canvasId);
@@ -73,6 +76,21 @@ export class QuantumHolographicVisualizer {
         this.setGeometryCatalog(initialCatalog);
 
         this.init();
+
+        this.audioResponse = {
+            gridDensity: 0,
+            morph: 0,
+            chaos: 0,
+            speed: 0,
+            hue: 0,
+            intensity: 0,
+            saturation: 0,
+            dimension: 0,
+            rot4dXW: 0,
+            rot4dYW: 0,
+            rot4dZW: 0
+        };
+        this.onsetPulse = 0;
     }
 
     normalizeGeometryIndex(index) {
@@ -968,7 +986,82 @@ void main() {
         this.mouseY = y;
         this.mouseIntensity = intensity;
     }
-    
+
+    getCurrentAudioState() {
+        if (typeof window === 'undefined' || !window.audioEnabled) {
+            return null;
+        }
+
+        if (window.audioEngine && typeof window.audioEngine.getAudioLevels === 'function') {
+            return window.audioEngine.getAudioLevels() || null;
+        }
+
+        return window.audioReactive || null;
+    }
+
+    updateAudioResponse(audioState) {
+        const smoothing = 0.16;
+        const target = {
+            gridDensity: 0,
+            morph: 0,
+            chaos: 0,
+            speed: 0,
+            hue: 0,
+            intensity: 0,
+            saturation: 0,
+            dimension: 0,
+            rot4dXW: 0,
+            rot4dYW: 0,
+            rot4dZW: 0
+        };
+
+        this.onsetPulse = (this.onsetPulse || 0) * 0.85;
+
+        if (audioState) {
+            const bass = clamp(audioState.bass ?? 0, 0, 1);
+            const mid = clamp(audioState.mid ?? 0, 0, 1);
+            const high = clamp(audioState.high ?? 0, 0, 1);
+            const sparkle = clamp(audioState.sparkle ?? audioState.bands?.air ?? 0, 0, 1);
+            const energy = clamp(audioState.energy ?? audioState.rms ?? 0, 0, 1);
+            const motion = clamp(audioState.motion ?? audioState.spectralFlux ?? 0, 0, 1);
+            const centroid = clamp(audioState.hueShift ?? audioState.spectralCentroid ?? 0, 0, 1);
+            const rolloff = clamp(audioState.spectralRolloff ?? 0, 0, 1);
+            const intensityBoost = clamp(audioState.intensity ?? audioState.rms ?? 0, 0, 1);
+
+            if (audioState.onset) {
+                this.onsetPulse = 1;
+            }
+
+            target.gridDensity = clamp((bass * 45) + (motion * 18), 0, 75);
+            target.morph = clamp((mid * 1.3) + (sparkle * 0.6) + (motion * 0.5), 0, 2.5);
+            target.chaos = clamp((energy * 0.7) + (motion * 0.4) + (high * 0.25), 0, 1.4);
+            target.speed = clamp((energy * 0.65) + (motion * 0.45), 0, 3.2);
+            target.hue = clamp((centroid * 0.6) + (sparkle * 0.3), 0, 1);
+            target.intensity = clamp((intensityBoost * 0.6) + (energy * 0.3), 0, 1.4);
+            target.saturation = clamp(sparkle * 0.4, 0, 0.6);
+            target.dimension = clamp((rolloff * 2.0) + (bass * 0.35), 0, 3.2);
+            target.rot4dXW = clamp(bass * 0.35, 0, 1.5);
+            target.rot4dYW = clamp(mid * 0.25, 0, 1.2);
+            target.rot4dZW = clamp(high * 0.2, 0, 1.0);
+        }
+
+        target.speed += this.onsetPulse * 0.55;
+
+        this.audioResponse.gridDensity = lerp(this.audioResponse.gridDensity, target.gridDensity, smoothing);
+        this.audioResponse.morph = lerp(this.audioResponse.morph, target.morph, smoothing);
+        this.audioResponse.chaos = lerp(this.audioResponse.chaos, target.chaos, smoothing);
+        this.audioResponse.speed = lerp(this.audioResponse.speed, target.speed, smoothing);
+        this.audioResponse.hue = lerp(this.audioResponse.hue, target.hue, smoothing);
+        this.audioResponse.intensity = lerp(this.audioResponse.intensity, target.intensity, smoothing);
+        this.audioResponse.saturation = lerp(this.audioResponse.saturation, target.saturation, smoothing);
+        this.audioResponse.dimension = lerp(this.audioResponse.dimension, target.dimension, smoothing);
+        this.audioResponse.rot4dXW = lerp(this.audioResponse.rot4dXW, target.rot4dXW, smoothing);
+        this.audioResponse.rot4dYW = lerp(this.audioResponse.rot4dYW, target.rot4dYW, smoothing);
+        this.audioResponse.rot4dZW = lerp(this.audioResponse.rot4dZW, target.rot4dZW, smoothing);
+
+        return this.audioResponse;
+    }
+
     /**
      * Render frame
      */
@@ -1012,37 +1105,40 @@ void main() {
         this.gl.uniform1f(this.uniforms.time, time);
         this.gl.uniform2f(this.uniforms.mouse, this.mouseX, this.mouseY);
         this.gl.uniform1f(this.uniforms.geometry, this.params.geometry);
-        // 🎵 QUANTUM AUDIO REACTIVITY - Direct and effective
-        let gridDensity = this.params.gridDensity;
-        let morphFactor = this.params.morphFactor;
-        let hue = this.params.hue;
-        let chaos = this.params.chaos;
-        
-        if (window.audioEnabled && window.audioReactive) {
-            // Quantum audio mapping: Enhanced complex lattice response
-            gridDensity += window.audioReactive.bass * 40;      // Bass creates dense lattice structures
-            morphFactor += window.audioReactive.mid * 1.2;      // Mid frequencies morph the geometry
-            hue += window.audioReactive.high * 120;             // High frequencies shift colors dramatically
-            chaos += window.audioReactive.energy * 0.6;         // Overall energy adds chaos/complexity
-            
-            // Debug logging every 10 seconds to verify audio reactivity is working
-            if (Date.now() % 10000 < 16) {
-                console.log(`🌌 Quantum audio reactivity: Density+${(window.audioReactive.bass * 40).toFixed(1)} Morph+${(window.audioReactive.mid * 1.2).toFixed(2)} Hue+${(window.audioReactive.high * 120).toFixed(1)} Chaos+${(window.audioReactive.energy * 0.6).toFixed(2)}`);
-            }
-        }
-        
-        this.gl.uniform1f(this.uniforms.gridDensity, Math.min(100, gridDensity));
-        this.gl.uniform1f(this.uniforms.morphFactor, Math.min(2, morphFactor));
-        this.gl.uniform1f(this.uniforms.chaos, Math.min(1, chaos));
-        this.gl.uniform1f(this.uniforms.speed, this.params.speed);
-        // Hue now used as global intensity modifier for extreme layer system
-        this.gl.uniform1f(this.uniforms.hue, (hue % 360) / 360.0); // Normalize to 0-1
-        this.gl.uniform1f(this.uniforms.intensity, this.params.intensity);
-        this.gl.uniform1f(this.uniforms.saturation, this.params.saturation);
-        this.gl.uniform1f(this.uniforms.dimension, this.params.dimension);
-        this.gl.uniform1f(this.uniforms.rot4dXW, this.params.rot4dXW);
-        this.gl.uniform1f(this.uniforms.rot4dYW, this.params.rot4dYW);
-        this.gl.uniform1f(this.uniforms.rot4dZW, this.params.rot4dZW);
+
+        const audioState = this.getCurrentAudioState();
+        const audioResponse = this.updateAudioResponse(audioState);
+
+        let gridDensity = this.params.gridDensity + audioResponse.gridDensity;
+        let morphFactor = this.params.morphFactor + audioResponse.morph;
+        let chaos = this.params.chaos + audioResponse.chaos;
+        let speed = this.params.speed + audioResponse.speed;
+
+        gridDensity = clamp(gridDensity, 0, 120);
+        morphFactor = clamp(morphFactor, 0, 3);
+        chaos = clamp(chaos, 0, 1.5);
+        speed = clamp(speed, 0, 4);
+
+        const hueBase = (this.params.hue % 360) / 360.0;
+        const hue = (hueBase + audioResponse.hue) % 1;
+        const intensity = clamp(this.params.intensity + audioResponse.intensity, 0, 2);
+        const saturation = clamp(this.params.saturation + audioResponse.saturation, 0, 1);
+        const dimension = clamp(this.params.dimension + audioResponse.dimension, 0, 6);
+        const rot4dXW = clamp(this.params.rot4dXW + audioResponse.rot4dXW, -4, 4);
+        const rot4dYW = clamp(this.params.rot4dYW + audioResponse.rot4dYW, -4, 4);
+        const rot4dZW = clamp(this.params.rot4dZW + audioResponse.rot4dZW, -4, 4);
+
+        this.gl.uniform1f(this.uniforms.gridDensity, gridDensity);
+        this.gl.uniform1f(this.uniforms.morphFactor, morphFactor);
+        this.gl.uniform1f(this.uniforms.chaos, chaos);
+        this.gl.uniform1f(this.uniforms.speed, speed);
+        this.gl.uniform1f(this.uniforms.hue, hue);
+        this.gl.uniform1f(this.uniforms.intensity, Math.min(2, intensity));
+        this.gl.uniform1f(this.uniforms.saturation, saturation);
+        this.gl.uniform1f(this.uniforms.dimension, dimension);
+        this.gl.uniform1f(this.uniforms.rot4dXW, rot4dXW);
+        this.gl.uniform1f(this.uniforms.rot4dYW, rot4dYW);
+        this.gl.uniform1f(this.uniforms.rot4dZW, rot4dZW);
         this.gl.uniform1f(this.uniforms.mouseIntensity, this.mouseIntensity);
         this.gl.uniform1f(this.uniforms.clickIntensity, this.clickIntensity);
         this.gl.uniform1f(this.uniforms.roleIntensity, roleIntensities[this.role] || 1.0);
