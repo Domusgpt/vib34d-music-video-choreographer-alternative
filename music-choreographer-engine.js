@@ -3,11 +3,12 @@
  * Dual-mode system: Reactive (built-in audio reactivity) + Choreographed (timeline-based)
  */
 
-import { VIB34DIntegratedEngine } from './src/core/Engine.js';
-import { QuantumEngine } from './src/quantum/QuantumEngine.js';
-import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
 import { DynamicParameterBridge } from './src/choreography/DynamicParameterBridge.js';
 import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
+import { SystemRegistry } from './src/systems/shared/SystemRegistry.js';
+import { FacetedSystem } from './src/systems/faceted/FacetedSystem.js';
+import { QuantumSystem } from './src/systems/quantum/QuantumSystem.js';
+import { HolographicSystem } from './src/systems/holographic/HolographicSystem.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -21,6 +22,16 @@ export class MusicVideoChoreographer {
         this.isPlaying = false;
         this.animationId = null;
         this.canvasManager = null;
+
+        this.systemRegistry = new SystemRegistry({
+            containerId: 'vib34dLayers',
+            autoClear: true,
+            destroyOnSwitch: true
+        });
+        this.systemRegistry.register('faceted', () => new FacetedSystem());
+        this.systemRegistry.register('quantum', () => new QuantumSystem());
+        this.systemRegistry.register('holographic', () => new HolographicSystem());
+        this.activeSystem = null;
 
         // Beat detection
         this.beatThreshold = 0.7;
@@ -121,6 +132,12 @@ export class MusicVideoChoreographer {
                 console.warn('[MusicVideoChoreographer] geometry unsubscribe failed', err);
             }
             this.geometrySubscription = null;
+        }
+
+        if (this.systemRegistry) {
+            this.systemRegistry.destroyAll({ reason: 'choreographer-destroy' }).catch(error => {
+                console.warn('[MusicVideoChoreographer] Failed to destroy system registry', error);
+            });
         }
     }
 
@@ -800,64 +817,23 @@ export class MusicVideoChoreographer {
     }
 
     async switchSystem(systemName) {
-        // Cleanup old engine
-        if (this.currentEngine && this.currentEngine.destroy) {
-            this.currentEngine.destroy();
-        }
-
-        // Clear canvases
-        const container = document.getElementById('vib34dLayers');
-        container.innerHTML = '';
-
-        // Create canvases based on system requirements
-        if (systemName === 'faceted') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'quantum') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `quantum-${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'holographic') {
-            for (let i = 0; i < 5; i++) {
-                const canvas = document.createElement('canvas');
-                canvas.id = `holo-layer-${i}`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            }
-        }
-
-        // Initialize new engine
         try {
-            if (systemName === 'faceted') {
-                this.currentEngine = new VIB34DIntegratedEngine();
-            } else if (systemName === 'quantum') {
-                this.currentEngine = new QuantumEngine();
-            } else if (systemName === 'holographic') {
-                this.currentEngine = new RealHolographicSystem();
-            }
+            const system = await this.systemRegistry.activate(systemName, {
+                clearContainer: true
+            });
 
+            this.activeSystem = system;
+            this.currentEngine = system?.engine || null;
             this.currentSystem = systemName;
-            this.canvasManager = this.currentEngine?.canvasManager || null;
+            this.canvasManager = system?.canvasManager || this.currentEngine?.canvasManager || null;
+
             this.dynamicBridge.bindToEngine(this.currentEngine);
 
-            // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.system === systemName);
             });
 
-            console.log('✅ Switched to', systemName, 'system');
+            console.log('✅ Switched to', systemName, 'system via SystemRegistry');
             this.refreshGeometryMetadata();
         } catch (error) {
             console.error('Failed to switch system:', error);
