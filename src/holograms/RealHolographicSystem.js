@@ -4,45 +4,61 @@
  * Audio reactive only - no mouse/touch/scroll interference
  */
 import { HolographicVisualizer } from './HolographicVisualizer.js';
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import {
+    DEFAULT_VARIATION_TARGET,
+    resolveVariantCatalog,
+    normalizeVariantIndex
+} from './VariantCatalog.js';
 
 export class RealHolographicSystem {
     constructor() {
         this.visualizers = [];
         this.currentVariant = 0;
-        this.baseVariants = 30; // Original 30 variations
-        this.totalVariants = 30;
+        this.variantTarget = DEFAULT_VARIATION_TARGET;
+        this.variantCatalog = resolveVariantCatalog(this.variantTarget);
+        this.baseVariants = this.variantCatalog.definitions.length;
+        this.totalVariants = this.baseVariants;
         this.isActive = false;
-        
+
         // REMOVED: Built-in reactivity - ReactivityManager handles all interactions now
-        
+
         // Audio reactivity system
         this.audioEnabled = false;
         this.audioContext = null;
         this.analyser = null;
         this.frequencyData = null;
         this.audioData = { bass: 0, mid: 0, high: 0 };
-        
-        // Variant names for display - SEQUENTIAL ORDER
-        this.variantNames = [
-            // 0-3: TETRAHEDRON variations
-            'TETRAHEDRON LATTICE', 'TETRAHEDRON FIELD', 'TETRAHEDRON MATRIX', 'TETRAHEDRON RESONANCE',
-            // 4-7: HYPERCUBE variations
-            'HYPERCUBE LATTICE', 'HYPERCUBE FIELD', 'HYPERCUBE MATRIX', 'HYPERCUBE QUANTUM',
-            // 8-11: SPHERE variations
-            'SPHERE LATTICE', 'SPHERE FIELD', 'SPHERE MATRIX', 'SPHERE RESONANCE',
-            // 12-15: TORUS variations
-            'TORUS LATTICE', 'TORUS FIELD', 'TORUS MATRIX', 'TORUS QUANTUM',
-            // 16-19: KLEIN BOTTLE variations
-            'KLEIN BOTTLE LATTICE', 'KLEIN BOTTLE FIELD', 'KLEIN BOTTLE MATRIX', 'KLEIN BOTTLE QUANTUM',
-            // 20-22: FRACTAL variations
-            'FRACTAL LATTICE', 'FRACTAL FIELD', 'FRACTAL QUANTUM',
-            // 23-25: WAVE variations
-            'WAVE LATTICE', 'WAVE FIELD', 'WAVE QUANTUM',
-            // 26-29: CRYSTAL variations
-            'CRYSTAL LATTICE', 'CRYSTAL FIELD', 'CRYSTAL MATRIX', 'CRYSTAL QUANTUM'
-        ];
-        
+
+        this.variantNames = this.variantCatalog.definitions.map(
+            definition => definition.displayLabel || definition.label || definition.displayName
+        );
+        this.geometryUnsubscribe = GeometryLibrary.subscribe((payload) => {
+            this.handleGeometryUpdate(payload?.names);
+        });
+
         this.initialize();
+    }
+
+    handleGeometryUpdate(names) {
+        this.variantCatalog = resolveVariantCatalog(this.variantTarget, names);
+        this.baseVariants = this.variantCatalog.definitions.length;
+        this.totalVariants = this.baseVariants;
+        this.variantNames = this.variantCatalog.definitions.map(
+            definition => definition.displayLabel || definition.label || definition.displayName
+        );
+        this.currentVariant = normalizeVariantIndex(
+            this.currentVariant,
+            this.variantCatalog.definitions
+        );
+
+        if (this.visualizers.length) {
+            this.visualizers.forEach(visualizer => {
+                visualizer.updateVariant(this.currentVariant);
+            });
+        }
+
+        this.updateVariantDisplay();
     }
     
     initialize() {
@@ -193,11 +209,13 @@ export class RealHolographicSystem {
     
     // Override updateVariant to preserve custom parameters
     updateVariant(newVariant) {
-        if (newVariant < 0) newVariant = this.totalVariants - 1;
-        if (newVariant >= this.totalVariants) newVariant = 0;
-        
-        this.currentVariant = newVariant;
-        
+        if (this.totalVariants <= 0) {
+            console.warn('No real holographic variants available to display.');
+            return;
+        }
+
+        this.currentVariant = normalizeVariantIndex(newVariant, this.variantCatalog.definitions);
+
         // Update all visualizers with new variant parameters
         this.visualizers.forEach(visualizer => {
             visualizer.variant = this.currentVariant;
@@ -713,11 +731,16 @@ export class RealHolographicSystem {
             }
         });
         this.visualizers = [];
-        
+
         if (this.audioContext) {
             this.audioContext.close();
         }
-        
+
+        if (typeof this.geometryUnsubscribe === 'function') {
+            this.geometryUnsubscribe();
+            this.geometryUnsubscribe = null;
+        }
+
         console.log('🧹 REAL Holographic System destroyed');
     }
 }

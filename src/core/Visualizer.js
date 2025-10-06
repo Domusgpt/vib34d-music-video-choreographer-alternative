@@ -4,6 +4,7 @@
  */
 
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import { ReactiveVisualizerInspector } from '../diagnostics/ReactiveVisualizerInspector.js';
 
 export class IntegratedHolographicVisualizer {
     constructor(canvasId, role, reactivity, variant) {
@@ -617,6 +618,18 @@ void main() {
         this.gl.uniform1f(this.uniforms.mouseIntensity, this.mouseIntensity);
         this.gl.uniform1f(this.uniforms.clickIntensity, this.clickIntensity);
         this.gl.uniform1f(this.uniforms.roleIntensity, roleIntensities[this.role] || 1.0);
+
+        ReactiveVisualizerInspector.inspectAndReport('integrated-holographic', {
+            rot4dXW: this.params.rot4dXW,
+            rot4dYW: this.params.rot4dYW,
+            rot4dZW: this.params.rot4dZW
+        }, {
+            audioReactive: typeof window !== 'undefined' ? window.audioReactive : null,
+            geometryIndex: this.params.geometry,
+            geometryLabel: GeometryLibrary?.getGeometryName?.(this.params.geometry) || null,
+            canvasId: this.canvas?.id,
+            variant: this.variant || null
+        });
         
         try {
             this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
