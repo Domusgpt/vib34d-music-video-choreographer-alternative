@@ -472,6 +472,10 @@
         };
 
         async function initChoreographer(mode) {
+            if (choreographer && typeof choreographer.destroy === 'function') {
+                choreographer.destroy();
+            }
+
             const { MusicVideoChoreographer } = await import('./music-choreographer-engine.js');
             choreographer = new MusicVideoChoreographer(mode);
             window.choreographer = choreographer;
@@ -502,6 +506,46 @@
             if (!choreographer) return;
             choreographer.importChoreography();
         };
+
+        window.addEventListener('beforeunload', () => {
+            if (choreographer && typeof choreographer.destroy === 'function') {
+                choreographer.destroy();
+            }
+        });
+
+        async function configureReactiveInspectorDebug() {
+            const params = new URLSearchParams(window.location.search);
+            const debugState = window.VIB34D_DEBUG = window.VIB34D_DEBUG || {};
+            debugState.reactiveInspector = debugState.reactiveInspector || {};
+
+            if (params.get('inspectorLog') === '1') {
+                debugState.reactiveInspector.log = true;
+            }
+
+            const shouldAutoPanel = params.get('inspectorPanel') === '1'
+                || debugState.reactiveInspector.autoPanel === true;
+
+            if (!shouldAutoPanel) {
+                return;
+            }
+
+            const anchor = params.get('inspectorAnchor') || debugState.reactiveInspector.anchor || 'bottom-right';
+            const widthParam = params.get('inspectorWidth') || debugState.reactiveInspector.width;
+            const parsedWidth = widthParam ? parseInt(widthParam, 10) : 320;
+
+            try {
+                const { installReactiveInspectorPanel } = await import('./src/ui/ReactiveInspectorPanel.js');
+                installReactiveInspectorPanel({
+                    anchor,
+                    width: Number.isFinite(parsedWidth) ? parsedWidth : 320,
+                    log: params.get('inspectorLog') === '1' || debugState.reactiveInspector.log === true
+                });
+            } catch (error) {
+                console.error('Failed to install reactive inspector panel:', error);
+            }
+        }
+
+        configureReactiveInspectorDebug();
     </script>
 </body>
 </html>
