@@ -1,139 +1,412 @@
 /**
  * VIB34D Audio Engine Module
- * Mobile-safe audio reactivity system with global window integration
- * Extracted from monolithic index.html for clean architecture
+ * Advanced audio reactivity hub that feeds all visualization systems
+ * Built on the unified AudioAnalyzer / ParameterMapper toolkit
  */
+
+import { AudioAnalyzer } from '../../src/audio/AudioAnalyzer.js';
+import { ParameterMapper } from '../../src/audio/ParameterMapper.js';
+import { ADSREnvelope } from '../../src/audio/ADSREnvelope.js';
 
 // Global audio state flags - CRITICAL for system integration
 window.audioEnabled = false; // Global audio flag (will auto-enable on interaction)
 
-/**
- * Simple Audio Engine - Mobile-safe and actually works
- * Provides real-time audio analysis for all visualization systems
- */
-export class SimpleAudioEngine {
-    constructor() {
-        this.context = null;
-        this.analyser = null;
-        this.dataArray = null;
-        this.isActive = false;
-        
-        // Mobile-safe: Initialize with defaults
-        window.audioReactive = {
+const clamp01 = value => Math.min(Math.max(value, 0), 1);
+
+function createDefaultReactiveState() {
+    return {
+        bass: 0,
+        mid: 0,
+        high: 0,
+        sparkle: 0,
+        energy: 0,
+        motion: 0,
+        onset: 0,
+        hueShift: 0,
+        intensity: 0,
+        spectralCentroid: 0,
+        spectralRolloff: 0,
+        spectralFlux: 0,
+        rms: 0,
+        bpm: 0,
+        bands: {
+            subBass: 0,
             bass: 0,
-            mid: 0, 
+            lowMid: 0,
+            mid: 0,
+            highMid: 0,
             high: 0,
-            energy: 0
+            air: 0
+        }
+    };
+}
+
+/**
+ * Advanced Audio Engine - Unified analysis + parameter routing
+ */
+export class AdvancedAudioEngine {
+    constructor(options = {}) {
+        this.context = null;
+        this.mediaStream = null;
+        this.analyserNode = null;
+        this.audioAnalyzer = null;
+        this.parameterMapper = null;
+        this.listeners = new Set();
+
+        this.isActive = false;
+        this.isEnabled = false;
+        this.processingHandle = null;
+        this.frameScheduler = 'raf';
+
+        this.options = {
+            fftSize: options.fftSize || 2048,
+            smoothingTimeConstant: options.smoothingTimeConstant ?? 0.7,
+            energySmoothing: options.energySmoothing ?? 0.75,
+            onsetThreshold: options.onsetThreshold ?? 0.18,
+            minimumOnsetInterval: options.minimumOnsetInterval ?? 110
         };
-        
-        console.log('🎵 Audio Engine: Initialized with default values');
+
+        this.sensitivity = {
+            bass: options.bassGain ?? 1,
+            mid: options.midGain ?? 1,
+            high: options.highGain ?? 1,
+            energy: options.energyGain ?? 1,
+            sparkle: options.sparkleGain ?? 1,
+            motion: options.motionGain ?? 1
+        };
+
+        window.audioReactive = createDefaultReactiveState();
+
+        console.log('🎵 Audio Engine: Advanced analyzer initialized with default values');
     }
-    
+
     async init() {
-        if (this.isActive) return true;
-        
+        if (this.isActive) {
+            if (this.context?.state === 'suspended') {
+                await this.context.resume();
+            }
+            this.setEnabled(true);
+            return true;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.warn('⚠️ Audio Analyzer: getUserMedia not available.');
+            return false;
+        }
+
         try {
-            console.log('🎵 Simple Audio Engine: Starting...');
-            
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('🎵 Advanced Audio Engine: Requesting microphone access…');
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.context = new (window.AudioContext || window.webkitAudioContext)();
-            
+
             if (this.context.state === 'suspended') {
                 await this.context.resume();
             }
-            
-            this.analyser = this.context.createAnalyser();
-            this.analyser.fftSize = 256;
-            this.analyser.smoothingTimeConstant = 0.8;
-            
-            const source = this.context.createMediaStreamSource(stream);
-            source.connect(this.analyser);
-            
-            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+            this.analyserNode = this.context.createAnalyser();
+            this.analyserNode.fftSize = this.options.fftSize;
+            this.analyserNode.smoothingTimeConstant = this.options.smoothingTimeConstant;
+
+            const source = this.context.createMediaStreamSource(this.mediaStream);
+            source.connect(this.analyserNode);
+
+            this.audioAnalyzer = new AudioAnalyzer(this.analyserNode, {
+                fftSize: this.options.fftSize,
+                frequencySmoothing: this.options.smoothingTimeConstant,
+                energySmoothing: this.options.energySmoothing,
+                onsetThreshold: this.options.onsetThreshold,
+                minimumOnsetInterval: this.options.minimumOnsetInterval
+            });
+
+            this.parameterMapper = this.#createDefaultMapper();
+
             this.isActive = true;
-            
-            // CRITICAL FIX: Enable global audio flag so visualizers will use the data
-            window.audioEnabled = true;
-            
-            this.startProcessing();
-            console.log('✅ Audio Engine: Active - window.audioEnabled = true');
+            this.setEnabled(true);
+            this.#startProcessing();
+
+            console.log('✅ Audio Engine: Advanced analyzer active');
             return true;
-            
         } catch (error) {
-            console.log('⚠️ Audio denied - silent mode');
-            window.audioEnabled = false; // Keep audio disabled if permission denied
+            console.warn('⚠️ Audio Analyzer: Permission denied or device unavailable', error);
+            this.isActive = false;
+            this.setEnabled(false);
             return false;
         }
     }
-    
-    startProcessing() {
-        const process = () => {
-            if (!this.isActive || !this.analyser) {
-                requestAnimationFrame(process);
-                return;
-            }
-            
-            this.analyser.getByteFrequencyData(this.dataArray);
-            
-            // Simple frequency analysis
-            const len = this.dataArray.length;
-            const bassRange = Math.floor(len * 0.1);
-            const midRange = Math.floor(len * 0.3);
-            
-            let bass = 0, mid = 0, high = 0;
-            
-            for (let i = 0; i < bassRange; i++) bass += this.dataArray[i];
-            for (let i = bassRange; i < midRange; i++) mid += this.dataArray[i];
-            for (let i = midRange; i < len; i++) high += this.dataArray[i];
-            
-            bass = (bass / bassRange) / 255;
-            mid = (mid / (midRange - bassRange)) / 255;
-            high = (high / (len - midRange)) / 255;
-            
-            const smoothing = 0.7;
-            window.audioReactive.bass = bass * smoothing + window.audioReactive.bass * (1 - smoothing);
-            window.audioReactive.mid = mid * smoothing + window.audioReactive.mid * (1 - smoothing);
-            window.audioReactive.high = high * smoothing + window.audioReactive.high * (1 - smoothing);
-            window.audioReactive.energy = (window.audioReactive.bass + window.audioReactive.mid + window.audioReactive.high) / 3;
-            
-            // Debug logging every 5 seconds to verify audio processing
-            if (Date.now() % 5000 < 16) {
-                console.log(`🎵 Audio levels: Bass=${window.audioReactive.bass.toFixed(2)} Mid=${window.audioReactive.mid.toFixed(2)} High=${window.audioReactive.high.toFixed(2)} Energy=${window.audioReactive.energy.toFixed(2)}`);
-            }
-            
-            requestAnimationFrame(process);
-        };
-        
-        process();
-    }
-    
-    /**
-     * Check if audio is currently active and processing
-     */
+
     isAudioActive() {
-        return this.isActive && window.audioEnabled;
+        return this.isActive && this.isEnabled && window.audioEnabled;
     }
-    
-    /**
-     * Get current audio reactive values
-     */
+
+    setEnabled(enabled) {
+        this.isEnabled = Boolean(enabled);
+        window.audioEnabled = this.isEnabled;
+
+        if (!this.isEnabled) {
+            this.#resetReactiveState();
+            this.#stopProcessingLoop();
+        }
+
+        if (!this.processingHandle && this.isActive && this.isEnabled) {
+            this.#startProcessing();
+        }
+    }
+
+    updateSensitivity(settings = {}) {
+        if (typeof settings.bassGain === 'number') {
+            this.sensitivity.bass = Math.max(0, settings.bassGain);
+        }
+        if (typeof settings.midGain === 'number') {
+            this.sensitivity.mid = Math.max(0, settings.midGain);
+        }
+        if (typeof settings.highGain === 'number') {
+            this.sensitivity.high = Math.max(0, settings.highGain);
+        }
+        if (typeof settings.energyGain === 'number') {
+            this.sensitivity.energy = Math.max(0, settings.energyGain);
+        }
+        if (typeof settings.sparkleGain === 'number') {
+            this.sensitivity.sparkle = Math.max(0, settings.sparkleGain);
+        }
+        if (typeof settings.motionGain === 'number') {
+            this.sensitivity.motion = Math.max(0, settings.motionGain);
+        }
+    }
+
+    registerMappings(parameterMappings = {}) {
+        if (!this.parameterMapper) {
+            this.parameterMapper = new ParameterMapper(parameterMappings);
+            return;
+        }
+
+        Object.entries(parameterMappings).forEach(([parameter, config]) => {
+            this.parameterMapper.registerMapping(parameter, config);
+        });
+    }
+
+    subscribe(listener) {
+        if (typeof listener !== 'function') {
+            return () => {};
+        }
+
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
     getAudioLevels() {
         return window.audioReactive;
     }
-    
-    /**
-     * Stop audio processing and clean up resources
-     */
+
     stop() {
-        this.isActive = false;
+        this.isEnabled = false;
         window.audioEnabled = false;
-        
+
+        this.#stopProcessingLoop();
+
+        if (this.analyserNode) {
+            this.analyserNode.disconnect();
+            this.analyserNode = null;
+        }
+
+        if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(track => track.stop());
+            this.mediaStream = null;
+        }
+
         if (this.context) {
             this.context.close();
             this.context = null;
         }
-        
-        console.log('🎵 Audio Engine: Stopped');
+
+        this.isActive = false;
+        this.#resetReactiveState();
+
+        console.log('🎵 Audio Engine: Stopped and cleaned up');
+    }
+
+    #startProcessing() {
+        if (!this.isActive || !this.isEnabled || !this.audioAnalyzer || this.processingHandle != null) {
+            return;
+        }
+
+        const useRaf = typeof requestAnimationFrame === 'function';
+        this.frameScheduler = useRaf ? 'raf' : 'timeout';
+
+        const step = () => {
+            if (!this.isActive) {
+                this.#stopProcessingLoop();
+                return;
+            }
+
+            if (this.isEnabled) {
+                this.#processFrame();
+            }
+
+            if (this.frameScheduler === 'raf') {
+                this.processingHandle = requestAnimationFrame(step);
+            } else {
+                this.processingHandle = setTimeout(step, 16);
+            }
+        };
+
+        if (this.frameScheduler === 'raf') {
+            this.processingHandle = requestAnimationFrame(step);
+        } else {
+            this.processingHandle = setTimeout(step, 16);
+        }
+    }
+
+    #processFrame() {
+        if (!this.audioAnalyzer || !this.parameterMapper) {
+            return;
+        }
+
+        const audioData = this.audioAnalyzer.analyze();
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const mapped = this.parameterMapper.map(audioData, now);
+
+        const combinedBands = {
+            subBass: clamp01(audioData.bands?.subBass ?? 0),
+            bass: clamp01(audioData.bands?.bass ?? 0),
+            lowMid: clamp01(audioData.bands?.lowMid ?? 0),
+            mid: clamp01(audioData.bands?.mid ?? 0),
+            highMid: clamp01(audioData.bands?.highMid ?? 0),
+            high: clamp01(audioData.bands?.high ?? 0),
+            air: clamp01(audioData.bands?.air ?? 0)
+        };
+
+        const reactive = {
+            bass: clamp01((mapped.bass ?? 0) * this.sensitivity.bass),
+            mid: clamp01((mapped.mid ?? 0) * this.sensitivity.mid),
+            high: clamp01((mapped.high ?? 0) * this.sensitivity.high),
+            sparkle: clamp01((mapped.sparkle ?? combinedBands.air) * this.sensitivity.sparkle),
+            energy: clamp01((mapped.energy ?? audioData.rms ?? 0) * this.sensitivity.energy),
+            motion: clamp01((mapped.motion ?? audioData.spectralFlux ?? 0) * this.sensitivity.motion),
+            onset: audioData.onset ? 1 : 0,
+            hueShift: clamp01(mapped.hueShift ?? audioData.spectralCentroid ?? 0),
+            intensity: clamp01(mapped.intensity ?? audioData.rms ?? 0),
+            spectralCentroid: clamp01(audioData.spectralCentroid ?? 0),
+            spectralRolloff: clamp01(audioData.spectralRolloff ?? 0),
+            spectralFlux: clamp01(audioData.spectralFlux ?? 0),
+            rms: clamp01(audioData.rms ?? 0),
+            bpm: audioData.bpm || 0,
+            bands: combinedBands
+        };
+
+        reactive.energy = Math.max(reactive.energy, (reactive.bass + reactive.mid + reactive.high) / 3);
+
+        window.audioReactive = reactive;
+
+        this.listeners.forEach(listener => {
+            try {
+                listener(reactive, audioData);
+            } catch (error) {
+                console.warn('Audio Engine listener error', error);
+            }
+        });
+
+        if (Math.floor(now) % 5000 < 32) {
+            console.log(
+                `🎵 Audio levels: Bass=${reactive.bass.toFixed(2)} Mid=${reactive.mid.toFixed(2)} High=${reactive.high.toFixed(2)} Energy=${reactive.energy.toFixed(2)} BPM=${Math.round(reactive.bpm)}`
+            );
+        }
+    }
+
+    #stopProcessingLoop() {
+        if (this.processingHandle == null) {
+            return;
+        }
+
+        if (this.frameScheduler === 'raf') {
+            if (typeof cancelAnimationFrame === 'function') {
+                cancelAnimationFrame(this.processingHandle);
+            }
+        } else if (this.frameScheduler === 'timeout') {
+            clearTimeout(this.processingHandle);
+        }
+
+        this.processingHandle = null;
+    }
+
+    #createDefaultMapper() {
+        return new ParameterMapper({
+            bass: {
+                source: data => ((data.bands.subBass + data.bands.bass) / 2) || 0,
+                curve: 'exponential',
+                range: [0, 1],
+                envelope: new ADSREnvelope(60, 140, 0.65, 220),
+                envelopeTrigger: 0.05,
+                envelopeRelease: 0.03
+            },
+            mid: {
+                source: data => ((data.bands.lowMid + data.bands.mid) / 2) || 0,
+                curve: 's-curve',
+                intensity: 0.8,
+                range: [0, 1],
+                envelope: new ADSREnvelope(50, 100, 0.7, 200),
+                envelopeTrigger: 0.05,
+                envelopeRelease: 0.03
+            },
+            high: {
+                source: data => ((data.bands.highMid + data.bands.high) / 2) || 0,
+                curve: 'power',
+                power: 1.4,
+                range: [0, 1],
+                envelope: new ADSREnvelope(35, 90, 0.6, 160),
+                envelopeTrigger: 0.04,
+                envelopeRelease: 0.025
+            },
+            sparkle: {
+                source: data => data.bands.air || 0,
+                curve: 'power',
+                power: 1.6,
+                range: [0, 1],
+                envelope: new ADSREnvelope(25, 80, 0.5, 140),
+                envelopeTrigger: 0.04,
+                envelopeRelease: 0.02
+            },
+            energy: {
+                source: data => data.rms || 0,
+                curve: 'logarithmic',
+                range: [0.1, 1],
+                envelope: new ADSREnvelope(30, 120, 0.75, 260),
+                envelopeTrigger: 0.04,
+                envelopeRelease: 0.02
+            },
+            motion: {
+                source: data => data.spectralFlux || 0,
+                curve: 'exponential',
+                range: [0, 1],
+                envelope: new ADSREnvelope(20, 80, 0.5, 180),
+                envelopeTrigger: 0.03,
+                envelopeRelease: 0.015
+            },
+            hueShift: {
+                source: data => data.spectralCentroid || 0,
+                curve: 'linear',
+                range: [0, 1]
+            },
+            intensity: {
+                source: data => data.rms || 0,
+                curve: 's-curve',
+                intensity: 0.6,
+                range: [0.2, 1],
+                envelope: new ADSREnvelope(25, 70, 0.8, 160),
+                envelopeTrigger: 0.04,
+                envelopeRelease: 0.02
+            }
+        });
+    }
+
+    #resetReactiveState() {
+        window.audioReactive = createDefaultReactiveState();
+        this.listeners.forEach(listener => {
+            try {
+                listener(window.audioReactive, null);
+            } catch (error) {
+                console.warn('Audio Engine listener error during reset', error);
+            }
+        });
     }
 }
 
@@ -142,56 +415,45 @@ export class SimpleAudioEngine {
  * Toggles audio reactivity and updates UI state
  */
 export function setupAudioToggle() {
-    window.toggleAudio = function() {
+    window.toggleAudio = async function toggleAudio() {
         const audioBtn = document.getElementById('audioToggle') || document.querySelector('[onclick="toggleAudio()"]');
-        
-        if (!window.audioEngine.isActive) {
-            // Try to start audio
-            window.audioEngine.init().then(success => {
-                if (success) {
-                    if (audioBtn) {
-                        audioBtn.classList.add('active');
-                        audioBtn.title = 'Audio Reactivity: ON';
-                    }
-                    console.log('🎵 Audio Reactivity: ON');
-                } else {
-                    console.log('⚠️ Audio permission denied or not available');
-                }
-            });
-        } else {
-            // Toggle audio processing
-            let audioEnabled = !window.audioEnabled;
-            window.audioEnabled = audioEnabled; // Update global flag
-            
-            if (audioBtn) {
-                // Update button visual state
-                if (audioEnabled) {
-                    audioBtn.classList.add('active');
-                } else {
-                    audioBtn.classList.remove('active');
-                }
-                audioBtn.title = `Audio Reactivity: ${audioEnabled ? 'ON' : 'OFF'}`;
-            }
-            
-            // Audio permission check for mobile
-            if (audioEnabled) {
-                navigator.mediaDevices.getUserMedia({ audio: true }).catch(e => {
-                    audioEnabled = false;
-                    window.audioEnabled = false;
-                    console.log('⚠️ Audio permission denied:', e.message);
-                });
-            }
-            
-            console.log(`🎵 Audio Reactivity: ${audioEnabled ? 'ON' : 'OFF'}`);
+
+        if (!window.audioEngine) {
+            console.warn('⚠️ No audio engine instance available');
+            return;
         }
+
+        if (!window.audioEngine.isActive) {
+            const success = await window.audioEngine.init();
+            if (!success) {
+                console.warn('⚠️ Audio Reactivity: Permission denied or unavailable');
+                return;
+            }
+            if (audioBtn) {
+                audioBtn.classList.add('active');
+                audioBtn.title = 'Audio Reactivity: ON';
+            }
+            console.log('🎵 Audio Reactivity: ON');
+            return;
+        }
+
+        const nextEnabled = !window.audioEnabled;
+        window.audioEngine.setEnabled(nextEnabled);
+
+        if (audioBtn) {
+            audioBtn.classList.toggle('active', nextEnabled);
+            audioBtn.title = `Audio Reactivity: ${nextEnabled ? 'ON' : 'OFF'}`;
+        }
+
+        console.log(`🎵 Audio Reactivity: ${nextEnabled ? 'ON' : 'OFF'}`);
     };
 }
 
 // Create and initialize the global audio engine instance
-const audioEngine = new SimpleAudioEngine();
+const audioEngine = new AdvancedAudioEngine();
 window.audioEngine = audioEngine;
 
 // Set up global audio toggle function
 setupAudioToggle();
 
-console.log('🎵 Audio Engine Module: Loaded');
+console.log('🎵 Audio Engine Module: Advanced analyzer loaded');
