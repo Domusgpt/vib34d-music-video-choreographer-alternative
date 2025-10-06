@@ -3,6 +3,12 @@
  * Manages the exact multi-layer holographic effects from active-holographic-systems-FIXED
  */
 import { ActiveHolographicVisualizer } from './ActiveHolographicVisualizer.js';
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import {
+    DEFAULT_VARIATION_TARGET,
+    resolveVariantCatalog,
+    normalizeVariantIndex
+} from './VariantCatalog.js';
 
 export class ActiveHolographicSystem {
     constructor() {
@@ -12,7 +18,13 @@ export class ActiveHolographicSystem {
         this.audioContext = null;
         this.audioData = { bass: 0, mid: 0, high: 0 };
         this.animationFrame = null;
-        
+        this.variantTarget = DEFAULT_VARIATION_TARGET;
+        this.variantCatalog = resolveVariantCatalog(this.variantTarget);
+        this.variantCount = this.variantCatalog.definitions.length || 1;
+        this.geometryUnsubscribe = GeometryLibrary.subscribe((payload) => {
+            this.handleGeometryUpdate(payload?.names);
+        });
+
         // Layer configuration - exact roles from active-holographic-systems-FIXED
         this.layerConfig = [
             { id: 'holo-background-canvas', role: 'background', reactivity: 0.3 },
@@ -28,6 +40,19 @@ export class ActiveHolographicSystem {
         this.isMouseActive = false;
         
         this.initializeEventListeners();
+    }
+
+    handleGeometryUpdate(names) {
+        this.variantCatalog = resolveVariantCatalog(this.variantTarget, names);
+        this.variantCount = this.variantCatalog.definitions.length || 1;
+        this.currentVariant = normalizeVariantIndex(
+            this.currentVariant,
+            this.variantCatalog.definitions
+        );
+
+        this.layers.forEach(visualizer => {
+            visualizer.updateVariant(this.currentVariant);
+        });
     }
     
     async initialize() {
@@ -83,18 +108,30 @@ export class ActiveHolographicSystem {
     }
     
     updateVariant(variant) {
-        if (variant < 0 || variant > 29) {
-            console.warn(`Invalid variant: ${variant}. Using 0.`);
-            variant = 0;
+        const count = this.getVariantCount();
+        if (!count) {
+            console.warn('No holographic variants available to select.');
+            return;
         }
-        
-        this.currentVariant = variant;
-        console.log(`🔄 Switching to Holographic Variant #${variant}`);
-        
-        // Update all layers to new variant
+
+        const normalized = ((variant % count) + count) % count;
+        this.currentVariant = normalized;
+        console.log(`🔄 Switching to Holographic Variant #${normalized}`);
+
         this.layers.forEach(visualizer => {
-            visualizer.updateVariant(variant);
+            visualizer.updateVariant(normalized);
         });
+    }
+
+    getVariantCount() {
+        if (this.layers.size) {
+            const first = this.layers.values().next().value;
+            if (first?.getVariantCount) {
+                return first.getVariantCount();
+            }
+        }
+
+        return this.variantCatalog?.definitions.length || this.variantCount || 1;
     }
     
     initializeEventListeners() {
@@ -233,7 +270,8 @@ export class ActiveHolographicSystem {
     // Get all available variants (0-29)
     getAvailableVariants() {
         const variants = [];
-        for (let i = 0; i < 30; i++) {
+        const total = this.getVariantCount();
+        for (let i = 0; i < total; i += 1) {
             // Create a temporary visualizer to get variant info
             const tempCanvas = document.createElement('canvas');
             tempCanvas.id = 'temp-canvas';
@@ -262,16 +300,21 @@ export class ActiveHolographicSystem {
     // Cleanup
     destroy() {
         this.stop();
-        
+
         this.layers.forEach(visualizer => {
             visualizer.destroy();
         });
         this.layers.clear();
-        
+
         if (this.audioContext) {
             this.audioContext.close();
         }
-        
+
+        if (typeof this.geometryUnsubscribe === 'function') {
+            this.geometryUnsubscribe();
+            this.geometryUnsubscribe = null;
+        }
+
         console.log('🧹 Active Holographic System destroyed');
     }
 }

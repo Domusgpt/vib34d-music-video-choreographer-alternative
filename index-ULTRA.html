@@ -112,6 +112,22 @@
             cursor: pointer;
         }
 
+        .geometry-legend {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            font-size: 10px;
+            line-height: 1.4;
+            opacity: 0.8;
+        }
+
+        .geometry-legend span {
+            background: rgba(0, 255, 255, 0.12);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
         .param-value {
             float: right;
             color: #f0f;
@@ -390,6 +406,7 @@
             <div class="param-group">
                 <label>Geometry <span class="param-value" id="geometry-value">0</span></label>
                 <input type="range" id="geometry" min="0" max="7" step="1" value="0" oninput="updateParam('geometry', this.value)">
+                <div class="geometry-legend" id="geometry-legend"></div>
             </div>
         </div>
 
@@ -499,6 +516,7 @@
         import { QuantumEngine } from './src/quantum/QuantumEngine.js';
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
         import { CanvasManager } from './src/core/CanvasManager.js';
+        import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
 
         let canvasManager = null;
         let currentEngine = null;
@@ -528,6 +546,8 @@
         // Sequences
         let sequences = [];
         let currentTime = 0;
+        let geometryNames = GeometryLibrary.getGeometryNames();
+        let geometrySubscriptionCleanup = null;
 
         const engineClasses = {
             VIB34DIntegratedEngine,
@@ -539,6 +559,7 @@
         (async function init() {
             canvasManager = new CanvasManager();
             currentEngine = await canvasManager.switchToSystem('faceted', engineClasses);
+            refreshGeometryControls();
 
             document.getElementById('audio-file').addEventListener('change', loadAudio);
             audioElement.addEventListener('timeupdate', updatePlayhead);
@@ -547,6 +568,71 @@
             startVisualization();
             console.log('✅ ULTRA System initialized');
         })();
+
+        function geometryCount() {
+            geometryNames = GeometryLibrary.getGeometryNames();
+            return geometryNames.length;
+        }
+
+        function clampGeometry(index) {
+            const count = geometryCount();
+            if (count === 0) return 0;
+            const numeric = Number(index);
+            if (!Number.isFinite(numeric)) return 0;
+            return Math.max(0, Math.min(count - 1, Math.round(numeric)));
+        }
+
+        function geometryLabel(index) {
+            if (!geometryNames.length) {
+                return `${index}`;
+            }
+            const normalized = clampGeometry(index);
+            const name = geometryNames[normalized];
+            return name ? `${normalized} · ${name}` : `${normalized}`;
+        }
+
+        function updateGeometryLegend() {
+            const legend = document.getElementById('geometry-legend');
+            if (!legend) return;
+            if (!geometryNames.length) {
+                legend.innerHTML = '<span style="opacity:0.6;">No geometries available</span>';
+                return;
+            }
+            legend.innerHTML = geometryNames
+                .map((name, idx) => `<span>${idx}: ${name}</span>`)
+                .join('');
+        }
+
+        function updateGeometryReadout(index) {
+            const readout = document.getElementById('geometry-value');
+            if (!readout) return;
+            if (index === undefined || index === null || Number.isNaN(index)) {
+                readout.textContent = '--';
+                return;
+            }
+            readout.textContent = geometryLabel(index);
+        }
+
+        function refreshGeometryControls() {
+            geometryCount();
+            const slider = document.getElementById('geometry');
+            if (slider) {
+                const maxIndex = Math.max(geometryNames.length - 1, 0);
+                if (Number(slider.max) !== maxIndex) {
+                    slider.max = maxIndex;
+                }
+                const normalized = clampGeometry(params.geometry ?? 0);
+                params.geometry = normalized;
+                slider.value = normalized;
+                updateGeometryReadout(normalized);
+            }
+            updateGeometryLegend();
+        }
+
+        geometrySubscriptionCleanup = GeometryLibrary.subscribe(({ names }) => {
+            geometryNames = Array.isArray(names) ? names : GeometryLibrary.getGeometryNames();
+            refreshGeometryControls();
+        });
 
         window.switchSystem = async function(system) {
             currentEngine = await canvasManager.switchToSystem(system, engineClasses);
@@ -557,12 +643,20 @@
             });
 
             applyAllParams();
+            refreshGeometryControls();
         };
 
         window.updateParam = function(param, value) {
             params[param] = parseFloat(value);
-            document.getElementById(param + '-value').textContent =
-                param === 'hue' ? value + '°' : parseFloat(value).toFixed(param === 'gridDensity' || param === 'geometry' ? 0 : 2);
+            if (param === 'geometry') {
+                params[param] = clampGeometry(params[param]);
+                const slider = document.getElementById('geometry');
+                if (slider) slider.value = params[param];
+                updateGeometryReadout(params[param]);
+            } else {
+                document.getElementById(param + '-value').textContent =
+                    param === 'hue' ? value + '°' : parseFloat(value).toFixed(param === 'gridDensity' ? 0 : 2);
+            }
 
             applyParam(param, params[param]);
         };
@@ -609,7 +703,8 @@
         };
 
         window.randomizeAll = function() {
-            params.geometry = Math.floor(Math.random() * 8);
+            const count = geometryCount();
+            params.geometry = count > 0 ? Math.floor(Math.random() * count) : 0;
             params.rot4dXW = Math.random() * 12.56 - 6.28;
             params.rot4dYW = Math.random() * 12.56 - 6.28;
             params.rot4dZW = Math.random() * 12.56 - 6.28;
@@ -720,6 +815,14 @@
             sequences.sort((a, b) => a.time - b.time);
             renderSequences();
         };
+
+        window.addEventListener('beforeunload', () => {
+            if (typeof geometrySubscriptionCleanup === 'function') {
+                try { geometrySubscriptionCleanup(); }
+                catch (err) { console.warn('Geometry unsubscribe failed', err); }
+                geometrySubscriptionCleanup = null;
+            }
+        });
 
         function renderSequences() {
             const track = document.getElementById('sequence-track');
