@@ -17,6 +17,21 @@ let geometrySubscriptionCleanup = null;
 let geometryGridElement = null;
 let geometryGridSystem = 'faceted';
 
+const COLOR_MODE_OPTIONS = ['single', 'dual', 'triad', 'complementary', 'analogous', 'palette', 'gradient', 'reactive'];
+const GRADIENT_TYPE_OPTIONS = ['horizontal', 'vertical', 'radial', 'spiral', 'wave'];
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+let colorControlsInitialized = false;
+let gradientPreviewElement = null;
+let gradientPreviewLoopActive = false;
+let colorModeSelect = null;
+let colorPaletteSelect = null;
+let gradientTypeSelect = null;
+let gradientSpeedInput = null;
+let gradientSpeedValueLabel = null;
+let colorReactivityInput = null;
+let colorReactivityValueLabel = null;
+
 function sanitizeGeometryList(names = []) {
     const seen = new Set();
     const sanitized = [];
@@ -153,6 +168,207 @@ function renderGeometryGrid() {
 syncLegacyGeometryState(cachedGeometryNames);
 ensureGeometrySubscription();
 
+function formatColorLabel(key) {
+    if (!key) {
+        return 'Default';
+    }
+    return key.replace(/[-_]/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function ensureSelectOptions(select, options) {
+    if (!select || !Array.isArray(options)) {
+        return;
+    }
+
+    const existing = Array.from(select.options).map(option => option.value);
+    const needsUpdate = existing.length !== options.length || existing.some((value, index) => value !== options[index]);
+
+    if (!needsUpdate) {
+        return;
+    }
+
+    select.innerHTML = options.map(option => `<option value="${option}">${formatColorLabel(option)}</option>`).join('');
+}
+
+function startGradientPreviewLoop() {
+    if (gradientPreviewLoopActive || !gradientPreviewElement) {
+        return;
+    }
+
+    gradientPreviewLoopActive = true;
+
+    const update = () => {
+        if (!gradientPreviewElement) {
+            gradientPreviewLoopActive = false;
+            return;
+        }
+
+        const gradientState = window.colorState?.gradient;
+        if (gradientState?.css && gradientPreviewElement.dataset.currentCss !== gradientState.css) {
+            gradientPreviewElement.style.background = gradientState.css;
+            gradientPreviewElement.dataset.currentCss = gradientState.css;
+        }
+
+        requestAnimationFrame(update);
+    };
+
+    requestAnimationFrame(update);
+}
+
+function syncColorControls(config, state) {
+    if (!colorControlsInitialized) {
+        return;
+    }
+
+    const audioEngine = window.audioEngine;
+    const activeConfig = config || audioEngine?.getColorConfiguration?.() || {};
+    const activeState = state || audioEngine?.getColorState?.() || window.colorState || {};
+
+    if (colorModeSelect) {
+        const modeValue = activeConfig.colorMode || 'single';
+        if (colorModeSelect.value !== modeValue) {
+            colorModeSelect.value = modeValue;
+        }
+    }
+
+    if (colorPaletteSelect) {
+        const paletteValue = activeConfig.colorPalette || '';
+        if (paletteValue && !Array.from(colorPaletteSelect.options).some(option => option.value === paletteValue)) {
+            const option = document.createElement('option');
+            option.value = paletteValue;
+            option.textContent = formatColorLabel(paletteValue);
+            colorPaletteSelect.appendChild(option);
+        }
+        if (paletteValue && colorPaletteSelect.value !== paletteValue) {
+            colorPaletteSelect.value = paletteValue;
+        }
+    }
+
+    if (gradientTypeSelect) {
+        const gradientValue = activeConfig.gradientType || 'horizontal';
+        if (gradientTypeSelect.value !== gradientValue) {
+            gradientTypeSelect.value = gradientValue;
+        }
+    }
+
+    if (gradientSpeedInput) {
+        const speedValue = typeof activeConfig.gradientSpeed === 'number' ? activeConfig.gradientSpeed : 0.25;
+        if (gradientSpeedInput.value !== String(speedValue)) {
+            gradientSpeedInput.value = String(speedValue);
+        }
+        if (gradientSpeedValueLabel) {
+            gradientSpeedValueLabel.textContent = `${speedValue.toFixed(2)}x`;
+        }
+    }
+
+    if (colorReactivityInput) {
+        const reactivityValue = typeof activeConfig.colorReactivity === 'number' ? activeConfig.colorReactivity : 0.65;
+        if (colorReactivityInput.value !== String(reactivityValue)) {
+            colorReactivityInput.value = String(reactivityValue);
+        }
+        if (colorReactivityValueLabel) {
+            colorReactivityValueLabel.textContent = `${Math.round(clamp(reactivityValue, 0, 1) * 100)}%`;
+        }
+    }
+
+    if (gradientPreviewElement && activeState?.gradient?.css) {
+        gradientPreviewElement.style.background = activeState.gradient.css;
+        gradientPreviewElement.dataset.currentCss = activeState.gradient.css;
+    }
+}
+
+function initializeColorControls(force = false) {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    if (!force && colorControlsInitialized) {
+        syncColorControls();
+        return;
+    }
+
+    if (!window.audioEngine) {
+        setTimeout(() => initializeColorControls(force), 150);
+        return;
+    }
+
+    colorModeSelect = document.getElementById('colorModeControl');
+    colorPaletteSelect = document.getElementById('colorPaletteControl');
+    gradientTypeSelect = document.getElementById('gradientTypeControl');
+    gradientSpeedInput = document.getElementById('gradientSpeedControl');
+    gradientSpeedValueLabel = document.getElementById('gradientSpeedValue');
+    colorReactivityInput = document.getElementById('colorReactivityControl');
+    colorReactivityValueLabel = document.getElementById('colorReactivityValue');
+    gradientPreviewElement = document.getElementById('gradientPreview');
+
+    if (!colorModeSelect || !colorPaletteSelect || !gradientTypeSelect || !gradientSpeedInput || !colorReactivityInput) {
+        return;
+    }
+
+    const audioEngine = window.audioEngine;
+    const availableModes = audioEngine?.getAvailableColorModes?.() ?? COLOR_MODE_OPTIONS;
+    const availablePalettes = audioEngine?.getAvailablePalettes?.() ?? [];
+    const availableGradients = audioEngine?.getAvailableGradients?.() ?? GRADIENT_TYPE_OPTIONS;
+
+    ensureSelectOptions(colorModeSelect, availableModes);
+    ensureSelectOptions(colorPaletteSelect, availablePalettes.length ? availablePalettes : ['synthwave']);
+    ensureSelectOptions(gradientTypeSelect, availableGradients);
+
+    colorModeSelect.addEventListener('change', event => {
+        audioEngine?.setColorMode?.(event.target.value);
+    });
+
+    colorPaletteSelect.addEventListener('change', event => {
+        audioEngine?.setColorPalette?.(event.target.value);
+    });
+
+    gradientTypeSelect.addEventListener('change', event => {
+        audioEngine?.setGradientType?.(event.target.value);
+    });
+
+    gradientSpeedInput.addEventListener('input', event => {
+        const value = parseFloat(event.target.value);
+        if (gradientSpeedValueLabel) {
+            gradientSpeedValueLabel.textContent = `${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
+        }
+        audioEngine?.setGradientSpeed?.(value);
+    });
+
+    colorReactivityInput.addEventListener('input', event => {
+        const value = parseFloat(event.target.value);
+        if (colorReactivityValueLabel) {
+            colorReactivityValueLabel.textContent = `${Math.round(clamp(value, 0, 1) * 100)}%`;
+        }
+        audioEngine?.setColorReactivity?.(value);
+    });
+
+    colorControlsInitialized = true;
+    syncColorControls();
+
+    if (gradientPreviewElement) {
+        startGradientPreviewLoop();
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('vib34d:color-state', event => {
+        syncColorControls(event.detail?.config, event.detail?.state);
+    });
+
+    window.refreshColorControls = (force = false) => {
+        initializeColorControls(force);
+    };
+}
+
+if (typeof document !== 'undefined') {
+    const initControls = () => initializeColorControls();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initControls, { once: true });
+    } else {
+        setTimeout(initControls, 0);
+    }
+}
+
 /**
  * Main parameter update function - CRITICAL for all visualizers
  * Routes parameters to appropriate engine based on current system
@@ -165,7 +381,18 @@ window.updateParameter = function(param, value) {
     if (!window.isGalleryPreview) {
         console.log(`💾 User parameter: ${param} = ${value}`);
     }
-    
+
+    if (window.audioEngine) {
+        const numericValue = parseFloat(value);
+        if (param === 'hue') {
+            window.audioEngine.setBaseHue?.(numericValue);
+        } else if (param === 'saturation') {
+            window.audioEngine.setBaseSaturation?.(numericValue);
+        } else if (param === 'intensity') {
+            window.audioEngine.setBaseIntensity?.(numericValue);
+        }
+    }
+
     const displays = {
         rot4dXW: 'xwValue',
         rot4dYW: 'ywValue', 
