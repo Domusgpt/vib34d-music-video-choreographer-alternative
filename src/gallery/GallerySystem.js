@@ -212,54 +212,46 @@ export class GallerySystem {
     populateGallery() {
         const sectionsContainer = this.galleryModal.querySelector('.gallery-sections');
         sectionsContainer.innerHTML = '';
-        
-        // Create sections for each geometry type
-        const geometryTypes = [
-            { name: 'Tetrahedron Lattice', range: [0, 3], class: 'tetrahedron' },
-            { name: 'Hypercube Lattice', range: [4, 7], class: 'hypercube' },
-            { name: 'Sphere Lattice', range: [8, 11], class: 'sphere' },
-            { name: 'Torus Lattice', range: [12, 15], class: 'torus' },
-            { name: 'Klein Bottle Lattice', range: [16, 19], class: 'klein' },
-            { name: 'Fractal Lattice', range: [20, 22], class: 'fractal' },
-            { name: 'Wave Lattice', range: [23, 25], class: 'wave' },
-            { name: 'Crystal Lattice', range: [26, 29], class: 'crystal' }
-        ];
-        
-        // Add default geometry sections
-        geometryTypes.forEach(geomType => {
-            const section = this.createGallerySection(geomType.name, geomType.range, geomType.class, true);
-            sectionsContainer.appendChild(section);
+
+        const defaultGroups = this.engine.variationManager.getDefaultVariationGroups();
+        defaultGroups.forEach(group => {
+            const section = this.createGallerySection(group);
+            if (section) {
+                sectionsContainer.appendChild(section);
+            }
         });
-        
+
         // Add custom variations section
         const customSection = this.createCustomGallerySection();
         sectionsContainer.appendChild(customSection);
     }
-    
+
     /**
      * Create gallery section for geometry type
      */
-    createGallerySection(name, range, className, isDefault) {
+    createGallerySection(group) {
+        if (!group || !group.variations || !group.variations.length) {
+            return null;
+        }
+
         const section = document.createElement('div');
         section.className = 'gallery-section';
-        
+
         const header = document.createElement('h3');
-        header.textContent = name;
-        header.className = `geometry-header ${className}`;
-        
+        header.textContent = group.name;
+        header.className = `geometry-header ${group.cssClass || 'geometry'}`;
+
         const grid = document.createElement('div');
         grid.className = 'gallery-grid';
-        
-        for (let i = range[0]; i <= range[1]; i++) {
-            if (i < this.engine.variationManager.variationNames.length || !isDefault) {
-                const thumbnail = this.createVariationThumbnail(i, isDefault);
-                grid.appendChild(thumbnail);
-            }
-        }
-        
+
+        group.variations.forEach(variation => {
+            const thumbnail = this.createVariationThumbnail(variation.index);
+            grid.appendChild(thumbnail);
+        });
+
         section.appendChild(header);
         section.appendChild(grid);
-        
+
         return section;
     }
     
@@ -269,40 +261,44 @@ export class GallerySystem {
     createCustomGallerySection() {
         const section = document.createElement('div');
         section.className = 'gallery-section custom-section';
-        
+
         const header = document.createElement('h3');
         header.textContent = 'Custom Variations';
         header.className = 'geometry-header custom';
-        
+
         const grid = document.createElement('div');
         grid.className = 'gallery-grid custom-grid';
-        
+
         // Show only populated custom variations
-        for (let i = 0; i < 70; i++) {
-            const customVar = this.engine.variationManager.customVariations[i];
-            if (customVar) {
-                const thumbnail = this.createVariationThumbnail(30 + i, false);
+        const offset = this.engine.variationManager.getDefaultVariationCount();
+        const customVariations = this.engine.variationManager.customVariations;
+
+        for (let i = 0; i < customVariations.length; i += 1) {
+            if (customVariations[i]) {
+                const thumbnail = this.createVariationThumbnail(offset + i);
                 grid.appendChild(thumbnail);
             }
         }
-        
+
         section.appendChild(header);
         section.appendChild(grid);
-        
+
         return section;
     }
     
     /**
      * Create individual variation thumbnail
      */
-    createVariationThumbnail(index, isDefault) {
+    createVariationThumbnail(index) {
         const thumbnail = document.createElement('div');
+        const defaultCount = this.engine.variationManager.getDefaultVariationCount();
+        const isDefault = index < defaultCount;
         thumbnail.className = `gallery-thumbnail ${isDefault ? 'default' : 'custom'}`;
         thumbnail.dataset.variation = index;
-        
+
         const name = this.engine.variationManager.getVariationName(index);
         const isCurrent = index === this.engine.currentVariation;
-        
+
         if (isCurrent) {
             thumbnail.classList.add('current');
         }
@@ -396,12 +392,18 @@ export class GallerySystem {
      */
     navigatePreview(direction) {
         let newIndex = this.currentPreview + direction;
-        
+        const totalVariations = this.engine.variationManager.totalVariations;
+        const defaultCount = this.engine.variationManager.getDefaultVariationCount();
+
+        if (!totalVariations) {
+            return;
+        }
+
         // Find next valid variation
-        while (newIndex >= 0 && newIndex < 100) {
-            if (newIndex < 30 || this.engine.variationManager.customVariations[newIndex - 30] !== null) {
+        while (newIndex >= 0 && newIndex < totalVariations) {
+            if (newIndex < defaultCount || this.engine.variationManager.customVariations[newIndex - defaultCount] !== null) {
                 this.showPreview(newIndex);
-                
+
                 // Scroll to thumbnail
                 const thumbnail = this.galleryModal.querySelector(`[data-variation="${newIndex}"]`);
                 if (thumbnail) {
@@ -417,20 +419,21 @@ export class GallerySystem {
      * Get parameters for specific variation
      */
     getVariationParameters(index) {
-        if (index < 30) {
-            return this.engine.variationManager.generateDefaultVariation(index);
-        } else {
-            const customVar = this.engine.variationManager.customVariations[index - 30];
-            return customVar ? customVar.parameters : this.engine.parameterManager.getAllParameters();
+        const defaultCount = this.engine.variationManager.getDefaultVariationCount();
+        if (index < defaultCount) {
+            return this.engine.variationManager.generateDefaultVariation(index)
+                || this.engine.parameterManager.generateVariationParameters(index);
         }
+
+        const customVar = this.engine.variationManager.customVariations[index - defaultCount];
+        return customVar ? customVar.parameters : this.engine.parameterManager.getAllParameters();
     }
-    
+
     /**
      * Get geometry name by index
      */
     getGeometryName(index) {
-        const names = ['Tetrahedron', 'Hypercube', 'Sphere', 'Torus', 'Klein Bottle', 'Fractal', 'Wave', 'Crystal'];
-        return names[index] || 'Unknown';
+        return this.engine.variationManager.getGeometryDisplayName(index);
     }
     
     /**
