@@ -1,3 +1,8 @@
+import {
+    getActiveEngine as getRegistryEngine,
+    getActiveParameterManager as getRegistryParameterManager
+} from '../systems/shared/SystemAccess.js';
+
 export class DynamicParameterBridge {
     constructor(choreographer) {
         this.choreographer = choreographer;
@@ -15,9 +20,10 @@ export class DynamicParameterBridge {
     }
 
     bindToEngine(engine) {
-        if (!engine) return;
+        const targetEngine = engine || this._resolveEngine();
+        if (!targetEngine) return;
         this.parameterRegistry.forEach((definition, name) => {
-            this._registerWithEngine(name, definition, engine);
+            this._registerWithEngine(name, definition, targetEngine);
         });
     }
 
@@ -140,7 +146,7 @@ export class DynamicParameterBridge {
             }
         }
 
-        const engine = this.choreographer.currentEngine;
+        const engine = this._resolveEngine();
         if (!engine) return;
 
         const methodName = method || type;
@@ -298,16 +304,17 @@ export class DynamicParameterBridge {
     }
 
     _getCurrentParameterValue(name) {
-        const engine = this.choreographer.currentEngine;
+        const engine = this._resolveEngine();
         if (!engine) return undefined;
 
         try {
-            if (engine.parameterManager) {
-                if (engine.parameterManager.getParameterValue) {
-                    return engine.parameterManager.getParameterValue(name);
+            const manager = this._resolveParameterManager(engine);
+            if (manager) {
+                if (manager.getParameterValue) {
+                    return manager.getParameterValue(name);
                 }
-                if (engine.parameterManager.getParameter) {
-                    return engine.parameterManager.getParameter(name);
+                if (manager.getParameter) {
+                    return manager.getParameter(name);
                 }
             }
         } catch (err) {
@@ -344,9 +351,10 @@ export class DynamicParameterBridge {
                 }
             }
 
-            if (eng.parameterManager) {
+            const manager = this._resolveParameterManager(eng);
+            if (manager) {
                 const definitionPayload = this._createParameterDefinition(definition);
-                if (eng.parameterManager.setParameterExternal && eng.parameterManager.setParameterExternal(name, value, {
+                if (manager.setParameterExternal && manager.setParameterExternal(name, value, {
                     allowOverflow,
                     register: !!(definitionPayload && (allowOverflow || this.parameterRegistry.has(name))),
                     definition: definitionPayload,
@@ -355,6 +363,12 @@ export class DynamicParameterBridge {
                     return true;
                 }
 
+                if (manager.setParameter && manager.setParameter(name, value)) {
+                    return true;
+                }
+            }
+
+            if (eng.parameterManager && eng.parameterManager !== manager) {
                 if (eng.parameterManager.setParameter && eng.parameterManager.setParameter(name, value)) {
                     return true;
                 }
@@ -386,8 +400,9 @@ export class DynamicParameterBridge {
             return false;
         };
 
-        if (target === 'manager' && this.choreographer.canvasManager) {
-            if (applyToEngine(this.choreographer.canvasManager)) return;
+        if (target === 'manager') {
+            const manager = this._resolveParameterManager(engine) || this.choreographer.canvasManager;
+            if (manager && applyToEngine(manager)) return;
         }
 
         if (!applyToEngine(engine) && meta.fallbackToManager && this.choreographer.canvasManager) {
@@ -406,8 +421,9 @@ export class DynamicParameterBridge {
         return 0;
     }
 
-    _registerWithEngine(name, definition, engine = this.choreographer?.currentEngine) {
-        if (!engine || !engine.parameterManager || !engine.parameterManager.registerDynamicParameter) {
+    _registerWithEngine(name, definition, engine = this._resolveEngine()) {
+        const manager = this._resolveParameterManager(engine);
+        if (!manager || !manager.registerDynamicParameter) {
             return;
         }
 
@@ -416,7 +432,22 @@ export class DynamicParameterBridge {
             return;
         }
 
-        engine.parameterManager.registerDynamicParameter(name, normalized);
+        manager.registerDynamicParameter(name, normalized);
+    }
+
+    _resolveEngine() {
+        return this.choreographer?.currentEngine || getRegistryEngine();
+    }
+
+    _resolveParameterManager(engine = this._resolveEngine()) {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        if (engine?.parameterManager) {
+            return engine.parameterManager;
+        }
+        return null;
     }
 
     _createParameterDefinition(definition = {}) {

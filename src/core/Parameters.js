@@ -4,6 +4,12 @@
  */
 
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import {
+    COLOR_MODES,
+    COLOR_PALETTES,
+    GRADIENT_TYPES,
+    DEFAULT_COLOR_CONFIG
+} from '../color/ColorSystem.js';
 
 export class ParameterManager {
     constructor() {
@@ -29,7 +35,15 @@ export class ParameterManager {
             hue: 200,          // Color rotation (0 to 360)
             intensity: 0.5,    // Visual intensity (0 to 1)
             saturation: 0.8,   // Color saturation (0 to 1)
-            
+            colorMode: DEFAULT_COLOR_CONFIG.colorMode,
+            colorPalette: DEFAULT_COLOR_CONFIG.colorPalette,
+            gradientType: DEFAULT_COLOR_CONFIG.gradientType,
+            gradientSpeed: DEFAULT_COLOR_CONFIG.gradientSpeed,
+            colorReactivity: DEFAULT_COLOR_CONFIG.colorReactivity,
+            baseHue: DEFAULT_COLOR_CONFIG.baseHue,
+            baseSaturation: DEFAULT_COLOR_CONFIG.baseSaturation,
+            baseIntensity: DEFAULT_COLOR_CONFIG.baseIntensity,
+
             // Geometry selection
             geometry: Math.max(0, defaultGeometryIndex)        // Current geometry type (0-n)
         };
@@ -48,6 +62,38 @@ export class ParameterManager {
             hue: { min: 0, max: 360, step: 1, type: 'int' },
             intensity: { min: 0, max: 1, step: 0.01, type: 'float' },
             saturation: { min: 0, max: 1, step: 0.01, type: 'float' },
+            colorMode: {
+                type: 'enum',
+                options: Array.from(COLOR_MODES),
+                default: DEFAULT_COLOR_CONFIG.colorMode
+            },
+            colorPalette: {
+                type: 'enum',
+                options: Object.keys(COLOR_PALETTES),
+                default: DEFAULT_COLOR_CONFIG.colorPalette
+            },
+            gradientType: {
+                type: 'enum',
+                options: Array.from(GRADIENT_TYPES),
+                default: DEFAULT_COLOR_CONFIG.gradientType
+            },
+            gradientSpeed: {
+                min: 0,
+                max: 2,
+                step: 0.01,
+                type: 'float',
+                default: DEFAULT_COLOR_CONFIG.gradientSpeed
+            },
+            colorReactivity: {
+                min: 0,
+                max: 1,
+                step: 0.01,
+                type: 'float',
+                default: DEFAULT_COLOR_CONFIG.colorReactivity
+            },
+            baseHue: { min: 0, max: 360, step: 1, type: 'float', default: DEFAULT_COLOR_CONFIG.baseHue },
+            baseSaturation: { min: 0, max: 1, step: 0.01, type: 'float', default: DEFAULT_COLOR_CONFIG.baseSaturation },
+            baseIntensity: { min: 0, max: 1, step: 0.01, type: 'float', default: DEFAULT_COLOR_CONFIG.baseIntensity },
             geometry: { min: 0, max: Math.max(geometryNames.length - 1, 0), step: 1, type: 'int' }
         };
         
@@ -134,33 +180,93 @@ export class ParameterManager {
     getAllParameters() {
         return { ...this.params };
     }
+
+    getParameterDefinition(name) {
+        const def = this.parameterDefs[name];
+        if (!def) {
+            return null;
+        }
+        const clone = { ...def };
+        if (Array.isArray(def.options)) {
+            clone.options = def.options.slice();
+        }
+        return clone;
+    }
     
     /**
      * Set a specific parameter with validation
      */
     setParameter(name, value) {
-        if (this.parameterDefs[name]) {
-            const def = this.parameterDefs[name];
+        const def = this.parameterDefs[name];
+        if (!def) {
+            console.warn(`Unknown parameter: ${name}`);
+            return false;
+        }
 
-            if (def.allowOverflow) {
-                this.params[name] = value;
-                return true;
-            }
-
-            // Clamp value to valid range
-            value = Math.max(def.min, Math.min(def.max, value));
-
-            // Apply type conversion
-            if (def.type === 'int') {
-                value = Math.round(value);
-            }
-
+        if (def.allowOverflow) {
             this.params[name] = value;
             return true;
         }
 
-        console.warn(`Unknown parameter: ${name}`);
-        return false;
+        const type = def.type || (typeof def.min === 'number' || typeof def.max === 'number' ? 'float' : typeof value);
+
+        if (type === 'enum') {
+            const options = Array.isArray(def.options) ? def.options : [];
+            if (!options.length) {
+                console.warn(`[ParameterManager] Enum parameter ${name} has no options defined`);
+                return false;
+            }
+
+            const normalized = typeof value === 'string'
+                ? value
+                : (value === null || value === undefined ? '' : String(value));
+
+            if (options.includes(normalized)) {
+                this.params[name] = normalized;
+                return true;
+            }
+
+            const fallback = def.default ?? this.defaults[name] ?? options[0];
+            this.params[name] = fallback;
+            return false;
+        }
+
+        if (type === 'bool' || type === 'boolean') {
+            this.params[name] = Boolean(value);
+            return true;
+        }
+
+        if (type === 'string') {
+            this.params[name] = value === null || value === undefined ? '' : String(value);
+            return true;
+        }
+
+        let numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            if (typeof def.default === 'number') {
+                numeric = def.default;
+            } else if (typeof this.defaults[name] === 'number') {
+                numeric = this.defaults[name];
+            } else if (typeof def.min === 'number' && Number.isFinite(def.min)) {
+                numeric = def.min;
+            } else {
+                numeric = 0;
+            }
+        }
+
+        if (typeof def.min === 'number' && !Number.isNaN(def.min)) {
+            numeric = Math.max(def.min, numeric);
+        }
+        if (typeof def.max === 'number' && !Number.isNaN(def.max)) {
+            numeric = Math.min(def.max, numeric);
+        }
+
+        if (def.type === 'int') {
+            numeric = Math.round(numeric);
+        }
+
+        this.params[name] = numeric;
+        return true;
     }
     
     /**
@@ -210,12 +316,34 @@ export class ParameterManager {
             }
         }
 
-        const {
-            type = 'float',
-            defaultValue = 0,
-            allowOverflow = true
-        } = definition;
+        const options = Array.isArray(definition.options)
+            ? definition.options.map(option => typeof option === 'string' ? option : String(option))
+            : undefined;
 
+        const type = definition.type
+            || (options && options.length ? 'enum' : 'float');
+
+        if (type === 'enum') {
+            const normalizedOptions = options && options.length ? options : [String(definition.defaultValue ?? '')];
+            const defaultValue = definition.defaultValue ?? this.params[name] ?? normalizedOptions[0];
+
+            if (!(name in this.params)) {
+                this.params[name] = defaultValue;
+            }
+
+            this.parameterDefs[name] = {
+                type: 'enum',
+                options: normalizedOptions,
+                default: defaultValue,
+                allowOverflow: definition.allowOverflow ?? false
+            };
+
+            this.dynamicParameters.add(name);
+            return;
+        }
+
+        const defaultValue = definition.defaultValue ?? this.params[name] ?? 0;
+        const allowOverflow = definition.allowOverflow ?? true;
         const step = type === 'int' ? 1 : (definition.step ?? 0.01);
         const min = minValue ?? Number.NEGATIVE_INFINITY;
         const max = maxValue ?? Number.POSITIVE_INFINITY;
@@ -229,7 +357,8 @@ export class ParameterManager {
             max,
             step,
             type,
-            allowOverflow
+            allowOverflow,
+            default: defaultValue
         };
 
         this.dynamicParameters.add(name);
