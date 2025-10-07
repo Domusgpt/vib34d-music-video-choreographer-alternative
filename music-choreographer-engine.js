@@ -3,11 +3,18 @@
  * Dual-mode system: Reactive (built-in audio reactivity) + Choreographed (timeline-based)
  */
 
-import { VIB34DIntegratedEngine } from './src/core/Engine.js';
-import { QuantumEngine } from './src/quantum/QuantumEngine.js';
-import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
 import { DynamicParameterBridge } from './src/choreography/DynamicParameterBridge.js';
 import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
+import { SystemRegistry } from './src/systems/shared/SystemRegistry.js';
+import { FacetedSystem } from './src/systems/faceted/FacetedSystem.js';
+import { QuantumSystem } from './src/systems/quantum/QuantumSystem.js';
+import { HolographicSystem } from './src/systems/holographic/HolographicSystem.js';
+import { PolychoraSystem } from './src/systems/polychora/PolychoraSystem.js';
+import {
+    registerSystemRegistry,
+    syncActiveSystemState,
+    getActiveParameterManager as getRegistryParameterManager
+} from './src/systems/shared/SystemAccess.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -21,6 +28,46 @@ export class MusicVideoChoreographer {
         this.isPlaying = false;
         this.animationId = null;
         this.canvasManager = null;
+
+        this.systemRegistry = new SystemRegistry({
+            containerId: 'vib34dLayers',
+            autoClear: true,
+            destroyOnSwitch: true
+        });
+        this.systemRegistry.register('faceted', () => new FacetedSystem(), {
+            title: 'Faceted Prism Engine',
+            description: 'Crystal prisms pulse with bass-driven density while mid-band morphing sculpts razor-sharp silhouettes.',
+            audioFocus: 'Bass boosts grid density, mids morph facets, highs add chaos sparkle.',
+            bestFor: 'Crisp geometric edits and export-ready sequences.',
+            tags: ['Geometric', 'Prismatic', 'Export-ready'],
+            accentColor: '#00faff'
+        });
+        this.systemRegistry.register('quantum', () => new QuantumSystem(), {
+            title: 'Quantum Lattice Engine',
+            description: 'Volumetric lattice fields orbit through 3D space, bending with spectral energy and stereo depth.',
+            audioFocus: 'Spectral centroid sweeps hue while flux tensions the lattice.',
+            bestFor: 'Atmospheric sci-fi moments and cinematic build-ups.',
+            tags: ['Volumetric', 'Spatial', 'Spectral'],
+            accentColor: '#8b6bff'
+        });
+        this.systemRegistry.register('holographic', () => new HolographicSystem(), {
+            title: 'Holographic Wave Engine',
+            description: 'Layered holograms ripple with diffused color diffraction and multi-plane bloom.',
+            audioFocus: 'RMS drives intensity while high-mids shimmer across the layers.',
+            bestFor: 'Performance overlays and light-trail choreography.',
+            tags: ['Layered', 'Luminous', 'Performance'],
+            accentColor: '#ff6bff'
+        });
+        this.systemRegistry.register('polychora', () => new PolychoraSystem(), {
+            title: 'Polychora 4D Engine',
+            description: 'High-dimensional polytopes rotate through projected space with evolving tessellation.',
+            audioFocus: 'Bass anchors rotation speed as spectral flux fractures the geometry.',
+            bestFor: 'Future-forward narratives and math-inspired sequences.',
+            tags: ['4D', 'Experimental', 'Immersive'],
+            accentColor: '#7cfcc5'
+        });
+        registerSystemRegistry(this.systemRegistry);
+        this.activeSystem = null;
 
         // Beat detection
         this.beatThreshold = 0.7;
@@ -54,6 +101,83 @@ export class MusicVideoChoreographer {
         this.init();
     }
 
+    resolveParameterManager() {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        if (this.currentEngine?.parameterManager) {
+            return this.currentEngine.parameterManager;
+        }
+        if (this.activeSystem?.engine?.parameterManager) {
+            return this.activeSystem.engine.parameterManager;
+        }
+        return null;
+    }
+
+    setParameterValue(param, value, options = {}) {
+        const manager = this.resolveParameterManager();
+        const allowOverflow = options?.allowOverflow ?? false;
+
+        if (manager) {
+            try {
+                if (allowOverflow && typeof manager.setParameterExternal === 'function') {
+                    const applied = manager.setParameterExternal(param, value, { allowOverflow: true });
+                    if (applied) {
+                        return true;
+                    }
+                }
+
+                if (typeof manager.setParameter === 'function') {
+                    const ownsParam = manager.params && Object.prototype.hasOwnProperty.call(manager.params, param);
+                    const result = manager.setParameter(param, value);
+                    if (ownsParam || result !== false) {
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] ParameterManager set failed', param, error);
+            }
+        }
+
+        const engineManager = this.currentEngine?.parameterManager;
+        if (engineManager && engineManager !== manager && typeof engineManager.setParameter === 'function') {
+            try {
+                const result = engineManager.setParameter(param, value);
+                if (result !== false) {
+                    return true;
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] Engine parameter set failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameter) {
+            try {
+                this.currentEngine.updateParameter(param, value);
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameter fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameters) {
+            try {
+                this.currentEngine.updateParameters({ [param]: value });
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameters fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine && param in this.currentEngine) {
+            this.currentEngine[param] = value;
+            return true;
+        }
+
+        return false;
+    }
+
     refreshGeometryMetadata() {
         this.geometryNames = GeometryLibrary.getGeometryNames();
         this.geometryCount = this.geometryNames.length;
@@ -68,8 +192,9 @@ export class MusicVideoChoreographer {
             this.lastGeometryIndex = 0;
         }
 
-        if (this.currentEngine && this.currentEngine.parameterManager && this.currentEngine.parameterManager.updateGeometryRange) {
-            this.currentEngine.parameterManager.updateGeometryRange(this.geometryCount);
+        const manager = this.resolveParameterManager();
+        if (manager?.updateGeometryRange) {
+            manager.updateGeometryRange(this.geometryCount);
         }
 
         this.applyGeometryMetadataToUI();
@@ -121,6 +246,12 @@ export class MusicVideoChoreographer {
                 console.warn('[MusicVideoChoreographer] geometry unsubscribe failed', err);
             }
             this.geometrySubscription = null;
+        }
+
+        if (this.systemRegistry) {
+            this.systemRegistry.destroyAll({ reason: 'choreographer-destroy' }).catch(error => {
+                console.warn('[MusicVideoChoreographer] Failed to destroy system registry', error);
+            });
         }
     }
 
@@ -800,64 +931,43 @@ export class MusicVideoChoreographer {
     }
 
     async switchSystem(systemName) {
-        // Cleanup old engine
-        if (this.currentEngine && this.currentEngine.destroy) {
-            this.currentEngine.destroy();
-        }
-
-        // Clear canvases
-        const container = document.getElementById('vib34dLayers');
-        container.innerHTML = '';
-
-        // Create canvases based on system requirements
-        if (systemName === 'faceted') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'quantum') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `quantum-${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'holographic') {
-            for (let i = 0; i < 5; i++) {
-                const canvas = document.createElement('canvas');
-                canvas.id = `holo-layer-${i}`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            }
-        }
-
-        // Initialize new engine
         try {
-            if (systemName === 'faceted') {
-                this.currentEngine = new VIB34DIntegratedEngine();
-            } else if (systemName === 'quantum') {
-                this.currentEngine = new QuantumEngine();
-            } else if (systemName === 'holographic') {
-                this.currentEngine = new RealHolographicSystem();
-            }
+            const system = await this.systemRegistry.activate(systemName, {
+                clearContainer: true
+            });
 
+            this.activeSystem = system;
+            this.currentEngine = system?.engine || null;
             this.currentSystem = systemName;
-            this.canvasManager = this.currentEngine?.canvasManager || null;
+            this.canvasManager = system?.canvasManager || this.currentEngine?.canvasManager || null;
+
             this.dynamicBridge.bindToEngine(this.currentEngine);
 
-            // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.system === systemName);
             });
 
-            console.log('✅ Switched to', systemName, 'system');
+            const metadata = typeof this.systemRegistry.getSystemMetadata === 'function'
+                ? this.systemRegistry.getSystemMetadata(systemName)
+                : null;
+
+            syncActiveSystemState();
+
+            if (metadata) {
+                window.dispatchEvent(new CustomEvent('vib34d:system-selected', {
+                    detail: { key: systemName, metadata }
+                }));
+
+                const statusElement = document.getElementById('status');
+                if (statusElement) {
+                    const currentStatus = statusElement.textContent || '';
+                    if (!currentStatus.trim() || /select a mode/i.test(currentStatus) || /system ready/i.test(currentStatus)) {
+                        statusElement.textContent = `System ready: ${metadata.title || systemName}`;
+                    }
+                }
+            }
+
+            console.log('✅ Switched to', systemName, 'system via SystemRegistry');
             this.refreshGeometryMetadata();
         } catch (error) {
             console.error('Failed to switch system:', error);
@@ -956,14 +1066,8 @@ export class MusicVideoChoreographer {
      * REACTIVE MODE: Built-in audio reactivity with direct parameter mapping
      */
     applyReactiveMode(audioData) {
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // Direct audio-to-parameter mapping
@@ -1013,14 +1117,8 @@ export class MusicVideoChoreographer {
 
         const effects = activeSequence.effects;
 
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)

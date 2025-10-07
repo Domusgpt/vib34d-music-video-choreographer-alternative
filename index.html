@@ -161,6 +161,52 @@
             cursor: not-allowed;
         }
 
+        select,
+        input[type="range"] {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0, 255, 255, 0.6);
+            color: #0ff;
+            font-family: 'Orbitron', monospace;
+            padding: 8px 12px;
+            border-radius: 8px;
+            appearance: none;
+        }
+
+        .control-value {
+            min-width: 48px;
+            text-align: right;
+            font-size: 12px;
+            color: #0ff;
+        }
+
+        .color-controls {
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .color-controls label {
+            font-size: 11px;
+            text-transform: uppercase;
+            opacity: 0.75;
+            letter-spacing: 0.05em;
+        }
+
+        .color-controls select {
+            min-width: 140px;
+        }
+
+        .color-controls input[type="range"] {
+            flex: 1;
+        }
+
+        .gradient-preview {
+            width: 140px;
+            height: 22px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            background: linear-gradient(90deg, #0ff, #f0f);
+        }
+
         .file-input-label {
             background: linear-gradient(135deg, #4a0a68, #f0f);
             padding: 12px 24px;
@@ -247,6 +293,43 @@
             line-height: 1.5;
             color: #aaa;
             margin-bottom: 8px;
+        }
+
+        .system-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--system-accent, rgba(0, 255, 255, 0.2));
+        }
+
+        .system-info h4 {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--system-accent, #0ff);
+            margin-bottom: 6px;
+        }
+
+        .system-info p {
+            color: #a7f6ff;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+
+        .system-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .system-tag {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 255, 255, 0.35);
+            background: rgba(0, 255, 255, 0.12);
+            color: #7ff;
         }
 
         .beat-indicator {
@@ -403,6 +486,14 @@
         <p id="mode-description">Real-time audio analysis with automatic parameter mapping</p>
         <p id="beat-info">BPM: -- | Beat: --</p>
         <p id="energy-info">Energy: -- | Bass: --</p>
+        <div class="system-info" id="systemInfo">
+            <h4 id="systemName">Faceted Prism Engine</h4>
+            <p id="systemDescription">Crystal prisms pulse with bass-driven density while mid-band morphing sculpts razor-sharp silhouettes.</p>
+            <div class="system-tags" id="systemTags">
+                <span class="system-tag">Geometric</span>
+                <span class="system-tag">Reactive</span>
+            </div>
+        </div>
     </div>
 
     <!-- Timeline Editor for Choreography Mode -->
@@ -434,12 +525,34 @@
             <button class="system-btn active" data-system="faceted">🔷 FACETED</button>
             <button class="system-btn" data-system="quantum">🌌 QUANTUM</button>
             <button class="system-btn" data-system="holographic">✨ HOLOGRAPHIC</button>
+            <button class="system-btn" data-system="polychora">🔮 POLYCHORA</button>
+        </div>
+
+        <div class="control-row color-controls">
+            <label for="colorModeControl">Color Mode</label>
+            <select id="colorModeControl"></select>
+            <label for="colorPaletteControl">Palette</label>
+            <select id="colorPaletteControl"></select>
+            <div class="gradient-preview" id="gradientPreview"></div>
+        </div>
+
+        <div class="control-row color-controls">
+            <label for="gradientTypeControl">Gradient</label>
+            <select id="gradientTypeControl"></select>
+            <label for="gradientSpeedControl">Speed</label>
+            <input type="range" id="gradientSpeedControl" min="0" max="2" step="0.01" value="0.25">
+            <span class="control-value" id="gradientSpeedValue">0.25x</span>
+            <label for="colorReactivityControl">Reactivity</label>
+            <input type="range" id="colorReactivityControl" min="0" max="1" step="0.05" value="0.65">
+            <span class="control-value" id="colorReactivityValue">65%</span>
         </div>
 
         <div id="status">Select a mode to begin</div>
     </div>
 
     <script type="module">
+        import './js/audio/audio-engine.js';
+        import './js/controls/ui-handlers.js';
         import { VIB34DIntegratedEngine } from './src/core/Engine.js';
         import { QuantumEngine } from './src/quantum/QuantumEngine.js';
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
@@ -464,6 +577,10 @@
 
             // Initialize choreographer with selected mode
             initChoreographer(mode);
+
+            if (window.refreshColorControls) {
+                window.refreshColorControls();
+            }
         };
 
         window.toggleMode = function() {
