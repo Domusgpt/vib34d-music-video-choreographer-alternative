@@ -3,6 +3,13 @@
  * Replaces multiple conflicting save systems with one unified approach
  */
 
+import {
+    getActiveEngine,
+    getActiveParameterManager,
+    getActiveParameterSnapshot,
+    getActiveSystemKey
+} from '../systems/shared/SystemAccess.js';
+
 export class UnifiedSaveManager {
     constructor(engine) {
         this.engine = engine;
@@ -128,10 +135,26 @@ export class UnifiedSaveManager {
     getSystemParameters(system) {
         let parameters = null;
         let captureMethod = 'unknown';
-        
+
+        const activeKey = getActiveSystemKey();
+        const activeEngine = getActiveEngine();
+        const activeManager = getActiveParameterManager();
+
         try {
             switch (system) {
                 case 'faceted':
+                    if (activeKey === 'faceted') {
+                        if (activeManager?.getAllParameters) {
+                            parameters = activeManager.getAllParameters();
+                            captureMethod = 'registry.activeManager.getAllParameters()';
+                            break;
+                        }
+                        if (activeEngine?.parameterManager?.getAllParameters) {
+                            parameters = activeEngine.parameterManager.getAllParameters();
+                            captureMethod = 'registry.activeEngine.parameterManager.getAllParameters()';
+                            break;
+                        }
+                    }
                     // Faceted system uses ParameterManager.getAllParameters()
                     if (this.engine?.parameterManager?.getAllParameters) {
                         parameters = this.engine.parameterManager.getAllParameters();
@@ -144,8 +167,20 @@ export class UnifiedSaveManager {
                         captureMethod = 'window.facetedEngine.parameterManager.getAllParameters()';
                     }
                     break;
-                    
+
                 case 'quantum':
+                    if (activeKey === 'quantum') {
+                        if (activeEngine?.getParameters) {
+                            parameters = activeEngine.getParameters();
+                            captureMethod = 'registry.activeEngine.getParameters()';
+                            break;
+                        }
+                        if (activeManager?.getAllParameters) {
+                            parameters = activeManager.getAllParameters();
+                            captureMethod = 'registry.activeManager.getAllParameters()';
+                            break;
+                        }
+                    }
                     // Quantum system has getParameters() method that calls this.parameters.getAllParameters()
                     if (this.engine?.getParameters) {
                         parameters = this.engine.getParameters();
@@ -155,16 +190,40 @@ export class UnifiedSaveManager {
                         captureMethod = 'window.quantumEngine.getParameters()';
                     }
                     break;
-                    
+
                 case 'holographic':
+                    if (activeKey === 'holographic') {
+                        if (activeEngine?.getParameters) {
+                            parameters = activeEngine.getParameters();
+                            captureMethod = 'registry.activeEngine.getParameters()';
+                            break;
+                        }
+                        if (activeManager?.getAllParameters) {
+                            parameters = activeManager.getAllParameters();
+                            captureMethod = 'registry.activeManager.getAllParameters()';
+                            break;
+                        }
+                    }
                     // Holographic system parameter capture - use getParameters() method directly
                     if (window.holographicSystem?.getParameters) {
                         parameters = window.holographicSystem.getParameters();
                         captureMethod = 'window.holographicSystem.getParameters()';
                     }
                     break;
-                    
+
                 case 'polychora':
+                    if (activeKey === 'polychora') {
+                        if (activeEngine?.getParameters) {
+                            parameters = activeEngine.getParameters();
+                            captureMethod = 'registry.activeEngine.getParameters()';
+                            break;
+                        }
+                        if (activeManager?.getAllParameters) {
+                            parameters = activeManager.getAllParameters();
+                            captureMethod = 'registry.activeManager.getAllParameters()';
+                            break;
+                        }
+                    }
                     // NEW: True 4D Polychora system parameter capture
                     if (window.newPolychoraEngine?.getParameters) {
                         parameters = window.newPolychoraEngine.getParameters();
@@ -217,7 +276,19 @@ export class UnifiedSaveManager {
                 captureMethod = 'global-userParameterState';
                 console.log('🔵 Using global userParameterState for parameter capture');
             }
-            
+
+            const activeSnapshot = getActiveParameterSnapshot();
+            if (activeSnapshot && typeof activeSnapshot === 'object') {
+                Object.entries(activeSnapshot).forEach(([key, value]) => {
+                    if (params[key] === undefined) {
+                        params[key] = value;
+                    }
+                });
+                captureMethod = captureMethod === 'unknown'
+                    ? 'registry-active-snapshot'
+                    : `${captureMethod}+registry-active-snapshot`;
+            }
+
             // SECOND PRIORITY: DOM element capture as enhancement/fallback
             
             // Enhanced geometry selection with multiple selectors
