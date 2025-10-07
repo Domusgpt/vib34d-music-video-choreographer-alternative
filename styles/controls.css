@@ -2,93 +2,115 @@
 
 .control-panel {
     position: fixed;
-    top: 50px;
+    top: 80px;
     right: 0;
-    bottom: 0;
-    width: 300px;
-    background: rgba(0, 0, 0, 0.95);
-    border-left: 2px solid #00ffff;
+    bottom: 20px;
+    width: 320px;
+    background: rgba(0, 0, 0, 0.92);
+    border-left: 2px solid var(--control-accent, #00ffff);
     padding: 20px;
     overflow-y: auto;
-    backdrop-filter: blur(10px);
-    z-index: 100;
-    transition: transform 0.3s ease;
+    backdrop-filter: blur(12px);
+    z-index: 1200;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    --control-accent: #00ffff;
+    --control-accent-soft: rgba(0, 255, 255, 0.25);
+    --control-accent-strong: rgba(0, 255, 255, 0.6);
+    --control-text-muted: rgba(255, 255, 255, 0.65);
+}
+
+.control-panel.hidden {
+    display: none;
+}
+
+.control-panel.collapsed {
+    transform: translateX(260px);
+    opacity: 0.45;
+}
+
+.control-panel.collapsed #controlPanelContent {
+    pointer-events: none;
 }
 
 .panel-header {
-    font-size: 1.1rem;
-    color: #ff00ff;
-    margin-bottom: 20px;
-    text-align: center;
-    text-shadow: 0 0 10px #ff00ff;
+    font-size: 1.05rem;
+    color: var(--control-accent, #00ffff);
+    margin-bottom: 18px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    text-shadow: 0 0 14px var(--control-accent-strong, rgba(0, 255, 255, 0.6));
 }
 
 .mobile-collapse-btn {
-    background: rgba(255, 0, 255, 0.2);
-    border: 1px solid #ff00ff;
-    color: #ff00ff;
-    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--control-accent, #00ffff);
+    color: var(--control-accent, #00ffff);
+    padding: 6px 12px;
     cursor: pointer;
-    font-size: 1.2rem;
-    border-radius: 5px;
+    font-size: 1.1rem;
+    border-radius: 6px;
     transition: all 0.3s ease;
 }
 
 .mobile-collapse-btn:hover {
-    background: rgba(255, 0, 255, 0.4);
+    background: var(--control-accent-soft, rgba(0, 255, 255, 0.25));
 }
 
 .control-section {
-    margin-bottom: 25px;
+    margin-bottom: 24px;
     padding-bottom: 20px;
-    border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .control-section:last-child {
     border-bottom: none;
 }
 
+.control-section.inactive {
+    opacity: 0.55;
+}
+
 .section-title {
-    font-size: 0.9rem;
-    color: #00ffff;
-    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: var(--control-accent, #00ffff);
+    margin-bottom: 12px;
     text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.geometry-readout {
+    font-size: 0.72rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.65));
+    margin-bottom: 8px;
 }
 
 /* Geometry Grid */
 .geometry-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 5px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
 }
 
 .geom-btn {
     background: rgba(0, 255, 255, 0.1);
-    border: 1px solid rgba(0, 255, 255, 0.3);
-    color: #00ffff;
+    border: 1px solid var(--control-accent-soft, rgba(0, 255, 255, 0.25));
+    color: var(--control-accent, #00ffff);
     padding: 8px;
     cursor: pointer;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     transition: all 0.3s;
-    
-    /* FIXED: Handle long text like HYPERTETRAHEDRON */
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
     line-height: 1.1;
     min-height: 40px;
-    
-    /* Allow text wrapping for long geometry names */
     word-wrap: break-word;
     overflow-wrap: break-word;
     hyphens: auto;
 }
 
-/* SPECIAL: HyperTetrahedron button - split into two lines */
 .geom-btn[data-name*="HYPERTETRAHEDRON"],
 .geom-btn[title*="HYPERTETRAHEDRON"] {
     font-size: 0.6rem;
@@ -103,52 +125,88 @@
     text-align: center;
 }
 
-/* Alternative: CSS-only line break for HYPERTETRAHEDRON */
-.geom-btn-text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.1;
-}
-
-.geom-btn-line {
-    font-size: 0.65rem;
-}
-
 .geom-btn:hover {
-    background: rgba(0, 255, 255, 0.2);
+    background: var(--control-accent-soft, rgba(0, 255, 255, 0.25));
 }
 
 .geom-btn.active {
-    background: rgba(0, 255, 255, 0.4);
-    border-color: #00ffff;
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    background: var(--control-accent, #00ffff);
+    color: #000;
+    border-color: var(--control-accent, #00ffff);
+    box-shadow: 0 0 6px var(--control-accent-strong, rgba(0, 255, 255, 0.6));
+}
+
+/* Adaptive Control Groups */
+.control-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.control-collection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.control-group-title {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--control-accent, #00ffff);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.control-group-icon {
+    font-size: 0.9rem;
+}
+
+.control-group-description {
+    font-size: 0.7rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.6));
+    line-height: 1.4;
+}
+
+.control-hint {
+    font-size: 0.65rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.5));
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.control-empty {
+    font-size: 0.75rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.6));
 }
 
 /* Parameter Controls */
 .control-group {
-    margin-bottom: 15px;
+    margin-bottom: 12px;
 }
 
 .control-label {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 5px;
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 6px;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.82);
 }
 
 .control-value {
-    color: #00ffff;
+    color: var(--control-accent, #00ffff);
     font-weight: bold;
+    margin-left: 10px;
 }
 
 .control-slider {
     width: 100%;
     height: 6px;
-    background: rgba(0, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     outline: none;
-    opacity: 0.9;
+    opacity: 0.95;
     transition: opacity 0.2s;
     appearance: none;
     border-radius: 3px;
@@ -162,141 +220,161 @@
     appearance: none;
     width: 16px;
     height: 16px;
-    background: #00ffff;
+    background: var(--control-accent, #00ffff);
     cursor: pointer;
     border-radius: 50%;
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    box-shadow: 0 0 5px var(--control-accent-strong, rgba(0, 255, 255, 0.6));
 }
 
 .control-slider::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #00ffff;
+    background: var(--control-accent, #00ffff);
     cursor: pointer;
     border-radius: 50%;
     border: none;
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    box-shadow: 0 0 5px var(--control-accent-strong, rgba(0, 255, 255, 0.6));
 }
 
 /* Action Buttons */
 .panel-btn {
-    background: rgba(255, 0, 255, 0.1);
-    border: 2px solid rgba(255, 0, 255, 0.3);
-    color: #ff00ff;
-    padding: 10px 20px;
-    margin: 5px 0;
+    background: rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--control-accent-soft, rgba(0, 255, 255, 0.3));
+    color: var(--control-accent, #00ffff);
+    padding: 10px 16px;
+    margin: 6px 0;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     width: 100%;
     transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 6px;
 }
 
 .panel-btn:hover {
-    background: rgba(255, 0, 255, 0.3);
-    box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+    background: var(--control-accent-soft, rgba(0, 255, 255, 0.25));
+    box-shadow: 0 0 12px var(--control-accent-soft, rgba(0, 255, 255, 0.35));
 }
 
-.panel-btn.wide {
+.panel-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.panel-btn.compact {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    text-transform: none;
+    letter-spacing: 0.02em;
+}
+
+/* Timeline Section */
+.timeline-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.timeline-track {
     width: 100%;
-    margin-bottom: 10px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
 }
 
-/* System Selector Panel (moved from top bar) */
-.system-selector-panel {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+.timeline-progress {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--control-accent, #00ffff), rgba(255, 0, 255, 0.65));
+    transition: width 0.1s linear;
+}
+
+.timeline-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.6));
+}
+
+.timeline-actions {
+    display: flex;
     gap: 8px;
-    margin-bottom: 10px;
 }
 
-.system-selector-panel .system-btn {
-    background: rgba(0, 255, 255, 0.1);
-    border: 1px solid rgba(0, 255, 255, 0.3);
-    color: #00ffff;
-    padding: 10px 8px;
-    cursor: pointer;
-    font-family: 'Orbitron', monospace;
-    font-size: 0.8rem;
-    transition: all 0.3s;
-    text-align: center;
-    line-height: 1.2;
+.timeline-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-top: 4px;
 }
 
-.system-selector-panel .system-btn:hover {
-    background: rgba(0, 255, 255, 0.2);
-    border-color: #00ffff;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+.timeline-hints {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-.system-selector-panel .system-btn.active {
-    background: rgba(0, 255, 255, 0.3);
-    border-color: #00ffff;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+.timeline-hint {
+    font-size: 0.68rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.6));
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px dashed var(--control-accent-soft, rgba(0, 255, 255, 0.25));
+    padding: 6px 8px;
+    border-radius: 6px;
+    line-height: 1.4;
 }
 
-/* Professional Action Buttons */
-.panel-btn.action-randomize {
-    background: rgba(100, 255, 100, 0.1);
-    border-color: rgba(100, 255, 100, 0.3);
-    color: #64ff64;
-    font-weight: 700;
-    letter-spacing: 1px;
+.timeline-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
-.panel-btn.action-reset {
-    background: rgba(255, 100, 100, 0.1);
-    border-color: rgba(255, 100, 100, 0.3);
-    color: #ff6464;
-    font-weight: 700;
-    letter-spacing: 1px;
+.timeline-editor-actions .panel-btn {
+    flex: 1 1 calc(50% - 8px);
 }
 
-.panel-btn.action-save {
-    background: rgba(0, 255, 255, 0.1);
-    border-color: rgba(0, 255, 255, 0.3);
-    color: #00ffff;
-    font-weight: 700;
-    letter-spacing: 1px;
+.timeline-empty {
+    font-size: 0.7rem;
+    color: var(--control-text-muted, rgba(255, 255, 255, 0.5));
+    padding: 6px 4px;
 }
 
-.panel-btn.action-card {
-    background: rgba(255, 200, 0, 0.1);
-    border-color: rgba(255, 200, 0, 0.3);
-    color: #ffc800;
-    font-weight: 700;
-    letter-spacing: 1px;
+.timeline-preset-btn {
+    font-size: 0.72rem;
 }
 
-.panel-btn.action-randomize:hover {
-    background: rgba(100, 255, 100, 0.2);
-    box-shadow: 0 0 10px rgba(100, 255, 100, 0.5);
+.timeline-editor-btn {
+    font-size: 0.74rem;
 }
 
-.panel-btn.action-reset:hover {
-    background: rgba(255, 100, 100, 0.2);
-    box-shadow: 0 0 10px rgba(255, 100, 100, 0.5);
+.timeline-section.inactive {
+    opacity: 0.55;
 }
 
-.panel-btn.action-save:hover {
-    background: rgba(0, 255, 255, 0.2);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+.timeline-section.inactive .panel-btn {
+    pointer-events: none;
 }
 
-.panel-btn.action-card:hover {
-    background: rgba(255, 200, 0, 0.2);
-    box-shadow: 0 0 10px rgba(255, 200, 0, 0.5);
+.action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-/* Randomize Lite Button */
-.panel-btn.action-randomize-lite {
-    background: rgba(150, 255, 150, 0.1);
-    border-color: rgba(150, 255, 150, 0.3);
-    color: #96ff96;
-    font-weight: 700;
-    letter-spacing: 1px;
+/* Geometry button long label helpers */
+.geom-btn-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
 }
 
-.panel-btn.action-randomize-lite:hover {
-    background: rgba(150, 255, 150, 0.2);
-    box-shadow: 0 0 10px rgba(150, 255, 150, 0.5);
+.geom-btn-line {
+    font-size: 0.65rem;
 }

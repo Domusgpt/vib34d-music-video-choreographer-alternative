@@ -3,11 +3,19 @@
  * Dual-mode system: Reactive (built-in audio reactivity) + Choreographed (timeline-based)
  */
 
-import { VIB34DIntegratedEngine } from './src/core/Engine.js';
-import { QuantumEngine } from './src/quantum/QuantumEngine.js';
-import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
 import { DynamicParameterBridge } from './src/choreography/DynamicParameterBridge.js';
 import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
+import { SystemRegistry } from './src/systems/shared/SystemRegistry.js';
+import { FacetedSystem } from './src/systems/faceted/FacetedSystem.js';
+import { QuantumSystem } from './src/systems/quantum/QuantumSystem.js';
+import { HolographicSystem } from './src/systems/holographic/HolographicSystem.js';
+import { PolychoraSystem } from './src/systems/polychora/PolychoraSystem.js';
+import {
+    registerSystemRegistry,
+    syncActiveSystemState,
+    getActiveParameterManager as getRegistryParameterManager
+} from './src/systems/shared/SystemAccess.js';
+import { resolveSystemDescriptor } from './src/systems/shared/SystemMetadata.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -21,6 +29,18 @@ export class MusicVideoChoreographer {
         this.isPlaying = false;
         this.animationId = null;
         this.canvasManager = null;
+
+        this.systemRegistry = new SystemRegistry({
+            containerId: 'vib34dLayers',
+            autoClear: true,
+            destroyOnSwitch: true
+        });
+        this.systemRegistry.register('faceted', () => new FacetedSystem(), resolveSystemDescriptor('faceted'));
+        this.systemRegistry.register('quantum', () => new QuantumSystem(), resolveSystemDescriptor('quantum'));
+        this.systemRegistry.register('holographic', () => new HolographicSystem(), resolveSystemDescriptor('holographic'));
+        this.systemRegistry.register('polychora', () => new PolychoraSystem(), resolveSystemDescriptor('polychora'));
+        registerSystemRegistry(this.systemRegistry);
+        this.activeSystem = null;
 
         // Beat detection
         this.beatThreshold = 0.7;
@@ -54,6 +74,83 @@ export class MusicVideoChoreographer {
         this.init();
     }
 
+    resolveParameterManager() {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        if (this.currentEngine?.parameterManager) {
+            return this.currentEngine.parameterManager;
+        }
+        if (this.activeSystem?.engine?.parameterManager) {
+            return this.activeSystem.engine.parameterManager;
+        }
+        return null;
+    }
+
+    setParameterValue(param, value, options = {}) {
+        const manager = this.resolveParameterManager();
+        const allowOverflow = options?.allowOverflow ?? false;
+
+        if (manager) {
+            try {
+                if (allowOverflow && typeof manager.setParameterExternal === 'function') {
+                    const applied = manager.setParameterExternal(param, value, { allowOverflow: true });
+                    if (applied) {
+                        return true;
+                    }
+                }
+
+                if (typeof manager.setParameter === 'function') {
+                    const ownsParam = manager.params && Object.prototype.hasOwnProperty.call(manager.params, param);
+                    const result = manager.setParameter(param, value);
+                    if (ownsParam || result !== false) {
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] ParameterManager set failed', param, error);
+            }
+        }
+
+        const engineManager = this.currentEngine?.parameterManager;
+        if (engineManager && engineManager !== manager && typeof engineManager.setParameter === 'function') {
+            try {
+                const result = engineManager.setParameter(param, value);
+                if (result !== false) {
+                    return true;
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] Engine parameter set failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameter) {
+            try {
+                this.currentEngine.updateParameter(param, value);
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameter fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameters) {
+            try {
+                this.currentEngine.updateParameters({ [param]: value });
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameters fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine && param in this.currentEngine) {
+            this.currentEngine[param] = value;
+            return true;
+        }
+
+        return false;
+    }
+
     refreshGeometryMetadata() {
         this.geometryNames = GeometryLibrary.getGeometryNames();
         this.geometryCount = this.geometryNames.length;
@@ -68,8 +165,9 @@ export class MusicVideoChoreographer {
             this.lastGeometryIndex = 0;
         }
 
-        if (this.currentEngine && this.currentEngine.parameterManager && this.currentEngine.parameterManager.updateGeometryRange) {
-            this.currentEngine.parameterManager.updateGeometryRange(this.geometryCount);
+        const manager = this.resolveParameterManager();
+        if (manager?.updateGeometryRange) {
+            manager.updateGeometryRange(this.geometryCount);
         }
 
         this.applyGeometryMetadataToUI();
@@ -121,6 +219,12 @@ export class MusicVideoChoreographer {
                 console.warn('[MusicVideoChoreographer] geometry unsubscribe failed', err);
             }
             this.geometrySubscription = null;
+        }
+
+        if (this.systemRegistry) {
+            this.systemRegistry.destroyAll({ reason: 'choreographer-destroy' }).catch(error => {
+                console.warn('[MusicVideoChoreographer] Failed to destroy system registry', error);
+            });
         }
     }
 
@@ -222,6 +326,9 @@ export class MusicVideoChoreographer {
         // Audio events
         this.audio.addEventListener('ended', () => this.stop());
         this.audio.addEventListener('timeupdate', () => this.updateTimeline());
+
+        this.updateTimelineReadout(0, this.audio?.duration || 0);
+        this.emitTimelineUpdate('init');
     }
 
     async loadAudioFile(file) {
@@ -229,6 +336,10 @@ export class MusicVideoChoreographer {
 
         const url = URL.createObjectURL(file);
         this.audio.src = url;
+
+        this.audio.addEventListener('loadedmetadata', () => {
+            this.updateTimelineReadout(0, this.audio.duration);
+        }, { once: true });
 
         // Connect audio to analyser
         if (!this.sourceNode) {
@@ -466,6 +577,26 @@ export class MusicVideoChoreographer {
         console.log('🎬 Generated default choreography with system switching');
     }
 
+    async applyTimelinePreset(presetId) {
+        const id = typeof presetId === 'string' ? presetId.toLowerCase() : '';
+
+        try {
+            if (['blank', 'blank-timeline', 'blank slate', 'blank-slate', 'empty', 'clear'].includes(id)) {
+                this.clearTimeline({ silent: true });
+                this.updateStatus('Timeline cleared — ready for manual choreography');
+                return true;
+            }
+
+            await this.generateDefaultChoreography();
+            this.updateStatus('Loaded cinematic switch-up preset');
+            return true;
+        } catch (error) {
+            console.error('Failed to apply timeline preset', presetId, error);
+        }
+
+        return false;
+    }
+
     renderSequenceList() {
         const list = document.getElementById('sequence-list');
         if (!list) return;
@@ -578,6 +709,7 @@ export class MusicVideoChoreographer {
         }).join('') : `<div class="sequence-empty" style="padding:12px;border:1px dashed rgba(0,255,255,0.3);border-radius:6px;font-size:11px;color:#7ff;">No sequences defined yet.</div>`;
 
         list.innerHTML = legendMarkup + sequenceMarkup;
+        this.emitTimelineUpdate('render');
     }
 
     describeGeometryStrategy(effects = {}) {
@@ -791,6 +923,16 @@ export class MusicVideoChoreographer {
         this.renderSequenceList();
     }
 
+    clearTimeline(options = {}) {
+        this.sequences = [];
+        this.scanGeometryDescriptors(this.sequences);
+        this.resetGeometryState(true);
+        this.renderSequenceList();
+        if (!options.silent) {
+            this.updateStatus('Timeline cleared');
+        }
+    }
+
     addSequenceToTimeline(newSeq) {
         this.sequences.push(newSeq);
         this.sequences.sort((a, b) => a.time - b.time);
@@ -800,64 +942,43 @@ export class MusicVideoChoreographer {
     }
 
     async switchSystem(systemName) {
-        // Cleanup old engine
-        if (this.currentEngine && this.currentEngine.destroy) {
-            this.currentEngine.destroy();
-        }
-
-        // Clear canvases
-        const container = document.getElementById('vib34dLayers');
-        container.innerHTML = '';
-
-        // Create canvases based on system requirements
-        if (systemName === 'faceted') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'quantum') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `quantum-${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'holographic') {
-            for (let i = 0; i < 5; i++) {
-                const canvas = document.createElement('canvas');
-                canvas.id = `holo-layer-${i}`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            }
-        }
-
-        // Initialize new engine
         try {
-            if (systemName === 'faceted') {
-                this.currentEngine = new VIB34DIntegratedEngine();
-            } else if (systemName === 'quantum') {
-                this.currentEngine = new QuantumEngine();
-            } else if (systemName === 'holographic') {
-                this.currentEngine = new RealHolographicSystem();
-            }
+            const system = await this.systemRegistry.activate(systemName, {
+                clearContainer: true
+            });
 
+            this.activeSystem = system;
+            this.currentEngine = system?.engine || null;
             this.currentSystem = systemName;
-            this.canvasManager = this.currentEngine?.canvasManager || null;
+            this.canvasManager = system?.canvasManager || this.currentEngine?.canvasManager || null;
+
             this.dynamicBridge.bindToEngine(this.currentEngine);
 
-            // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.system === systemName);
             });
 
-            console.log('✅ Switched to', systemName, 'system');
+            const metadata = typeof this.systemRegistry.getSystemMetadata === 'function'
+                ? this.systemRegistry.getSystemMetadata(systemName)
+                : null;
+
+            syncActiveSystemState();
+
+            if (metadata) {
+                window.dispatchEvent(new CustomEvent('vib34d:system-selected', {
+                    detail: { key: systemName, metadata }
+                }));
+
+                const statusElement = document.getElementById('status');
+                if (statusElement) {
+                    const currentStatus = statusElement.textContent || '';
+                    if (!currentStatus.trim() || /select a mode/i.test(currentStatus) || /system ready/i.test(currentStatus)) {
+                        statusElement.textContent = `System ready: ${metadata.title || systemName}`;
+                    }
+                }
+            }
+
+            console.log('✅ Switched to', systemName, 'system via SystemRegistry');
             this.refreshGeometryMetadata();
         } catch (error) {
             console.error('Failed to switch system:', error);
@@ -870,6 +991,7 @@ export class MusicVideoChoreographer {
         }
 
         this.audio.play();
+        this.updateTimeline();
         this.isPlaying = true;
         this.startVisualization();
         this.updateStatus('Playing...');
@@ -878,6 +1000,7 @@ export class MusicVideoChoreographer {
     pause() {
         this.audio.pause();
         this.isPlaying = false;
+        this.updateTimeline();
         this.updateStatus('Paused');
     }
 
@@ -885,6 +1008,7 @@ export class MusicVideoChoreographer {
         this.audio.pause();
         this.audio.currentTime = 0;
         this.isPlaying = false;
+        this.updateTimeline();
         this.updateStatus('Stopped');
     }
 
@@ -956,14 +1080,8 @@ export class MusicVideoChoreographer {
      * REACTIVE MODE: Built-in audio reactivity with direct parameter mapping
      */
     applyReactiveMode(audioData) {
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // Direct audio-to-parameter mapping
@@ -1013,14 +1131,8 @@ export class MusicVideoChoreographer {
 
         const effects = activeSequence.effects;
 
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)
@@ -1582,8 +1694,56 @@ export class MusicVideoChoreographer {
     }
 
     updateTimeline() {
-        const progress = (this.audio.currentTime / this.audio.duration) * 100;
-        document.getElementById('timeline-progress').style.width = progress + '%';
+        const bar = document.getElementById('timeline-progress');
+        const duration = Number.isFinite(this.audio?.duration) ? this.audio.duration : 0;
+        const current = Number.isFinite(this.audio?.currentTime) ? this.audio.currentTime : 0;
+        const ratio = duration > 0 ? Math.min(Math.max(current / duration, 0), 1) : 0;
+
+        if (bar) {
+            bar.style.width = `${(ratio * 100).toFixed(3)}%`;
+        }
+
+        this.updateTimelineReadout(current, duration);
+    }
+
+    updateTimelineReadout(current = 0, duration = null) {
+        const currentLabel = document.getElementById('timelineCurrent');
+        const durationLabel = document.getElementById('timelineDuration');
+
+        if (currentLabel) {
+            currentLabel.textContent = this.formatTimelineTime(current);
+        }
+
+        if (durationLabel) {
+            const referenceDuration = duration ?? (Number.isFinite(this.audio?.duration) ? this.audio.duration : 0);
+            durationLabel.textContent = this.formatTimelineTime(referenceDuration);
+        }
+    }
+
+    formatTimelineTime(value = 0) {
+        if (!Number.isFinite(value) || value < 0) {
+            return '0:00';
+        }
+
+        const minutes = Math.floor(value / 60);
+        const seconds = Math.floor(value % 60);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    emitTimelineUpdate(reason = 'update') {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const detail = {
+            reason,
+            mode: this.mode,
+            system: this.currentSystem,
+            count: Array.isArray(this.sequences) ? this.sequences.length : 0,
+            duration: Number.isFinite(this.audio?.duration) ? this.audio.duration : null
+        };
+
+        window.dispatchEvent(new CustomEvent('vib34d:timeline-updated', { detail }));
     }
 
     updateInfoPanel(audioData) {
