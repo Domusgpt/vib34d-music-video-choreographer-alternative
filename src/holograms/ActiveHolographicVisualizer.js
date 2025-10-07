@@ -1,3 +1,11 @@
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import {
+    DEFAULT_VARIATION_TARGET,
+    resolveVariantCatalog,
+    normalizeVariantIndex,
+    buildVariantParams
+} from './VariantCatalog.js';
+
 /**
  * REAL Active Holographic Visualizer - Exact implementation from active-holographic-systems-FIXED
  * Multi-layer WebGL rendering with audio reactivity, touch interaction, and complex visual effects
@@ -8,14 +16,26 @@ export class ActiveHolographicVisualizer {
         this.role = role;
         this.reactivity = reactivity;
         this.variant = variant;
+        this.variantTarget = DEFAULT_VARIATION_TARGET;
+        this.variantDefinitions = [];
+        this.geometryUnsubscribe = null;
         this.gl = this.canvas.getContext('webgl');
         
         if (!this.gl) {
             throw new Error(`WebGL not supported for ${canvasId}`);
         }
         
-        this.variantParams = this.generateVariantParams(variant);
+        this.refreshVariantDefinitions();
+        this.variant = normalizeVariantIndex(variant, this.variantDefinitions);
+        this.variantParams = this.generateVariantParams(this.variant);
         this.roleParams = this.generateRoleParams(role);
+
+        this.geometryUnsubscribe = GeometryLibrary.subscribe((payload) => {
+            this.refreshVariantDefinitions(payload?.names);
+            this.variant = normalizeVariantIndex(this.variant, this.variantDefinitions);
+            this.variantParams = this.generateVariantParams(this.variant);
+            this.roleParams = this.generateRoleParams(this.role);
+        });
         
         // Initialize state
         this.mouseX = 0.5;
@@ -55,54 +75,37 @@ export class ActiveHolographicVisualizer {
         this.resize();
     }
     
+    refreshVariantDefinitions(names) {
+        const { definitions } = resolveVariantCatalog(this.variantTarget, names);
+        if (definitions.length) {
+            this.variantDefinitions = definitions;
+        } else if (!this.variantDefinitions.length) {
+            this.variantDefinitions = [{
+                geometryIndex: 0,
+                geometryKey: 'TETRAHEDRON',
+                cssClass: 'tetrahedron',
+                displayName: 'Tetrahedron',
+                displayLabel: 'Tetrahedron Lattice 1',
+                level: 0
+            }];
+        }
+    }
+
+    ensureVariantDefinitions() {
+        if (!Array.isArray(this.variantDefinitions) || !this.variantDefinitions.length) {
+            this.refreshVariantDefinitions();
+        }
+    }
+
+    getVariantCount() {
+        this.ensureVariantDefinitions();
+        return this.variantDefinitions.length;
+    }
+
     generateVariantParams(variant) {
-        const vib3Geometries = [
-            'TETRAHEDRON', 'HYPERCUBE', 'SPHERE', 'TORUS', 
-            'KLEIN BOTTLE', 'FRACTAL', 'WAVE', 'CRYSTAL'
-        ];
-        
-        const geometryMap = [
-            0, 0, 0, 0,  // 0-3: TETRAHEDRON variations
-            1, 1, 1, 1,  // 4-7: HYPERCUBE variations
-            2, 2, 2, 2,  // 8-11: SPHERE variations
-            3, 3, 3, 3,  // 12-15: TORUS variations
-            4, 4, 4, 4,  // 16-19: KLEIN BOTTLE variations
-            5, 5, 5,     // 20-22: FRACTAL variations
-            6, 6, 6,     // 23-25: WAVE variations
-            7, 7, 7, 7   // 26-29: CRYSTAL variations
-        ];
-        
-        const baseGeometry = geometryMap[variant] || 0;
-        const variationLevel = variant % 4;
-        const geometryName = vib3Geometries[baseGeometry];
-        
-        const suffixes = [' LATTICE', ' FIELD', ' MATRIX', ' RESONANCE'];
-        const finalName = geometryName + suffixes[variationLevel];
-        
-        const geometryConfigs = {
-            0: { density: 0.8 + variationLevel * 0.2, speed: 0.3 + variationLevel * 0.1, chaos: variationLevel * 0.1, morph: 0.0 + variationLevel * 0.2 },
-            1: { density: 1.0 + variationLevel * 0.3, speed: 0.5 + variationLevel * 0.1, chaos: variationLevel * 0.15, morph: variationLevel * 0.2 },
-            2: { density: 1.2 + variationLevel * 0.4, speed: 0.4 + variationLevel * 0.2, chaos: 0.1 + variationLevel * 0.1, morph: 0.3 + variationLevel * 0.2 },
-            3: { density: 0.9 + variationLevel * 0.3, speed: 0.6 + variationLevel * 0.2, chaos: 0.2 + variationLevel * 0.2, morph: 0.5 + variationLevel * 0.1 },
-            4: { density: 1.4 + variationLevel * 0.5, speed: 0.7 + variationLevel * 0.1, chaos: 0.3 + variationLevel * 0.2, morph: 0.7 + variationLevel * 0.1 },
-            5: { density: 1.8 + variationLevel * 0.3, speed: 0.5 + variationLevel * 0.3, chaos: 0.5 + variationLevel * 0.2, morph: 0.8 + variationLevel * 0.05 },
-            6: { density: 0.6 + variationLevel * 0.4, speed: 0.8 + variationLevel * 0.4, chaos: 0.4 + variationLevel * 0.3, morph: 0.6 + variationLevel * 0.2 },
-            7: { density: 1.6 + variationLevel * 0.2, speed: 0.2 + variationLevel * 0.1, chaos: 0.1 + variationLevel * 0.1, morph: 0.2 + variationLevel * 0.2 }
-        };
-        
-        const config = geometryConfigs[baseGeometry];
-        
-        return {
-            geometryType: baseGeometry,
-            name: finalName,
-            density: config.density,
-            speed: config.speed,
-            hue: (variant * 12.27) % 360,
-            saturation: 0.8 + (variationLevel * 0.05),
-            intensity: 0.5 + (variationLevel * 0.1),
-            chaos: config.chaos,
-            morph: config.morph
-        };
+        this.ensureVariantDefinitions();
+        const index = normalizeVariantIndex(variant, this.variantDefinitions);
+        return buildVariantParams(this.variantDefinitions[index]);
     }
     
     generateRoleParams(role) {
@@ -473,8 +476,8 @@ void main() {
     }
     
     updateVariant(variant) {
-        this.variant = variant;
-        this.variantParams = this.generateVariantParams(variant);
+        this.variant = normalizeVariantIndex(variant, this.variantDefinitions);
+        this.variantParams = this.generateVariantParams(this.variant);
         this.roleParams = this.generateRoleParams(this.role);
     }
     
@@ -593,6 +596,11 @@ void main() {
     }
     
     destroy() {
+        if (typeof this.geometryUnsubscribe === 'function') {
+            this.geometryUnsubscribe();
+            this.geometryUnsubscribe = null;
+        }
+
         if (this.gl && this.program) {
             this.gl.deleteProgram(this.program);
         }

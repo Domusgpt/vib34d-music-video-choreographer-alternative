@@ -19,6 +19,18 @@ Design precise, timeline-based sequences - perfect for music videos!
 3. Load your audio file
 4. Press play and enjoy!
 
+## ✅ Testing & Diagnostics
+
+Run the consolidated test harness to execute the inspector diagnostics and attempt the full Playwright regression suite:
+
+```bash
+npm test
+```
+
+- The script always runs `tests/reactive-inspector.test.mjs`.
+- Playwright tests are executed via the official CLI. If system dependencies are missing, the harness reports a non-blocking warning. Pass `--require-playwright` or run with `CI=1` to make Playwright failures fatal.
+- Use `npm run test:unit` for just the Node diagnostics or `npm run test:playwright -- --project=chromium` to forward options directly to Playwright.
+
 ## 📱 Features
 
 - Dual-mode operation (Reactive + Choreographed)

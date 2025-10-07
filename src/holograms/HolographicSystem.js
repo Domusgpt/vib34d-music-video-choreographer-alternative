@@ -4,51 +4,46 @@
  */
 import { HolographicVisualizer } from './HolographicVisualizer.js';
 import { ExportSystem } from '../features/ExportSystem.js';
+import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
+import {
+    DEFAULT_VARIATION_TARGET,
+    resolveVariantCatalog,
+    normalizeVariantIndex
+} from './VariantCatalog.js';
 
 export class HolographicSystem {
     constructor() {
         this.visualizers = [];
         this.currentVariant = 0;
-        this.baseVariants = 30; // Original 30 variations
-        this.customVariants = []; // Store custom variations
-        this.totalVariants = 30; // Will update dynamically
+        this.customVariants = [];
         this.maxVariants = 10000; // Maximum allowed variations
         this.autoCycleActive = false;
         this.autoCycleInterval = null;
         this.mouseX = 0.5;
         this.mouseY = 0.5;
         this.mouseIntensity = 0.0;
-        
+
         // Audio reactivity system
         this.audioEnabled = false;
         this.audioContext = null;
         this.analyser = null;
         this.frequencyData = null;
         this.audioData = { bass: 0, mid: 0, high: 0 };
-        
-        // Variant names for display - SEQUENTIAL ORDER
-        this.variantNames = [
-            // 0-3: TETRAHEDRON variations
-            'TETRAHEDRON LATTICE', 'TETRAHEDRON FIELD', 'TETRAHEDRON MATRIX', 'TETRAHEDRON RESONANCE',
-            // 4-7: HYPERCUBE variations
-            'HYPERCUBE LATTICE', 'HYPERCUBE FIELD', 'HYPERCUBE MATRIX', 'HYPERCUBE QUANTUM',
-            // 8-11: SPHERE variations
-            'SPHERE LATTICE', 'SPHERE FIELD', 'SPHERE MATRIX', 'SPHERE RESONANCE',
-            // 12-15: TORUS variations
-            'TORUS LATTICE', 'TORUS FIELD', 'TORUS MATRIX', 'TORUS QUANTUM',
-            // 16-19: KLEIN BOTTLE variations
-            'KLEIN BOTTLE LATTICE', 'KLEIN BOTTLE FIELD', 'KLEIN BOTTLE MATRIX', 'KLEIN BOTTLE QUANTUM',
-            // 20-22: FRACTAL variations
-            'FRACTAL LATTICE', 'FRACTAL FIELD', 'FRACTAL QUANTUM',
-            // 23-25: WAVE variations
-            'WAVE LATTICE', 'WAVE FIELD', 'WAVE QUANTUM',
-            // 26-29: CRYSTAL variations
-            'CRYSTAL LATTICE', 'CRYSTAL FIELD', 'CRYSTAL MATRIX', 'CRYSTAL QUANTUM'
-        ];
-        
+
+        this.variantTarget = DEFAULT_VARIATION_TARGET;
+        this.variantCatalog = resolveVariantCatalog(this.variantTarget);
+        this.baseVariants = this.variantCatalog.definitions.length;
+        this.variantNames = this.variantCatalog.definitions.map(
+            definition => definition.displayLabel || definition.label || definition.displayName
+        );
+        this.totalVariants = this.baseVariants;
+        this.geometryUnsubscribe = GeometryLibrary.subscribe((payload) => {
+            this.handleGeometryUpdate(payload?.names);
+        });
+
         // Initialize export system
         this.exportSystem = new ExportSystem(this);
-        
+
         // Load any saved custom variations from session
         this.loadSavedVariations();
         
@@ -60,14 +55,10 @@ export class HolographicSystem {
             const saved = localStorage.getItem('customHolographicVariations');
             if (saved) {
                 const data = JSON.parse(saved);
-                this.customVariants = data.variations || [];
-                this.totalVariants = this.baseVariants + this.customVariants.length;
-                
-                // Restore variant names
-                this.customVariants.forEach(cv => {
-                    this.variantNames[cv.id] = cv.name;
-                });
-                
+                this.customVariants = Array.isArray(data.variations)
+                    ? data.variations
+                    : [];
+                this.reindexCustomVariations();
                 console.log(`💾 Loaded ${this.customVariants.length} saved custom variations`);
             }
         } catch (e) {
@@ -86,12 +77,48 @@ export class HolographicSystem {
             console.error('Failed to save variations:', e);
         }
     }
+
+    reindexCustomVariations() {
+        this.customVariants = this.customVariants.map((cv, index) => ({
+            ...cv,
+            id: this.baseVariants + index
+        }));
+
+        this.variantNames = this.variantCatalog.definitions.map(
+            definition => definition.displayLabel || definition.label || definition.displayName
+        );
+
+        this.customVariants.forEach(cv => {
+            this.variantNames[cv.id] = cv.name;
+        });
+
+        this.totalVariants = this.baseVariants + this.customVariants.length;
+    }
+
+    handleGeometryUpdate(names) {
+        this.variantCatalog = resolveVariantCatalog(this.variantTarget, names);
+        this.baseVariants = this.variantCatalog.definitions.length;
+        this.reindexCustomVariations();
+
+        const total = this.totalVariants;
+        if (total > 0) {
+            this.currentVariant = Math.min(Math.max(this.currentVariant, 0), total - 1);
+        } else {
+            this.currentVariant = 0;
+        }
+
+        if (this.visualizers.length) {
+            this.updateVariant(this.currentVariant);
+        }
+
+        this.updateVariantDisplay();
+    }
     
     clearSavedVariations() {
         try {
             localStorage.removeItem('customHolographicVariations');
             this.customVariants = [];
-            this.totalVariants = this.baseVariants;
+            this.reindexCustomVariations();
             console.log('🗑️ Cleared all saved variations');
         } catch (e) {
             console.error('Failed to clear variations:', e);
@@ -124,13 +151,18 @@ export class HolographicSystem {
         
         console.log(`✅ Created 5-layer holographic system`);
     }
-    
+
     updateVariant(newVariant) {
+        if (this.totalVariants <= 0) {
+            console.warn('No holographic variations available to display.');
+            return;
+        }
+
         if (newVariant < 0) newVariant = this.totalVariants - 1;
         if (newVariant >= this.totalVariants) newVariant = 0;
-        
+
         this.currentVariant = newVariant;
-        
+
         // Check if this is a custom variation
         this.isCustomVariation = newVariant >= this.baseVariants;
         
@@ -680,19 +712,18 @@ export class HolographicSystem {
         
         // Add as a new variation if under the limit
         if (this.totalVariants < this.maxVariants) {
-            const newVariantId = this.totalVariants;
             this.customVariants.push({
-                id: newVariantId,
                 params: params,
                 name: this.getGeometryName(params.geometryType) + ' CUSTOM ' + (this.customVariants.length + 1)
             });
-            this.totalVariants++;
+            this.reindexCustomVariations();
+
+            const newVariantId = this.baseVariants + this.customVariants.length - 1;
             this.currentVariant = newVariantId;
             this.isCustomVariation = true;
-            
-            this.variantNames[newVariantId] = this.customVariants[this.customVariants.length - 1].name;
+
             this.saveVariations();
-            
+
             console.log(`✅ Added custom variation #${newVariantId}`);
         } else {
             console.warn('⚠️ Maximum variations limit reached (10000)');
@@ -710,10 +741,8 @@ export class HolographicSystem {
     }
     
     getGeometryName(geometryId) {
-        const geometryNames = [
-            'TETRAHEDRON', 'HYPERCUBE', 'SPHERE', 'TORUS',
-            'KLEIN BOTTLE', 'FRACTAL', 'WAVE', 'CRYSTAL'
-        ];
-        return geometryNames[geometryId] || 'UNKNOWN';
+        const rawName = GeometryLibrary.getGeometryName(geometryId);
+        const normalized = GeometryLibrary.normalizeName(rawName);
+        return normalized ? GeometryLibrary.formatDisplayName(normalized) : 'UNKNOWN';
     }
 }
