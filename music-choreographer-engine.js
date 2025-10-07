@@ -3,11 +3,18 @@
  * Dual-mode system: Reactive (built-in audio reactivity) + Choreographed (timeline-based)
  */
 
-import { VIB34DIntegratedEngine } from './src/core/Engine.js';
-import { QuantumEngine } from './src/quantum/QuantumEngine.js';
-import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
 import { DynamicParameterBridge } from './src/choreography/DynamicParameterBridge.js';
 import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
+import { SystemRegistry } from './src/systems/shared/SystemRegistry.js';
+import { FacetedSystem } from './src/systems/faceted/FacetedSystem.js';
+import { QuantumSystem } from './src/systems/quantum/QuantumSystem.js';
+import { HolographicSystem } from './src/systems/holographic/HolographicSystem.js';
+import { PolychoraSystem } from './src/systems/polychora/PolychoraSystem.js';
+import {
+    registerSystemRegistry,
+    syncActiveSystemState,
+    getActiveParameterManager as getRegistryParameterManager
+} from './src/systems/shared/SystemAccess.js';
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -16,11 +23,30 @@ export class MusicVideoChoreographer {
         this.audioContext = null;
         this.analyser = null;
         this.dataArray = null;
+        this.sourceNode = null;
+        this.audioEngine = (typeof window !== 'undefined' && window.audioEngine) ? window.audioEngine : null;
+        this.audioEngineSubscription = null;
+        this.audioReactiveData = this.createReactiveSnapshot(
+            this.audioEngine?.getAudioLevels?.()
+        );
+        this.usingAdvancedAudio = Boolean(this.audioEngine);
         this.currentSystem = 'faceted';
         this.currentEngine = null;
         this.isPlaying = false;
         this.animationId = null;
         this.canvasManager = null;
+
+        this.systemRegistry = new SystemRegistry({
+            containerId: 'vib34dLayers',
+            autoClear: true,
+            destroyOnSwitch: true
+        });
+        this.systemRegistry.register('faceted', () => new FacetedSystem());
+        this.systemRegistry.register('quantum', () => new QuantumSystem());
+        this.systemRegistry.register('holographic', () => new HolographicSystem());
+        this.systemRegistry.register('polychora', () => new PolychoraSystem());
+        registerSystemRegistry(this.systemRegistry);
+        this.activeSystem = null;
 
         // Beat detection
         this.beatThreshold = 0.7;
@@ -42,6 +68,12 @@ export class MusicVideoChoreographer {
             this.refreshGeometryMetadata();
         });
 
+        if (this.audioEngine?.subscribe) {
+            this.audioEngineSubscription = this.audioEngine.subscribe((reactive) => {
+                this.audioReactiveData = this.createReactiveSnapshot(reactive);
+            });
+        }
+
         // Audio reactivity multipliers (for reactive mode)
         this.reactivitySettings = {
             bassToGridDensity: 30,
@@ -52,6 +84,83 @@ export class MusicVideoChoreographer {
         };
 
         this.init();
+    }
+
+    resolveParameterManager() {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        if (this.currentEngine?.parameterManager) {
+            return this.currentEngine.parameterManager;
+        }
+        if (this.activeSystem?.engine?.parameterManager) {
+            return this.activeSystem.engine.parameterManager;
+        }
+        return null;
+    }
+
+    setParameterValue(param, value, options = {}) {
+        const manager = this.resolveParameterManager();
+        const allowOverflow = options?.allowOverflow ?? false;
+
+        if (manager) {
+            try {
+                if (allowOverflow && typeof manager.setParameterExternal === 'function') {
+                    const applied = manager.setParameterExternal(param, value, { allowOverflow: true });
+                    if (applied) {
+                        return true;
+                    }
+                }
+
+                if (typeof manager.setParameter === 'function') {
+                    const ownsParam = manager.params && Object.prototype.hasOwnProperty.call(manager.params, param);
+                    const result = manager.setParameter(param, value);
+                    if (ownsParam || result !== false) {
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] ParameterManager set failed', param, error);
+            }
+        }
+
+        const engineManager = this.currentEngine?.parameterManager;
+        if (engineManager && engineManager !== manager && typeof engineManager.setParameter === 'function') {
+            try {
+                const result = engineManager.setParameter(param, value);
+                if (result !== false) {
+                    return true;
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] Engine parameter set failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameter) {
+            try {
+                this.currentEngine.updateParameter(param, value);
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameter fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameters) {
+            try {
+                this.currentEngine.updateParameters({ [param]: value });
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameters fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine && param in this.currentEngine) {
+            this.currentEngine[param] = value;
+            return true;
+        }
+
+        return false;
     }
 
     refreshGeometryMetadata() {
@@ -68,8 +177,9 @@ export class MusicVideoChoreographer {
             this.lastGeometryIndex = 0;
         }
 
-        if (this.currentEngine && this.currentEngine.parameterManager && this.currentEngine.parameterManager.updateGeometryRange) {
-            this.currentEngine.parameterManager.updateGeometryRange(this.geometryCount);
+        const manager = this.resolveParameterManager();
+        if (manager?.updateGeometryRange) {
+            manager.updateGeometryRange(this.geometryCount);
         }
 
         this.applyGeometryMetadataToUI();
@@ -114,6 +224,15 @@ export class MusicVideoChoreographer {
     }
 
     destroy() {
+        if (typeof this.audioEngineSubscription === 'function') {
+            try {
+                this.audioEngineSubscription();
+            } catch (err) {
+                console.warn('[MusicVideoChoreographer] audio engine unsubscribe failed', err);
+            }
+            this.audioEngineSubscription = null;
+        }
+
         if (typeof this.geometrySubscription === 'function') {
             try {
                 this.geometrySubscription();
@@ -121,6 +240,12 @@ export class MusicVideoChoreographer {
                 console.warn('[MusicVideoChoreographer] geometry unsubscribe failed', err);
             }
             this.geometrySubscription = null;
+        }
+
+        if (this.systemRegistry) {
+            this.systemRegistry.destroyAll({ reason: 'choreographer-destroy' }).catch(error => {
+                console.warn('[MusicVideoChoreographer] Failed to destroy system registry', error);
+            });
         }
     }
 
@@ -170,11 +295,13 @@ export class MusicVideoChoreographer {
     async init() {
         console.log(`🎵 Initializing Music Video Choreographer in ${this.mode.toUpperCase()} mode`);
 
-        // Initialize audio context
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 2048;
-        this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        // Initialize audio context (legacy fallback when advanced engine unavailable)
+        if (!this.audioEngine) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 2048;
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        }
 
         // Initialize default engine
         await this.switchSystem('faceted');
@@ -230,11 +357,39 @@ export class MusicVideoChoreographer {
         const url = URL.createObjectURL(file);
         this.audio.src = url;
 
-        // Connect audio to analyser
-        if (!this.sourceNode) {
-            this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
-            this.sourceNode.connect(this.analyser);
-            this.analyser.connect(this.audioContext.destination);
+        if (this.audioEngine?.useMediaElement) {
+            try {
+                const attached = await this.audioEngine.useMediaElement(this.audio);
+                this.usingAdvancedAudio = Boolean(attached);
+                if (attached && !window.audioEnabled) {
+                    this.audioEngine.setEnabled(true);
+                    const audioBtn = document.getElementById('audioToggle');
+                    if (audioBtn) {
+                        audioBtn.classList.add('active');
+                        audioBtn.title = 'Audio Reactivity: ON';
+                    }
+                }
+            } catch (error) {
+                console.warn('🎵 Advanced audio engine failed to attach media element, falling back to legacy analyser', error);
+                this.usingAdvancedAudio = false;
+            }
+        }
+
+        // Connect audio to legacy analyser when advanced engine unavailable
+        if (!this.usingAdvancedAudio) {
+            if (!this.audioContext) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (!this.analyser) {
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 2048;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+            }
+            if (!this.sourceNode) {
+                this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+                this.sourceNode.connect(this.analyser);
+                this.analyser.connect(this.audioContext.destination);
+            }
         }
 
         // Enable controls
@@ -800,64 +955,24 @@ export class MusicVideoChoreographer {
     }
 
     async switchSystem(systemName) {
-        // Cleanup old engine
-        if (this.currentEngine && this.currentEngine.destroy) {
-            this.currentEngine.destroy();
-        }
-
-        // Clear canvases
-        const container = document.getElementById('vib34dLayers');
-        container.innerHTML = '';
-
-        // Create canvases based on system requirements
-        if (systemName === 'faceted') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'quantum') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `quantum-${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'holographic') {
-            for (let i = 0; i < 5; i++) {
-                const canvas = document.createElement('canvas');
-                canvas.id = `holo-layer-${i}`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            }
-        }
-
-        // Initialize new engine
         try {
-            if (systemName === 'faceted') {
-                this.currentEngine = new VIB34DIntegratedEngine();
-            } else if (systemName === 'quantum') {
-                this.currentEngine = new QuantumEngine();
-            } else if (systemName === 'holographic') {
-                this.currentEngine = new RealHolographicSystem();
-            }
+            const system = await this.systemRegistry.activate(systemName, {
+                clearContainer: true
+            });
 
+            this.activeSystem = system;
+            this.currentEngine = system?.engine || null;
             this.currentSystem = systemName;
-            this.canvasManager = this.currentEngine?.canvasManager || null;
+            this.canvasManager = system?.canvasManager || this.currentEngine?.canvasManager || null;
+
             this.dynamicBridge.bindToEngine(this.currentEngine);
 
-            // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.system === systemName);
             });
 
-            console.log('✅ Switched to', systemName, 'system');
+            syncActiveSystemState();
+            console.log('✅ Switched to', systemName, 'system via SystemRegistry');
             this.refreshGeometryMetadata();
         } catch (error) {
             console.error('Failed to switch system:', error);
@@ -865,7 +980,7 @@ export class MusicVideoChoreographer {
     }
 
     play() {
-        if (this.audioContext.state === 'suspended') {
+        if (this.audioContext?.state === 'suspended') {
             this.audioContext.resume();
         }
 
@@ -892,21 +1007,27 @@ export class MusicVideoChoreographer {
         const render = () => {
             if (!this.isPlaying) return;
 
-            // Get audio data
-            this.analyser.getByteFrequencyData(this.dataArray);
-            const audioData = this.processAudioData(this.dataArray);
+            let audioData = null;
 
-            // Detect beats
+            if (this.audioEngine && this.usingAdvancedAudio) {
+                audioData = this.createReactiveSnapshot(this.audioReactiveData);
+            } else if (this.analyser && this.dataArray) {
+                this.analyser.getByteFrequencyData(this.dataArray);
+                audioData = this.processLegacyAudioData(this.dataArray);
+            }
+
+            if (!audioData) {
+                audioData = this.createReactiveSnapshot();
+            }
+
             this.detectBeat(audioData);
 
-            // Apply mode-specific logic
             if (this.mode === 'reactive') {
                 this.applyReactiveMode(audioData);
             } else if (this.mode === 'choreographed') {
                 this.applyChoreography(audioData);
             }
 
-            // Update info panel
             this.updateInfoPanel(audioData);
 
             this.animationId = requestAnimationFrame(render);
@@ -914,13 +1035,62 @@ export class MusicVideoChoreographer {
         render();
     }
 
-    processAudioData(dataArray) {
+    createReactiveSnapshot(source = {}) {
+        const base = source || {};
+        const defaultBands = {
+            subBass: 0,
+            bass: 0,
+            lowMid: 0,
+            mid: 0,
+            highMid: 0,
+            high: 0,
+            air: 0
+        };
+
+        const bands = { ...defaultBands, ...(base.bands || {}) };
+        const bass = base.bass ?? bands.bass ?? 0;
+        const mid = base.mid ?? bands.mid ?? 0;
+        const high = base.high ?? bands.high ?? 0;
+        const energy = base.energy ?? Math.max(0, (bass + mid + high) / 3);
+
+        return {
+            bass,
+            mid,
+            high,
+            energy,
+            sparkle: base.sparkle ?? bands.air ?? 0,
+            motion: base.motion ?? base.spectralFlux ?? 0,
+            onset: base.onset ?? 0,
+            hueShift: base.hueShift ?? base.spectralCentroid ?? 0,
+            intensity: base.intensity ?? energy,
+            spectralCentroid: base.spectralCentroid ?? 0,
+            spectralRolloff: base.spectralRolloff ?? 0,
+            spectralFlux: base.spectralFlux ?? 0,
+            rms: base.rms ?? energy,
+            bpm: base.bpm ?? 0,
+            bands,
+            color: base.color || null
+        };
+    }
+
+    processLegacyAudioData(dataArray) {
         const bass = this.getAverage(dataArray, 0, 100) / 255;
         const mid = this.getAverage(dataArray, 100, 400) / 255;
         const high = this.getAverage(dataArray, 400, 1024) / 255;
         const energy = (bass + mid + high) / 3;
 
-        return { bass, mid, high, energy };
+        return {
+            bass,
+            mid,
+            high,
+            energy,
+            spectralFlux: 0,
+            spectralCentroid: 0,
+            spectralRolloff: 0,
+            rms: energy,
+            onset: 0,
+            bpm: this.detectedBPM || 0
+        };
     }
 
     getAverage(array, start, end) {
@@ -933,10 +1103,31 @@ export class MusicVideoChoreographer {
 
     detectBeat(audioData) {
         const now = Date.now();
-        if (audioData.bass > this.beatThreshold && now - this.lastBeatTime > this.beatInterval) {
+        const onsetDetected = Boolean(audioData?.onset);
+
+        if (audioData?.bpm) {
+            this.detectedBPM = Math.round(audioData.bpm);
+        }
+
+        if (onsetDetected) {
+            const interval = this.lastBeatTime ? now - this.lastBeatTime : 0;
             this.lastBeatTime = now;
             this.onBeat();
-            this.detectedBPM = Math.round(60000 / this.beatInterval);
+            if (interval > 0) {
+                this.beatInterval = interval;
+                this.detectedBPM = Math.round(60000 / interval);
+            }
+            return;
+        }
+
+        if (audioData?.bass > this.beatThreshold && now - this.lastBeatTime > this.beatInterval) {
+            const interval = now - this.lastBeatTime;
+            this.lastBeatTime = now;
+            this.onBeat();
+            if (interval > 0) {
+                this.beatInterval = interval;
+                this.detectedBPM = Math.round(60000 / interval);
+            }
         }
     }
 
@@ -956,14 +1147,8 @@ export class MusicVideoChoreographer {
      * REACTIVE MODE: Built-in audio reactivity with direct parameter mapping
      */
     applyReactiveMode(audioData) {
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // Direct audio-to-parameter mapping
@@ -1013,14 +1198,8 @@ export class MusicVideoChoreographer {
 
         const effects = activeSequence.effects;
 
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)
@@ -1587,8 +1766,20 @@ export class MusicVideoChoreographer {
     }
 
     updateInfoPanel(audioData) {
-        document.getElementById('beat-info').textContent = `BPM: ${this.detectedBPM} | Threshold: ${this.beatThreshold}`;
-        document.getElementById('energy-info').textContent = `Energy: ${(audioData.energy * 100).toFixed(0)}% | Bass: ${(audioData.bass * 100).toFixed(0)}%`;
+        const beatInfo = document.getElementById('beat-info');
+        const energyInfo = document.getElementById('energy-info');
+
+        if (beatInfo) {
+            const bpmDisplay = this.detectedBPM > 0 ? this.detectedBPM : Math.round(audioData.bpm || 0);
+            beatInfo.textContent = `BPM: ${bpmDisplay || '--'} | Threshold: ${this.beatThreshold}`;
+        }
+
+        if (energyInfo) {
+            const energyPct = ((audioData.energy ?? 0) * 100).toFixed(0);
+            const bassPct = ((audioData.bass ?? 0) * 100).toFixed(0);
+            const fluxPct = ((audioData.spectralFlux ?? 0) * 100).toFixed(0);
+            energyInfo.textContent = `Energy: ${energyPct}% | Bass: ${bassPct}% | Flux: ${fluxPct}%`;
+        }
     }
 
     updateStatus(message) {

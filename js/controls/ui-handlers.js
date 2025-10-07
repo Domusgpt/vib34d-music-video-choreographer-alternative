@@ -5,6 +5,13 @@
  */
 
 import { GeometryLibrary } from '../../src/geometry/GeometryLibrary.js';
+import { COLOR_MODES, GRADIENT_TYPES, COLOR_PALETTES } from '../../src/color/ColorSystem.js';
+import {
+    getActiveEngine,
+    getActiveParameterManager,
+    getActiveSystemKey,
+    onRegistryChange
+} from '../../src/systems/shared/SystemAccess.js';
 
 // Global state variables
 let audioEnabled = window.audioEnabled || false;
@@ -15,7 +22,24 @@ const LEGACY_SYSTEM_KEYS = ['faceted', 'quantum', 'holographic', 'polychora'];
 let cachedGeometryNames = sanitizeGeometryList(GeometryLibrary.getGeometryNames());
 let geometrySubscriptionCleanup = null;
 let geometryGridElement = null;
-let geometryGridSystem = 'faceted';
+let geometryGridSystem = getActiveSystemKey() || 'faceted';
+
+const COLOR_MODE_OPTIONS = Array.from(COLOR_MODES);
+const GRADIENT_TYPE_OPTIONS = Array.from(GRADIENT_TYPES);
+const COLOR_PALETTE_OPTIONS = Object.keys(COLOR_PALETTES);
+const getSystemKeyFallback = () => getActiveSystemKey() || window.currentSystem || 'faceted';
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+let colorControlsInitialized = false;
+let gradientPreviewElement = null;
+let gradientPreviewLoopActive = false;
+let colorModeSelect = null;
+let colorPaletteSelect = null;
+let gradientTypeSelect = null;
+let gradientSpeedInput = null;
+let gradientSpeedValueLabel = null;
+let colorReactivityInput = null;
+let colorReactivityValueLabel = null;
 
 function sanitizeGeometryList(names = []) {
     const seen = new Set();
@@ -113,7 +137,7 @@ function ensureGeometrySubscription() {
     }, { once: true });
 }
 
-function getGeometryNamesForSystem(system = window.currentSystem || 'faceted') {
+function getGeometryNamesForSystem(system = getSystemKeyFallback()) {
     const fallback = cachedGeometryNames.length ? cachedGeometryNames : sanitizeGeometryList(GeometryLibrary.getGeometryNames());
     const manual = window.geometries?.[system];
     if (!Array.isArray(manual) || !manual.length) {
@@ -153,22 +177,268 @@ function renderGeometryGrid() {
 syncLegacyGeometryState(cachedGeometryNames);
 ensureGeometrySubscription();
 
+onRegistryChange(({ key }) => {
+    if (!key) {
+        return;
+    }
+    if (geometryGridSystem !== key) {
+        geometryGridSystem = key;
+        if (geometryGridElement) {
+            renderGeometryGrid();
+        }
+    }
+});
+
+function formatColorLabel(key) {
+    if (!key) {
+        return 'Default';
+    }
+    return key.replace(/[-_]/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function ensureSelectOptions(select, options) {
+    if (!select || !Array.isArray(options)) {
+        return;
+    }
+
+    const existing = Array.from(select.options).map(option => option.value);
+    const needsUpdate = existing.length !== options.length || existing.some((value, index) => value !== options[index]);
+
+    if (!needsUpdate) {
+        return;
+    }
+
+    select.innerHTML = options.map(option => `<option value="${option}">${formatColorLabel(option)}</option>`).join('');
+}
+
+function startGradientPreviewLoop() {
+    if (gradientPreviewLoopActive || !gradientPreviewElement) {
+        return;
+    }
+
+    gradientPreviewLoopActive = true;
+
+    const update = () => {
+        if (!gradientPreviewElement) {
+            gradientPreviewLoopActive = false;
+            return;
+        }
+
+        const gradientState = window.colorState?.gradient;
+        if (gradientState?.css && gradientPreviewElement.dataset.currentCss !== gradientState.css) {
+            gradientPreviewElement.style.background = gradientState.css;
+            gradientPreviewElement.dataset.currentCss = gradientState.css;
+        }
+
+        requestAnimationFrame(update);
+    };
+
+    requestAnimationFrame(update);
+}
+
+function syncColorControls(config, state) {
+    if (!colorControlsInitialized) {
+        return;
+    }
+
+    const audioEngine = window.audioEngine;
+    const activeConfig = config || audioEngine?.getColorConfiguration?.() || {};
+    const activeState = state || audioEngine?.getColorState?.() || window.colorState || {};
+
+    if (colorModeSelect) {
+        const modeValue = activeConfig.colorMode || 'single';
+        if (colorModeSelect.value !== modeValue) {
+            colorModeSelect.value = modeValue;
+        }
+    }
+
+    if (colorPaletteSelect) {
+        const paletteValue = activeConfig.colorPalette || '';
+        if (paletteValue && !Array.from(colorPaletteSelect.options).some(option => option.value === paletteValue)) {
+            const option = document.createElement('option');
+            option.value = paletteValue;
+            option.textContent = formatColorLabel(paletteValue);
+            colorPaletteSelect.appendChild(option);
+        }
+        if (paletteValue && colorPaletteSelect.value !== paletteValue) {
+            colorPaletteSelect.value = paletteValue;
+        }
+    }
+
+    if (gradientTypeSelect) {
+        const gradientValue = activeConfig.gradientType || 'horizontal';
+        if (gradientTypeSelect.value !== gradientValue) {
+            gradientTypeSelect.value = gradientValue;
+        }
+    }
+
+    if (gradientSpeedInput) {
+        const speedValue = typeof activeConfig.gradientSpeed === 'number' ? activeConfig.gradientSpeed : 0.25;
+        if (gradientSpeedInput.value !== String(speedValue)) {
+            gradientSpeedInput.value = String(speedValue);
+        }
+        if (gradientSpeedValueLabel) {
+            gradientSpeedValueLabel.textContent = `${speedValue.toFixed(2)}x`;
+        }
+    }
+
+    if (colorReactivityInput) {
+        const reactivityValue = typeof activeConfig.colorReactivity === 'number' ? activeConfig.colorReactivity : 0.65;
+        if (colorReactivityInput.value !== String(reactivityValue)) {
+            colorReactivityInput.value = String(reactivityValue);
+        }
+        if (colorReactivityValueLabel) {
+            colorReactivityValueLabel.textContent = `${Math.round(clamp(reactivityValue, 0, 1) * 100)}%`;
+        }
+    }
+
+    if (gradientPreviewElement && activeState?.gradient?.css) {
+        gradientPreviewElement.style.background = activeState.gradient.css;
+        gradientPreviewElement.dataset.currentCss = activeState.gradient.css;
+    }
+}
+
+function initializeColorControls(force = false) {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    if (!force && colorControlsInitialized) {
+        syncColorControls();
+        return;
+    }
+
+    if (!window.audioEngine) {
+        setTimeout(() => initializeColorControls(force), 150);
+        return;
+    }
+
+    colorModeSelect = document.getElementById('colorModeControl');
+    colorPaletteSelect = document.getElementById('colorPaletteControl');
+    gradientTypeSelect = document.getElementById('gradientTypeControl');
+    gradientSpeedInput = document.getElementById('gradientSpeedControl');
+    gradientSpeedValueLabel = document.getElementById('gradientSpeedValue');
+    colorReactivityInput = document.getElementById('colorReactivityControl');
+    colorReactivityValueLabel = document.getElementById('colorReactivityValue');
+    gradientPreviewElement = document.getElementById('gradientPreview');
+
+    if (!colorModeSelect || !colorPaletteSelect || !gradientTypeSelect || !gradientSpeedInput || !colorReactivityInput) {
+        return;
+    }
+
+    const audioEngine = window.audioEngine;
+    const availableModes = audioEngine?.getAvailableColorModes?.() ?? COLOR_MODE_OPTIONS;
+    const availablePalettes = audioEngine?.getAvailablePalettes?.() ?? COLOR_PALETTE_OPTIONS;
+    const availableGradients = audioEngine?.getAvailableGradients?.() ?? GRADIENT_TYPE_OPTIONS;
+
+    ensureSelectOptions(colorModeSelect, availableModes);
+    ensureSelectOptions(colorPaletteSelect, availablePalettes.length ? availablePalettes : COLOR_PALETTE_OPTIONS);
+    ensureSelectOptions(gradientTypeSelect, availableGradients);
+
+    colorModeSelect.addEventListener('change', event => {
+        audioEngine?.setColorMode?.(event.target.value);
+    });
+
+    colorPaletteSelect.addEventListener('change', event => {
+        audioEngine?.setColorPalette?.(event.target.value);
+    });
+
+    gradientTypeSelect.addEventListener('change', event => {
+        audioEngine?.setGradientType?.(event.target.value);
+    });
+
+    gradientSpeedInput.addEventListener('input', event => {
+        const value = parseFloat(event.target.value);
+        if (gradientSpeedValueLabel) {
+            gradientSpeedValueLabel.textContent = `${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
+        }
+        audioEngine?.setGradientSpeed?.(value);
+    });
+
+    colorReactivityInput.addEventListener('input', event => {
+        const value = parseFloat(event.target.value);
+        if (colorReactivityValueLabel) {
+            colorReactivityValueLabel.textContent = `${Math.round(clamp(value, 0, 1) * 100)}%`;
+        }
+        audioEngine?.setColorReactivity?.(value);
+    });
+
+    colorControlsInitialized = true;
+    syncColorControls();
+
+    if (gradientPreviewElement) {
+        startGradientPreviewLoop();
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('vib34d:color-state', event => {
+        syncColorControls(event.detail?.config, event.detail?.state);
+    });
+
+    window.refreshColorControls = (force = false) => {
+        initializeColorControls(force);
+    };
+}
+
+if (typeof document !== 'undefined') {
+    const initControls = () => initializeColorControls();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initControls, { once: true });
+    } else {
+        setTimeout(initControls, 0);
+    }
+}
+
 /**
  * Main parameter update function - CRITICAL for all visualizers
  * Routes parameters to appropriate engine based on current system
  */
 window.updateParameter = function(param, value) {
-    // CRITICAL: Store user's parameter choice for persistence
-    window.userParameterState[param] = parseFloat(value);
-    
-    // GALLERY PERFORMANCE FIX: Reduce parameter logging spam in gallery context
-    if (!window.isGalleryPreview) {
-        console.log(`💾 User parameter: ${param} = ${value}`);
+    if (!window.userParameterState) {
+        window.userParameterState = {};
     }
-    
+
+    const systemKey = getSystemKeyFallback();
+    const manager = getActiveParameterManager();
+    const definition = manager?.getParameterDefinition?.(param) || manager?.parameterDefs?.[param] || null;
+
+    let numericValue = Number(value);
+    const isNumeric = Number.isFinite(numericValue);
+    let processedValue = value;
+
+    if (definition) {
+        if (definition.type === 'enum') {
+            processedValue = typeof value === 'string' ? value : (value === null || value === undefined ? '' : String(value));
+        } else if (definition.type === 'bool' || definition.type === 'boolean') {
+            processedValue = Boolean(value);
+        } else {
+            processedValue = isNumeric ? numericValue : Number(definition.default ?? manager?.params?.[param] ?? value);
+            numericValue = Number(processedValue);
+        }
+    } else if (isNumeric) {
+        processedValue = numericValue;
+    }
+
+    window.userParameterState[param] = processedValue;
+
+    if (!window.isGalleryPreview) {
+        console.log(`💾 User parameter: ${param} = ${processedValue}`);
+    }
+
+    if (window.audioEngine && isNumeric) {
+        if (param === 'hue') {
+            window.audioEngine.setBaseHue?.(numericValue);
+        } else if (param === 'saturation') {
+            window.audioEngine.setBaseSaturation?.(numericValue);
+        } else if (param === 'intensity') {
+            window.audioEngine.setBaseIntensity?.(numericValue);
+        }
+    }
+
     const displays = {
         rot4dXW: 'xwValue',
-        rot4dYW: 'ywValue', 
+        rot4dYW: 'ywValue',
         rot4dZW: 'zwValue',
         gridDensity: 'densityValue',
         morphFactor: 'morphValue',
@@ -178,72 +448,50 @@ window.updateParameter = function(param, value) {
         intensity: 'intensityValue',
         saturation: 'saturationValue'
     };
-    
+
     const display = document.getElementById(displays[param]);
     if (display) {
-        if (param === 'hue') {
-            display.textContent = value + '°';
-        } else if (param.startsWith('rot4d')) {
-            display.textContent = parseFloat(value).toFixed(2);
-        } else {
-            display.textContent = parseFloat(value).toFixed(1);
+        if (definition?.type === 'enum') {
+            display.textContent = String(processedValue);
+        } else if (param === 'hue' && isNumeric) {
+            display.textContent = `${Math.round(numericValue)}°`;
+        } else if (param.startsWith('rot4d') && isNumeric) {
+            display.textContent = numericValue.toFixed(2);
+        } else if (isNumeric) {
+            display.textContent = numericValue.toFixed(1);
         }
     }
-    
-    // SURGICAL FIX: Unified parameter router - eliminates scope confusion
+
     try {
-        const activeSystem = window.currentSystem || 'faceted';
-        const engines = {
-            faceted: window.engine,
-            quantum: window.quantumEngine,
-            holographic: window.holographicSystem,
-            polychora: window.polychoraSystem
-        };
-        
-        const engine = engines[activeSystem];
+        let handled = false;
+        if (manager?.setParameter) {
+            handled = manager.setParameter(param, processedValue) || handled;
+        }
+
+        const engine = getActiveEngine();
         if (!engine) {
-            console.warn(`⚠️ System ${activeSystem} not available - engines:`, Object.keys(engines).map(k => `${k}:${!!engines[k]}`).join(', '));
-            
-            // CRITICAL FIX: Track retry count to prevent infinite loops
-            if (!window.parameterRetryCount) window.parameterRetryCount = {};
-            const retryKey = `${param}_${value}_${activeSystem}`;
-            const currentRetries = window.parameterRetryCount[retryKey] || 0;
-            
-            // Only retry once, then give up to prevent infinite loops
-            if (currentRetries < 1) {
-                window.parameterRetryCount[retryKey] = currentRetries + 1;
-                console.log(`🔄 Retrying parameter ${param} = ${value} for ${activeSystem} (attempt ${currentRetries + 2})`);
-                setTimeout(() => {
-                    window.updateParameter(param, value);
-                }, 100);
-            } else {
-                console.warn(`❌ Parameter ${param} = ${value} failed for ${activeSystem} - system not available, giving up after 2 attempts`);
-                // Clean up retry tracking for this parameter
-                delete window.parameterRetryCount[retryKey];
-            }
+            console.warn(`[UIHandlers] No active engine available for ${systemKey}`);
             return;
         }
-        
-        // Route to appropriate engine method
-        if (activeSystem === 'faceted') {
-            engine.parameterManager.setParameter(param, parseFloat(value));
-            engine.updateVisualizers();
-        } else if (activeSystem === 'quantum') {
-            engine.updateParameter(param, parseFloat(value));
-        } else if (activeSystem === 'holographic') {
-            engine.updateParameter(param, parseFloat(value));
-        } else if (activeSystem === 'polychora') {
-            engine.updateParameters({ [param]: parseFloat(value) });
+
+        if (systemKey === 'faceted') {
+            if (!handled && engine.parameterManager && engine.parameterManager !== manager) {
+                engine.parameterManager.setParameter?.(param, processedValue);
+            }
+            engine.updateVisualizers?.();
+        } else if (!handled) {
+            if (typeof engine.updateParameter === 'function') {
+                engine.updateParameter(param, processedValue);
+            } else if (typeof engine.updateParameters === 'function') {
+                engine.updateParameters({ [param]: processedValue });
+            }
         }
-        
-        // GALLERY PERFORMANCE FIX: Reduce engine parameter logging spam in gallery context
+
         if (!window.isGalleryPreview) {
-            console.log(`📊 ${activeSystem.toUpperCase()}: ${param} = ${value}`);
+            console.log(`📊 ${systemKey.toUpperCase()}: ${param} = ${processedValue}`);
         }
-        
     } catch (error) {
-        console.error(`❌ Parameter update error in ${window.currentSystem || 'unknown'} for ${param}:`, error);
-        // Don't break the UI, just log the error
+        console.error(`❌ Parameter update error in ${systemKey} for ${param}:`, error);
     }
 };
 
@@ -290,8 +538,9 @@ function randomizeParameters() {
  */
 function randomizeGeometryAndHue() {
     // Randomize geometry selection
-    if (window.currentSystem !== 'holographic') {
-        const geometryNames = getGeometryNamesForSystem(window.currentSystem);
+    const systemKey = getSystemKeyFallback();
+    if (systemKey !== 'holographic') {
+        const geometryNames = getGeometryNamesForSystem(systemKey);
         if (geometryNames.length) {
             const randomGeometry = Math.floor(Math.random() * geometryNames.length);
             if (window.selectGeometry) {
@@ -409,7 +658,7 @@ window.openViewer = function() {
     console.log('👁️ Navigating to viewer...');
     // Save current parameters for viewer
     const currentState = {
-        system: window.currentSystem || 'faceted',
+        system: getSystemKeyFallback(),
         parameters: window.userParameterState || {},
         toggleStates: {
             audioEnabled: window.audioEnabled || false,
@@ -743,49 +992,41 @@ document.addEventListener('keydown', (e) => {
 
 // Listen for mouse events from gallery iframe for visualizer interactivity
 window.addEventListener('message', (event) => {
-    if (event.data && event.data.type) {
-        if (event.data.type === 'mouseMove') {
-            // Update all visualizers with mouse position
-            const updateMouseForSystem = (system) => {
-                if (system && system.visualizers) {
-                    system.visualizers.forEach(vis => {
-                        if (vis) {
-                            vis.mouseX = event.data.x;
-                            vis.mouseY = event.data.y;
-                            vis.mouseIntensity = event.data.intensity || 0.5;
-                        }
-                    });
-                }
-            };
-            
-            // Update the active system's visualizers
-            if (window.currentSystem === 'faceted' && window.engine) {
-                updateMouseForSystem(window.engine);
-            } else if (window.currentSystem === 'quantum' && window.quantumEngine) {
-                updateMouseForSystem(window.quantumEngine);
-            } else if (window.currentSystem === 'holographic' && window.holographicSystem) {
-                updateMouseForSystem(window.holographicSystem);
+    if (!event.data || !event.data.type) {
+        return;
+    }
+
+    if (event.data.type === 'mouseMove') {
+        const updateMouseForSystem = (system) => {
+            if (system && system.visualizers) {
+                system.visualizers.forEach(vis => {
+                    if (vis) {
+                        vis.mouseX = event.data.x;
+                        vis.mouseY = event.data.y;
+                        vis.mouseIntensity = event.data.intensity || 0.5;
+                    }
+                });
             }
-        } else if (event.data.type === 'mouseClick') {
-            // Trigger click effects on all visualizers
-            const triggerClickForSystem = (system) => {
-                if (system && system.visualizers) {
-                    system.visualizers.forEach(vis => {
-                        if (vis) {
-                            vis.clickIntensity = event.data.intensity || 1.0;
-                        }
-                    });
-                }
-            };
-            
-            // Trigger click on active system
-            if (window.currentSystem === 'faceted' && window.engine) {
-                triggerClickForSystem(window.engine);
-            } else if (window.currentSystem === 'quantum' && window.quantumEngine) {
-                triggerClickForSystem(window.quantumEngine);
-            } else if (window.currentSystem === 'holographic' && window.holographicSystem) {
-                triggerClickForSystem(window.holographicSystem);
+        };
+
+        const engine = getActiveEngine();
+        if (engine) {
+            updateMouseForSystem(engine);
+        }
+    } else if (event.data.type === 'mouseClick') {
+        const triggerClickForSystem = (system) => {
+            if (system && system.visualizers) {
+                system.visualizers.forEach(vis => {
+                    if (vis) {
+                        vis.clickIntensity = event.data.intensity || 1.0;
+                    }
+                });
             }
+        };
+
+        const engine = getActiveEngine();
+        if (engine) {
+            triggerClickForSystem(engine);
         }
     }
 });
@@ -798,7 +1039,7 @@ window.setupGeometry = function(system) {
     if (!grid) return;
 
     geometryGridElement = grid;
-    geometryGridSystem = system || window.currentSystem || 'faceted';
+    geometryGridSystem = system || getSystemKeyFallback();
 
     if (!geometrySubscriptionCleanup) {
         ensureGeometrySubscription();

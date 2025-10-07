@@ -5,6 +5,28 @@
 
 import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
 
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const lerp = (current, target, factor) => current + (target - current) * factor;
+
+const COLOR_MODE_MAP = Object.freeze({
+    single: 0,
+    dual: 1,
+    triad: 2,
+    complementary: 3,
+    analogous: 4,
+    palette: 5,
+    gradient: 6,
+    reactive: 7
+});
+
+const GRADIENT_TYPE_MAP = Object.freeze({
+    horizontal: 0,
+    vertical: 1,
+    radial: 2,
+    spiral: 3,
+    wave: 4
+});
+
 export class IntegratedHolographicVisualizer {
     constructor(canvasId, role, reactivity, variant) {
         this.canvas = document.getElementById(canvasId);
@@ -55,7 +77,30 @@ export class IntegratedHolographicVisualizer {
             rot4dYW: 0.0,
             rot4dZW: 0.0
         };
-        
+
+        this.audioResponse = {
+            gridDensity: 0,
+            morph: 0,
+            chaos: 0,
+            speed: 0,
+            hueShift: 0,
+            intensity: 0,
+            saturation: 0,
+            dimension: 0,
+            rot4dXW: 0,
+            rot4dYW: 0,
+            rot4dZW: 0
+        };
+        this.onsetPulse = 0;
+
+        this.colorUniformBuffer = new Float32Array(12);
+        this.colorUniformState = {
+            mode: COLOR_MODE_MAP.single,
+            paletteSize: 0,
+            gradientType: GRADIENT_TYPE_MAP.horizontal,
+            gradientPhase: 0
+        };
+
         // Initialization now happens in ensureCanvasSizedThenInitWebGL after sizing
         // this.init(); // MOVED
     }
@@ -183,6 +228,74 @@ uniform float u_rot4dZW;
 uniform float u_mouseIntensity;
 uniform float u_clickIntensity;
 uniform float u_roleIntensity;
+uniform int u_colorMode;
+uniform int u_paletteSize;
+uniform vec3 u_palette[4];
+uniform int u_gradientType;
+uniform float u_gradientPhase;
+
+const int COLOR_MODE_SINGLE = 0;
+const int COLOR_MODE_DUAL = 1;
+const int COLOR_MODE_TRIAD = 2;
+const int COLOR_MODE_COMPLEMENTARY = 3;
+const int COLOR_MODE_ANALOGOUS = 4;
+const int COLOR_MODE_PALETTE = 5;
+const int COLOR_MODE_GRADIENT = 6;
+const int COLOR_MODE_REACTIVE = 7;
+
+const int GRADIENT_HORIZONTAL = 0;
+const int GRADIENT_VERTICAL = 1;
+const int GRADIENT_RADIAL = 2;
+const int GRADIENT_SPIRAL = 3;
+const int GRADIENT_WAVE = 4;
+
+float clamp01(float value) {
+    return clamp(value, 0.0, 1.0);
+}
+
+vec3 samplePaletteColor(float position) {
+    if (u_paletteSize <= 0) {
+        return vec3(1.0);
+    }
+
+    if (u_paletteSize == 1) {
+        return u_palette[0];
+    }
+
+    float clamped = clamp(position, 0.0, 0.9999);
+    float scaled = clamped * float(u_paletteSize - 1);
+    int index = int(floor(scaled));
+    int nextIndex = min(index + 1, u_paletteSize - 1);
+    float mixAmount = fract(scaled);
+    vec3 a = u_palette[index];
+    vec3 b = u_palette[nextIndex];
+    return mix(a, b, mixAmount);
+}
+
+float computeGradientPosition(vec2 uv, float geometryValue) {
+    vec2 normalized = uv * 0.5 + 0.5;
+    float base = fract(u_gradientPhase + geometryValue * 0.25);
+
+    if (u_colorMode == COLOR_MODE_GRADIENT) {
+        if (u_gradientType == GRADIENT_HORIZONTAL) {
+            base = clamp01(normalized.x);
+        } else if (u_gradientType == GRADIENT_VERTICAL) {
+            base = clamp01(normalized.y);
+        } else if (u_gradientType == GRADIENT_RADIAL) {
+            float dist = length(normalized - 0.5);
+            base = clamp(dist * 1.4142, 0.0, 1.0);
+        } else if (u_gradientType == GRADIENT_SPIRAL) {
+            float angle = atan(normalized.y - 0.5, normalized.x - 0.5) / (6.28318);
+            base = fract(angle + u_gradientPhase);
+        } else if (u_gradientType == GRADIENT_WAVE) {
+            base = fract(normalized.x + sin((normalized.y + u_gradientPhase) * 6.28318) * 0.2 + u_gradientPhase);
+        }
+    } else {
+        base = fract(u_gradientPhase + geometryValue * 0.3 + normalized.x * 0.25);
+    }
+
+    return clamp01(base);
+}
 
 // 4D rotation matrices
 mat4 rotateXW(float theta) {
@@ -308,18 +421,25 @@ void main() {
     float finalIntensity = geometryIntensity * u_intensity;
     
     float hue = u_hue / 360.0 + value * 0.1;
-    
+
     // Create color with saturation control
     vec3 baseColor = vec3(
         sin(hue * 6.28318 + 0.0) * 0.5 + 0.5,
         sin(hue * 6.28318 + 2.0943) * 0.5 + 0.5,
         sin(hue * 6.28318 + 4.1887) * 0.5 + 0.5
     );
-    
+
+    float palettePosition = computeGradientPosition(uv, value);
+    vec3 paletteColor = samplePaletteColor(palettePosition);
+    if (u_paletteSize > 0) {
+        float blendStrength = (u_colorMode == COLOR_MODE_SINGLE) ? 0.7 : 1.0;
+        baseColor = mix(baseColor, paletteColor, blendStrength);
+    }
+
     // Apply saturation (mix with grayscale)
     float gray = (baseColor.r + baseColor.g + baseColor.b) / 3.0;
     vec3 color = mix(vec3(gray), baseColor, u_saturation) * finalIntensity;
-    
+
     gl_FragColor = vec4(color, finalIntensity * u_roleIntensity);
 }`;
         
@@ -342,7 +462,12 @@ void main() {
             rot4dZW: this.gl.getUniformLocation(this.program, 'u_rot4dZW'),
             mouseIntensity: this.gl.getUniformLocation(this.program, 'u_mouseIntensity'),
             clickIntensity: this.gl.getUniformLocation(this.program, 'u_clickIntensity'),
-            roleIntensity: this.gl.getUniformLocation(this.program, 'u_roleIntensity')
+            roleIntensity: this.gl.getUniformLocation(this.program, 'u_roleIntensity'),
+            colorMode: this.gl.getUniformLocation(this.program, 'u_colorMode'),
+            palette: this.gl.getUniformLocation(this.program, 'u_palette[0]'),
+            paletteSize: this.gl.getUniformLocation(this.program, 'u_paletteSize'),
+            gradientType: this.gl.getUniformLocation(this.program, 'u_gradientType'),
+            gradientPhase: this.gl.getUniformLocation(this.program, 'u_gradientPhase')
         };
     }
     
@@ -537,12 +662,156 @@ void main() {
             this.mouseIntensity = 0.0;
             return;
         }
-        
+
         this.mouseX = x;
         this.mouseY = y;
         this.mouseIntensity = intensity;
     }
-    
+
+    getCurrentAudioState() {
+        if (typeof window === 'undefined' || !window.audioEnabled) {
+            return null;
+        }
+
+        if (window.audioEngine && typeof window.audioEngine.getAudioLevels === 'function') {
+            return window.audioEngine.getAudioLevels() || null;
+        }
+
+        return window.audioReactive || null;
+    }
+
+    getCurrentColorState() {
+        if (typeof window === 'undefined') {
+            return null;
+        }
+
+        if (window.audioEngine && typeof window.audioEngine.getColorState === 'function') {
+            const state = window.audioEngine.getColorState();
+            if (state) {
+                return state;
+            }
+        }
+
+        return window.colorState || window.audioReactive?.color || null;
+    }
+
+    prepareColorUniforms(colorState) {
+        const buffer = this.colorUniformBuffer;
+        buffer.fill(0);
+
+        let paletteSize = 0;
+        if (colorState?.uniforms?.palette && Array.isArray(colorState.uniforms.palette)) {
+            const palette = colorState.uniforms.palette;
+            paletteSize = Math.min(palette.length, 4);
+            for (let i = 0; i < paletteSize; i += 1) {
+                const color = palette[i] || [0, 0, 0];
+                const offset = i * 3;
+                buffer[offset] = color[0] ?? 0;
+                buffer[offset + 1] = color[1] ?? 0;
+                buffer[offset + 2] = color[2] ?? 0;
+            }
+        }
+
+        const gradientTypeKey = colorState?.gradient?.type || 'horizontal';
+        const gradientType = GRADIENT_TYPE_MAP[gradientTypeKey] ?? GRADIENT_TYPE_MAP.horizontal;
+        const gradientPhase = typeof colorState?.gradient?.phase === 'number'
+            ? colorState.gradient.phase
+            : 0;
+        const modeKey = colorState?.mode || 'single';
+        const mode = COLOR_MODE_MAP[modeKey] ?? COLOR_MODE_MAP.single;
+
+        this.colorUniformState.mode = mode;
+        this.colorUniformState.paletteSize = paletteSize;
+        this.colorUniformState.gradientType = gradientType;
+        this.colorUniformState.gradientPhase = gradientPhase;
+
+        return this.colorUniformState;
+    }
+
+    applyColorUniforms(uniformState) {
+        if (!this.gl || !this.uniforms) {
+            return;
+        }
+
+        if (this.uniforms.colorMode) {
+            this.gl.uniform1i(this.uniforms.colorMode, uniformState.mode);
+        }
+        if (this.uniforms.palette) {
+            this.gl.uniform3fv(this.uniforms.palette, this.colorUniformBuffer);
+        }
+        if (this.uniforms.paletteSize) {
+            this.gl.uniform1i(this.uniforms.paletteSize, uniformState.paletteSize);
+        }
+        if (this.uniforms.gradientType) {
+            this.gl.uniform1i(this.uniforms.gradientType, uniformState.gradientType);
+        }
+        if (this.uniforms.gradientPhase) {
+            this.gl.uniform1f(this.uniforms.gradientPhase, uniformState.gradientPhase);
+        }
+    }
+
+    updateAudioResponse(audioState) {
+        const smoothing = 0.18;
+        const target = {
+            gridDensity: 0,
+            morph: 0,
+            chaos: 0,
+            speed: 0,
+            hueShift: 0,
+            intensity: 0,
+            saturation: 0,
+            dimension: 0,
+            rot4dXW: 0,
+            rot4dYW: 0,
+            rot4dZW: 0
+        };
+
+        this.onsetPulse = (this.onsetPulse || 0) * 0.82;
+
+        if (audioState) {
+            const bass = clamp(audioState.bass ?? 0, 0, 1);
+            const mid = clamp(audioState.mid ?? 0, 0, 1);
+            const high = clamp(audioState.high ?? 0, 0, 1);
+            const sparkle = clamp(audioState.sparkle ?? audioState.bands?.air ?? 0, 0, 1);
+            const energy = clamp(audioState.energy ?? audioState.rms ?? 0, 0, 1);
+            const motion = clamp(audioState.motion ?? audioState.spectralFlux ?? 0, 0, 1);
+            const hueShiftNorm = clamp(audioState.hueShift ?? audioState.spectralCentroid ?? 0, 0, 1);
+            const intensityBoost = clamp(audioState.intensity ?? audioState.rms ?? 0, 0, 1);
+
+            if (audioState.onset) {
+                this.onsetPulse = 1;
+            }
+
+            target.gridDensity = (bass * 32) + (motion * 14);
+            target.morph = (motion * 0.9) + (energy * 0.4);
+            target.chaos = (motion * 0.6) + (energy * 0.45);
+            target.speed = (energy * 0.45) + (motion * 0.3);
+            target.hueShift = (hueShiftNorm * 240) + (sparkle * 60);
+            target.intensity = (intensityBoost * 0.6) + (sparkle * 0.4);
+            target.saturation = sparkle * 0.35;
+            target.dimension = (energy * 0.35) + (bass * 0.25);
+            target.rot4dXW = bass * 0.4;
+            target.rot4dYW = mid * 0.3;
+            target.rot4dZW = high * 0.25;
+        }
+
+        target.speed += this.onsetPulse * 0.45;
+
+        this.audioResponse.gridDensity = lerp(this.audioResponse.gridDensity, target.gridDensity, smoothing);
+        this.audioResponse.morph = lerp(this.audioResponse.morph, target.morph, smoothing);
+        this.audioResponse.chaos = lerp(this.audioResponse.chaos, target.chaos, smoothing);
+        this.audioResponse.speed = lerp(this.audioResponse.speed, target.speed, smoothing);
+        this.audioResponse.hueShift = lerp(this.audioResponse.hueShift, target.hueShift, smoothing);
+        this.audioResponse.intensity = lerp(this.audioResponse.intensity, target.intensity, smoothing);
+        this.audioResponse.saturation = lerp(this.audioResponse.saturation, target.saturation, smoothing);
+        this.audioResponse.dimension = lerp(this.audioResponse.dimension, target.dimension, smoothing);
+        this.audioResponse.rot4dXW = lerp(this.audioResponse.rot4dXW, target.rot4dXW, smoothing);
+        this.audioResponse.rot4dYW = lerp(this.audioResponse.rot4dYW, target.rot4dYW, smoothing);
+        this.audioResponse.rot4dZW = lerp(this.audioResponse.rot4dZW, target.rot4dZW, smoothing);
+
+        return this.audioResponse;
+    }
+
     /**
      * Render frame
      */
@@ -591,33 +860,61 @@ void main() {
         this.gl.uniform1f(this.uniforms.time, time);
         this.gl.uniform2f(this.uniforms.mouse, this.mouseX, this.mouseY);
         this.gl.uniform1f(this.uniforms.geometry, this.params.geometry);
-        // 🎵 DIRECT AUDIO REACTIVITY - Simple and works
-        let gridDensity = this.params.gridDensity;
-        let hue = this.params.hue;
-        let intensity = this.params.intensity;
-        
-        if (window.audioEnabled && window.audioReactive) {
-            // Faceted audio mapping: Bass affects grid density, Mid affects hue, High affects intensity
-            gridDensity += window.audioReactive.bass * 30;  // Bass makes patterns denser
-            hue += window.audioReactive.mid * 60;           // Mid frequencies shift colors
-            intensity += window.audioReactive.high * 0.4;   // High frequencies brighten
+        const audioState = this.getCurrentAudioState();
+        const audioResponse = this.updateAudioResponse(audioState);
+        const colorState = audioState?.color || this.getCurrentColorState();
+        const colorUniforms = this.prepareColorUniforms(colorState);
+
+        let gridDensity = this.params.gridDensity + audioResponse.gridDensity;
+        let morphFactor = this.params.morphFactor + audioResponse.morph;
+        let chaos = this.params.chaos + audioResponse.chaos;
+        let speed = this.params.speed + audioResponse.speed;
+        let hue = (this.params.hue + audioResponse.hueShift) % 360;
+        let intensity = this.params.intensity + audioResponse.intensity;
+        let saturation = this.params.saturation + audioResponse.saturation;
+        let dimension = this.params.dimension + audioResponse.dimension;
+        let rot4dXW = this.params.rot4dXW + audioResponse.rot4dXW;
+        let rot4dYW = this.params.rot4dYW + audioResponse.rot4dYW;
+        let rot4dZW = this.params.rot4dZW + audioResponse.rot4dZW;
+
+        if (colorState?.primary) {
+            hue = colorState.primary.h;
+            saturation = clamp(Math.max(saturation, colorState.primary.s), 0, 1);
+            intensity = clamp(intensity + (colorState.primary.v - 0.5) * 0.8, 0, 2);
         }
-        
-        this.gl.uniform1f(this.uniforms.gridDensity, Math.min(100, gridDensity));
-        this.gl.uniform1f(this.uniforms.morphFactor, this.params.morphFactor);
-        this.gl.uniform1f(this.uniforms.chaos, this.params.chaos);
-        this.gl.uniform1f(this.uniforms.speed, this.params.speed);
-        this.gl.uniform1f(this.uniforms.hue, hue % 360);
+
+        if (colorState?.accent && colorState.accent !== colorState.primary) {
+            saturation = clamp(Math.max(saturation, colorState.accent.s * 0.9), 0, 1);
+        }
+
+        gridDensity = clamp(gridDensity, 0, 120);
+        morphFactor = clamp(morphFactor, 0, 2.5);
+        chaos = clamp(chaos, 0, 1.4);
+        speed = clamp(speed, 0, 3.5);
+        intensity = clamp(intensity, 0, 1.4);
+        saturation = clamp(saturation, 0, 1);
+        dimension = clamp(dimension, 0, 6);
+        rot4dXW = clamp(rot4dXW, -4, 4);
+        rot4dYW = clamp(rot4dYW, -4, 4);
+        rot4dZW = clamp(rot4dZW, -4, 4);
+
+        this.gl.uniform1f(this.uniforms.gridDensity, gridDensity);
+        this.gl.uniform1f(this.uniforms.morphFactor, morphFactor);
+        this.gl.uniform1f(this.uniforms.chaos, chaos);
+        this.gl.uniform1f(this.uniforms.speed, speed);
+        this.gl.uniform1f(this.uniforms.hue, hue);
         this.gl.uniform1f(this.uniforms.intensity, Math.min(1, intensity));
-        this.gl.uniform1f(this.uniforms.saturation, this.params.saturation);
-        this.gl.uniform1f(this.uniforms.dimension, this.params.dimension);
-        this.gl.uniform1f(this.uniforms.rot4dXW, this.params.rot4dXW);
-        this.gl.uniform1f(this.uniforms.rot4dYW, this.params.rot4dYW);
-        this.gl.uniform1f(this.uniforms.rot4dZW, this.params.rot4dZW);
+        this.gl.uniform1f(this.uniforms.saturation, saturation);
+        this.gl.uniform1f(this.uniforms.dimension, dimension);
+        this.gl.uniform1f(this.uniforms.rot4dXW, rot4dXW);
+        this.gl.uniform1f(this.uniforms.rot4dYW, rot4dYW);
+        this.gl.uniform1f(this.uniforms.rot4dZW, rot4dZW);
         this.gl.uniform1f(this.uniforms.mouseIntensity, this.mouseIntensity);
         this.gl.uniform1f(this.uniforms.clickIntensity, this.clickIntensity);
         this.gl.uniform1f(this.uniforms.roleIntensity, roleIntensities[this.role] || 1.0);
-        
+
+        this.applyColorUniforms(colorUniforms);
+
         try {
             this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
             
