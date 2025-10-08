@@ -8,12 +8,67 @@
 import { TradingCardSystemFaceted } from './systems/TradingCardSystemFaceted.js';
 import { TradingCardSystemQuantum } from './systems/TradingCardSystemQuantum.js';
 import { TradingCardSystemHolographic } from './systems/TradingCardSystemHolographic.js';
+import {
+    getActiveEngine as getRegistryEngine,
+    getActiveParameterManager as getRegistryParameterManager,
+    getActiveSystemKey
+} from '../systems/shared/SystemAccess.js';
 
 export class TradingCardGenerator {
     constructor(engine) {
-        this.engine = engine;
+        this.engine = engine || getRegistryEngine();
         // Detect current system reliably from multiple sources
         this.currentSystem = this.detectCurrentSystem();
+    }
+
+    setEngine(engine) {
+        this.engine = engine;
+    }
+
+    getEngine() {
+        return this.engine || getRegistryEngine();
+    }
+
+    getParameterManager() {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        const engine = this.getEngine();
+        if (engine?.parameterManager) {
+            return engine.parameterManager;
+        }
+        return null;
+    }
+
+    getParameterSnapshot() {
+        const manager = this.getParameterManager();
+        if (manager?.getAllParameters) {
+            try {
+                return manager.getAllParameters();
+            } catch (error) {
+                console.warn('[TradingCardGenerator] Failed to read parameters from manager', error);
+            }
+        }
+
+        const engine = this.getEngine();
+        if (engine?.getParameters) {
+            try {
+                return engine.getParameters();
+            } catch (error) {
+                console.warn('[TradingCardGenerator] engine.getParameters() failed', error);
+            }
+        }
+
+        if (engine?.parameterManager?.getAllParameters) {
+            try {
+                return engine.parameterManager.getAllParameters();
+            } catch (error) {
+                console.warn('[TradingCardGenerator] engine.parameterManager.getAllParameters() failed', error);
+            }
+        }
+
+        return {};
     }
     
     /**
@@ -26,7 +81,12 @@ export class TradingCardGenerator {
             return activeSystemBtn.dataset.system;
         }
         
-        // Method 2: Check global variable
+        // Method 2: Check registry active key
+        const registryKey = getActiveSystemKey();
+        if (registryKey) {
+            return registryKey;
+        }
+
         if (window.currentSystem) {
             return window.currentSystem;
         }
@@ -218,51 +278,52 @@ export class TradingCardGenerator {
     captureCurrentState() {
         // Detect current system more reliably
         const activeSystemBtn = document.querySelector('.system-btn.active');
-        const detectedSystem = activeSystemBtn?.dataset.system || window.currentSystem || 'faceted';
+        const detectedSystem = activeSystemBtn?.dataset.system || getActiveSystemKey() || window.currentSystem || 'faceted';
         this.currentSystem = detectedSystem;
-        
+
         console.log('🎯 Capturing state for system:', this.currentSystem);
-        
+
         // Get parameters based on current system
-        let params = {};
+        const engine = this.getEngine();
+        let params = this.getParameterSnapshot();
         let geometryType = 0;
-        
-        if (this.currentSystem === 'faceted' && this.engine) {
-            // VIB34D Faceted System
-            params = this.engine.parameterManager?.getAllParameters() || {};
-            geometryType = params.geometry || this.getActiveGeometryIndex();
+
+        if (this.currentSystem === 'faceted') {
+            geometryType = params.geometry ?? this.getActiveGeometryIndex();
         } else if (this.currentSystem === 'holographic') {
             // CRITICAL FIX: Use SAME parameter names as holographicSystem.getParameters()
             // This ensures trading cards match gallery save/load system
-            params = {
-                geometry: this.getActiveGeometryIndex(),
-                gridDensity: parseFloat(document.getElementById('gridDensity')?.value || 15), // Raw value, not divided
-                morphFactor: parseFloat(document.getElementById('morphFactor')?.value || 1.0),
-                speed: parseFloat(document.getElementById('speed')?.value || 1.0),
-                chaos: parseFloat(document.getElementById('chaos')?.value || 0.2),
-                hue: parseFloat(document.getElementById('hue')?.value || 320), // Match holographic default
-                intensity: parseFloat(document.getElementById('intensity')?.value || 0.6), // Match holographic default
-                saturation: parseFloat(document.getElementById('saturation')?.value || 0.8),
-                rot4dXW: parseFloat(document.getElementById('rot4dXW')?.value || 0),
-                rot4dYW: parseFloat(document.getElementById('rot4dYW')?.value || 0),
-                rot4dZW: parseFloat(document.getElementById('rot4dZW')?.value || 0)
-            };
+            if (!params || Object.keys(params).length === 0) {
+                params = {};
+            }
+            params.geometry = params.geometry ?? this.getActiveGeometryIndex();
+            params.gridDensity = params.gridDensity ?? parseFloat(document.getElementById('gridDensity')?.value || 15);
+            params.morphFactor = params.morphFactor ?? parseFloat(document.getElementById('morphFactor')?.value || 1.0);
+            params.speed = params.speed ?? parseFloat(document.getElementById('speed')?.value || 1.0);
+            params.chaos = params.chaos ?? parseFloat(document.getElementById('chaos')?.value || 0.2);
+            params.hue = params.hue ?? parseFloat(document.getElementById('hue')?.value || 320);
+            params.intensity = params.intensity ?? parseFloat(document.getElementById('intensity')?.value || 0.6);
+            params.saturation = params.saturation ?? parseFloat(document.getElementById('saturation')?.value || 0.8);
+            params.rot4dXW = params.rot4dXW ?? parseFloat(document.getElementById('rot4dXW')?.value || 0);
+            params.rot4dYW = params.rot4dYW ?? parseFloat(document.getElementById('rot4dYW')?.value || 0);
+            params.rot4dZW = params.rot4dZW ?? parseFloat(document.getElementById('rot4dZW')?.value || 0);
             geometryType = params.geometry;
         } else if (this.currentSystem === 'polychora') {
-            // Polychora System  
-            params = {
-                polytope: this.getActiveGeometryIndex(),
-                gridDensity: parseFloat(document.getElementById('gridDensity')?.value || 15),
-                morphFactor: parseFloat(document.getElementById('morphFactor')?.value || 1.0),
-                chaos: parseFloat(document.getElementById('chaos')?.value || 0.2),
-                speed: parseFloat(document.getElementById('speed')?.value || 1.0),
-                hue: parseFloat(document.getElementById('hue')?.value || 200),
-                intensity: parseFloat(document.getElementById('intensity')?.value || 0.5),
-                saturation: parseFloat(document.getElementById('saturation')?.value || 0.8),
-                rot4dXW: parseFloat(document.getElementById('rot4dXW')?.value || 0),
-                rot4dYW: parseFloat(document.getElementById('rot4dYW')?.value || 0),
-                rot4dZW: parseFloat(document.getElementById('rot4dZW')?.value || 0)
-            };
+            // Polychora System
+            if (!params || Object.keys(params).length === 0) {
+                params = {};
+            }
+            params.polytope = params.polytope ?? this.getActiveGeometryIndex();
+            params.gridDensity = params.gridDensity ?? parseFloat(document.getElementById('gridDensity')?.value || 15);
+            params.morphFactor = params.morphFactor ?? parseFloat(document.getElementById('morphFactor')?.value || 1.0);
+            params.chaos = params.chaos ?? parseFloat(document.getElementById('chaos')?.value || 0.2);
+            params.speed = params.speed ?? parseFloat(document.getElementById('speed')?.value || 1.0);
+            params.hue = params.hue ?? parseFloat(document.getElementById('hue')?.value || 200);
+            params.intensity = params.intensity ?? parseFloat(document.getElementById('intensity')?.value || 0.5);
+            params.saturation = params.saturation ?? parseFloat(document.getElementById('saturation')?.value || 0.8);
+            params.rot4dXW = params.rot4dXW ?? parseFloat(document.getElementById('rot4dXW')?.value || 0);
+            params.rot4dYW = params.rot4dYW ?? parseFloat(document.getElementById('rot4dYW')?.value || 0);
+            params.rot4dZW = params.rot4dZW ?? parseFloat(document.getElementById('rot4dZW')?.value || 0);
             geometryType = params.polytope;
         }
         
