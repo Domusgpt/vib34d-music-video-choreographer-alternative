@@ -3,12 +3,67 @@
  * Handles all export and import functionality for configurations and media
  */
 
+import {
+    getActiveEngine as getRegistryEngine,
+    getActiveParameterManager as getRegistryParameterManager
+} from '../systems/shared/SystemAccess.js';
+
 export class ExportManager {
     constructor(engine) {
         this.engine = engine;
         this.setupFileInputs();
     }
-    
+
+    setEngine(engine) {
+        this.engine = engine;
+    }
+
+    getEngine() {
+        return this.engine || getRegistryEngine();
+    }
+
+    getParameterManager() {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        const engine = this.getEngine();
+        if (engine?.parameterManager) {
+            return engine.parameterManager;
+        }
+        return null;
+    }
+
+    getParameterSnapshot() {
+        const manager = this.getParameterManager();
+        if (manager?.getAllParameters) {
+            try {
+                return manager.getAllParameters();
+            } catch (error) {
+                console.warn('[ExportManager] Failed to read parameters from active manager', error);
+            }
+        }
+
+        const engine = this.getEngine();
+        if (engine?.getParameters) {
+            try {
+                return engine.getParameters();
+            } catch (error) {
+                console.warn('[ExportManager] engine.getParameters() failed', error);
+            }
+        }
+
+        if (engine?.parameterManager?.getAllParameters) {
+            try {
+                return engine.parameterManager.getAllParameters();
+            } catch (error) {
+                console.warn('[ExportManager] engine.parameterManager.getAllParameters() failed', error);
+            }
+        }
+
+        return {};
+    }
+
     /**
      * Set up file input handlers
      */
@@ -36,12 +91,20 @@ export class ExportManager {
      * Export current configuration as JSON
      */
     exportJSON() {
+        const engine = this.getEngine();
+        const variationManager = engine?.variationManager;
+        const currentVariation = engine?.currentVariation ?? 0;
+        const variationName = variationManager
+            ? variationManager.getVariationName(currentVariation)
+            : 'VIB34D Variation';
+        const params = this.getParameterSnapshot();
+
         const config = {
             version: "2.0",
             type: "vib34d-integrated-config",
-            name: `${this.engine.variationManager.getVariationName(this.engine.currentVariation)} - ${new Date().toLocaleDateString()}`,
-            variation: this.engine.currentVariation,
-            parameters: this.engine.parameterManager.getAllParameters(),
+            name: `${variationName} - ${new Date().toLocaleDateString()}`,
+            variation: currentVariation,
+            parameters: params,
             timestamp: Date.now(),
             metadata: {
                 engine: "VIB34D Integrated",
@@ -50,10 +113,10 @@ export class ExportManager {
                 email: "phillips.paul.email@gmail.com"
             }
         };
-        
+
         const json = JSON.stringify(config, null, 2);
         this.downloadFile(json, 'vib34d-config.json', 'application/json');
-        this.engine.statusManager.success('Configuration exported as JSON');
+        engine?.statusManager?.success?.('Configuration exported as JSON');
     }
     
     /**
@@ -61,8 +124,12 @@ export class ExportManager {
      */
     saveToGallery(customName = null) {
         // Get current state
-        const params = this.engine.parameterManager.getAllParameters();
-        const variationName = customName || this.engine.variationManager.getVariationName(this.engine.currentVariation);
+        const engine = this.getEngine();
+        const params = this.getParameterSnapshot();
+        const variationManager = engine?.variationManager;
+        const variationName = customName || (variationManager
+            ? variationManager.getVariationName(engine?.currentVariation ?? 0)
+            : 'VIB34D Variation');
         const timestamp = new Date().toISOString();
         
         // Format as holographic-collection (gallery format)
@@ -106,7 +173,7 @@ export class ExportManager {
         this.downloadFile(json, filename, 'application/json');
         
         // Show detailed instructions
-        this.engine.statusManager.success(
+        engine?.statusManager?.success?.(
             `🎯 Saved for Gallery!<br><br>` +
             `<strong>File:</strong> ${filename}<br>` +
             `<strong>Next Steps:</strong><br>` +
@@ -124,14 +191,20 @@ export class ExportManager {
      * Export current configuration as CSS theme
      */
     exportCSS() {
-        const params = this.engine.parameterManager.getAllParameters();
+        const engine = this.getEngine();
+        const params = this.getParameterSnapshot();
+        const variationManager = engine?.variationManager;
+        const currentVariation = engine?.currentVariation ?? 0;
+        const variationLabel = variationManager
+            ? variationManager.getVariationName(currentVariation)
+            : `Variation ${currentVariation + 1}`;
         const cssContent = `/* VIB34D Integrated Holographic CSS Theme */
 /* Generated: ${new Date().toISOString()} */
-/* Variation: ${this.engine.currentVariation + 1} - ${this.engine.variationManager.getVariationName(this.engine.currentVariation)} */
+/* Variation: ${currentVariation + 1} - ${variationLabel} */
 
 :root {
     /* VIB34D Parameters */
-    --vib34d-variation: ${this.engine.currentVariation};
+    --vib34d-variation: ${currentVariation};
     --vib34d-geometry: ${params.geometry};
     --vib34d-grid-density: ${params.gridDensity};
     --vib34d-morph-factor: ${params.morphFactor};
@@ -146,22 +219,22 @@ export class ExportManager {
 
 .vib34d-holographic {
     /* Base holographic background */
-    background: linear-gradient(45deg, 
+    background: linear-gradient(45deg,
         hsl(${params.hue}, 70%, 30%) 0%,
         hsl(${(params.hue + 60) % 360}, 70%, 20%) 25%,
         hsl(${(params.hue + 120) % 360}, 70%, 25%) 50%,
         hsl(${(params.hue + 180) % 360}, 70%, 20%) 75%,
         hsl(${(params.hue + 240) % 360}, 70%, 30%) 100%);
-    
+
     /* Animation based on parameters */
     animation: vib34d-holographic-pulse ${3 / params.speed}s infinite;
-    
+
     /* 4D transformation simulation */
-    transform: perspective(1000px) 
-               rotateX(${params.rot4dXW * 5}deg) 
-               rotateY(${params.rot4dYW * 5}deg) 
+    transform: perspective(1000px)
+               rotateX(${params.rot4dXW * 5}deg)
+               rotateY(${params.rot4dYW * 5}deg)
                rotateZ(${params.rot4dZW * 5}deg);
-    
+
     /* Layer effects */
     position: relative;
     overflow: hidden;
@@ -174,7 +247,7 @@ export class ExportManager {
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle at 50% 50%, 
+    background: radial-gradient(circle at 50% 50%,
         hsla(${(params.hue + 30) % 360}, 80%, 50%, 0.3) 0%,
         hsla(${(params.hue + 90) % 360}, 70%, 40%, 0.2) 30%,
         transparent 60%);
@@ -199,30 +272,30 @@ export class ExportManager {
 }
 
 @keyframes vib34d-holographic-pulse {
-    0% { 
+    0% {
         filter: hue-rotate(0deg) saturate(1) brightness(1);
-        transform: perspective(1000px) 
-                   rotateX(${params.rot4dXW * 5}deg) 
-                   rotateY(${params.rot4dYW * 5}deg) 
-                   rotateZ(${params.rot4dZW * 5}deg) 
+        transform: perspective(1000px)
+                   rotateX(${params.rot4dXW * 5}deg)
+                   rotateY(${params.rot4dYW * 5}deg)
+                   rotateZ(${params.rot4dZW * 5}deg)
                    scale(1);
     }
-    50% { 
-        filter: hue-rotate(${params.chaos * 180}deg) 
-                saturate(${1 + params.morphFactor}) 
+    50% {
+        filter: hue-rotate(${params.chaos * 180}deg)
+                saturate(${1 + params.morphFactor})
                 brightness(${1.1 + params.morphFactor * 0.3});
-        transform: perspective(1000px) 
-                   rotateX(${params.rot4dXW * 5 + 2}deg) 
-                   rotateY(${params.rot4dYW * 5 + 2}deg) 
-                   rotateZ(${params.rot4dZW * 5 + 2}deg) 
+        transform: perspective(1000px)
+                   rotateX(${params.rot4dXW * 5 + 2}deg)
+                   rotateY(${params.rot4dYW * 5 + 2}deg)
+                   rotateZ(${params.rot4dZW * 5 + 2}deg)
                    scale(${1 + params.morphFactor * 0.1});
     }
-    100% { 
+    100% {
         filter: hue-rotate(360deg) saturate(1) brightness(1);
-        transform: perspective(1000px) 
-                   rotateX(${params.rot4dXW * 5}deg) 
-                   rotateY(${params.rot4dYW * 5}deg) 
-                   rotateZ(${params.rot4dZW * 5}deg) 
+        transform: perspective(1000px)
+                   rotateX(${params.rot4dXW * 5}deg)
+                   rotateY(${params.rot4dYW * 5}deg)
+                   rotateZ(${params.rot4dZW * 5}deg)
                    scale(1);
     }
 }
@@ -239,25 +312,25 @@ export class ExportManager {
 }
 
 .vib34d-holographic:active {
-    transform: perspective(1000px) 
-               rotateX(${params.rot4dXW * 5 + 5}deg) 
-               rotateY(${params.rot4dYW * 5 + 5}deg) 
-               rotateZ(${params.rot4dZW * 5 + 3}deg) 
+    transform: perspective(1000px)
+               rotateX(${params.rot4dXW * 5 + 5}deg)
+               rotateY(${params.rot4dYW * 5 + 5}deg)
+               rotateZ(${params.rot4dZW * 5 + 3}deg)
                scale(${0.95 + params.morphFactor * 0.05});
 }
 
 /* Configuration comment for reference */
 /* VIB34D Configuration: ${JSON.stringify(params, null, 2)} */`;
-        
+
         this.downloadFile(cssContent, 'vib34d-holographic.css', 'text/css');
-        this.engine.statusManager.success('CSS theme exported');
+        engine?.statusManager?.success?.('CSS theme exported');
     }
     
     /**
      * Export complete HTML page with current visualization
      */
     exportHTML() {
-        const params = this.engine.parameterManager.getAllParameters();
+        const params = this.getParameterSnapshot();
         const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -536,14 +609,29 @@ window.addEventListener('load', () => {
      */
     loadConfiguration(config) {
         if (config.parameters) {
-            this.engine.parameterManager.setParameters(config.parameters);
-            
-            if (typeof config.variation === 'number') {
-                this.engine.setVariation(config.variation);
+            const engine = this.getEngine();
+            const manager = this.getParameterManager();
+
+            if (manager?.setParameters) {
+                try {
+                    manager.setParameters(config.parameters);
+                } catch (error) {
+                    console.warn('[ExportManager] Failed to apply parameters via manager', error);
+                }
+            } else if (engine?.parameterManager?.setParameters) {
+                try {
+                    engine.parameterManager.setParameters(config.parameters);
+                } catch (error) {
+                    console.warn('[ExportManager] Engine parameterManager.setParameters failed', error);
+                }
             }
-            
-            this.engine.updateDisplayValues();
-            this.engine.updateVisualizers();
+
+            if (engine && typeof config.variation === 'number' && typeof engine.setVariation === 'function') {
+                engine.setVariation(config.variation);
+            }
+
+            engine?.updateDisplayValues?.();
+            engine?.updateVisualizers?.();
         }
     }
     
