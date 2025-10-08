@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VIB34D Music Video Choreographer - Dual Mode</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles/controls.css">
+    <link rel="stylesheet" href="./styles/mobile.css">
     <style>
         * {
             margin: 0;
@@ -161,6 +163,52 @@
             cursor: not-allowed;
         }
 
+        select,
+        input[type="range"] {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0, 255, 255, 0.6);
+            color: #0ff;
+            font-family: 'Orbitron', monospace;
+            padding: 8px 12px;
+            border-radius: 8px;
+            appearance: none;
+        }
+
+        .control-value {
+            min-width: 48px;
+            text-align: right;
+            font-size: 12px;
+            color: #0ff;
+        }
+
+        .color-controls {
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .color-controls label {
+            font-size: 11px;
+            text-transform: uppercase;
+            opacity: 0.75;
+            letter-spacing: 0.05em;
+        }
+
+        .color-controls select {
+            min-width: 140px;
+        }
+
+        .color-controls input[type="range"] {
+            flex: 1;
+        }
+
+        .gradient-preview {
+            width: 140px;
+            height: 22px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            background: linear-gradient(90deg, #0ff, #f0f);
+        }
+
         .file-input-label {
             background: linear-gradient(135deg, #4a0a68, #f0f);
             padding: 12px 24px;
@@ -249,6 +297,43 @@
             margin-bottom: 8px;
         }
 
+        .system-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--system-accent, rgba(0, 255, 255, 0.2));
+        }
+
+        .system-info h4 {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--system-accent, #0ff);
+            margin-bottom: 6px;
+        }
+
+        .system-info p {
+            color: #a7f6ff;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+
+        .system-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .system-tag {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 255, 255, 0.35);
+            background: rgba(0, 255, 255, 0.12);
+            color: #7ff;
+        }
+
         .beat-indicator {
             position: fixed;
             top: 50%;
@@ -277,20 +362,14 @@
 
         /* Timeline Editor Mode */
         #timeline-editor {
-            position: fixed;
-            left: 20px;
-            top: 120px;
-            bottom: 20px;
-            width: 350px;
-            background: rgba(0, 0, 0, 0.95);
-            border: 2px solid #f0f;
-            border-radius: 10px;
-            padding: 15px;
-            z-index: 1500;
             display: none;
             flex-direction: column;
             gap: 10px;
-            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 0, 255, 0.35);
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 12px;
         }
 
         #timeline-editor.active {
@@ -300,11 +379,12 @@
         #timeline-editor h3 {
             color: #f0f;
             margin-bottom: 10px;
+            font-size: 14px;
         }
 
         .sequence-item {
-            background: rgba(255, 0, 255, 0.1);
-            border: 1px solid #f0f;
+            background: rgba(255, 0, 255, 0.08);
+            border: 1px solid rgba(255, 0, 255, 0.35);
             border-radius: 5px;
             padding: 10px;
             margin-bottom: 10px;
@@ -340,8 +420,7 @@
         }
 
         .add-sequence-btn {
-            background: linear-gradient(135deg, #4a0a68, #f0f);
-            margin-top: 10px;
+            margin-top: 6px;
         }
 
         .mode-toggle {
@@ -364,10 +443,6 @@
                 max-width: 90%;
             }
 
-            #timeline-editor {
-                width: 90%;
-                left: 5%;
-            }
         }
     </style>
 </head>
@@ -403,16 +478,59 @@
         <p id="mode-description">Real-time audio analysis with automatic parameter mapping</p>
         <p id="beat-info">BPM: -- | Beat: --</p>
         <p id="energy-info">Energy: -- | Bass: --</p>
+        <div class="system-info" id="systemInfo">
+            <h4 id="systemName">Faceted Prism Engine</h4>
+            <p id="systemDescription">Crystal prisms pulse with bass-driven density while mid-band morphing sculpts razor-sharp silhouettes.</p>
+            <div class="system-tags" id="systemTags">
+                <span class="system-tag">Geometric</span>
+                <span class="system-tag">Reactive</span>
+            </div>
+        </div>
     </div>
 
-    <!-- Timeline Editor for Choreography Mode -->
-    <div id="timeline-editor">
-        <h3>📝 Sequence Timeline</h3>
-        <button class="add-sequence-btn" onclick="addSequence()">+ Add Sequence</button>
-        <div id="sequence-list"></div>
-        <button onclick="saveChoreography()">💾 Save Choreography</button>
-        <button onclick="loadChoreography()">📂 Load Choreography</button>
-    </div>
+    <aside class="control-panel hidden" id="controlPanel" aria-label="System Control Panel">
+        <div class="panel-header">
+            <span id="controlPanelTitle">Control Center</span>
+            <button class="mobile-collapse-btn" type="button" onclick="toggleMobilePanel()" aria-expanded="true" aria-controls="controlPanelContent">▼</button>
+        </div>
+        <div id="controlPanelContent">
+            <section class="control-section timeline-section" id="timelineSection">
+                <div class="section-title">Timeline</div>
+                <div class="timeline-wrapper">
+                    <div id="timeline" class="timeline-track">
+                        <div id="timeline-progress" class="timeline-progress"></div>
+                    </div>
+                    <div class="timeline-meta">
+                        <span id="timelineCurrent">0:00</span>
+                        <span id="timelineDuration">0:00</span>
+                    </div>
+                    <div class="timeline-actions">
+                        <button class="panel-btn compact" id="timelineEditorToggle" type="button" onclick="toggleTimelineEditor()" disabled>📝 Edit Timeline</button>
+                    </div>
+                    <div class="timeline-presets" id="timelinePresetList"></div>
+                    <div class="timeline-hints" id="timelineHints"></div>
+                </div>
+                <div id="timeline-editor" aria-hidden="true">
+                    <h3>📝 Sequence Timeline</h3>
+                    <div class="timeline-editor-actions" id="timelineEditorActions"></div>
+                    <div id="sequence-list"></div>
+                </div>
+            </section>
+            <section class="control-section" id="geometrySection">
+                <div class="section-title">Geometry Library</div>
+                <div class="geometry-readout" id="v-geometry">--</div>
+                <div class="geometry-grid" id="geometryGrid"></div>
+            </section>
+            <section class="control-section" id="dynamicControlSection">
+                <div class="section-title">System Controls</div>
+                <div class="control-groups" id="dynamicControlGroups"></div>
+            </section>
+            <section class="control-section actions-section" id="controlActionsSection">
+                <div class="section-title">Quick Actions</div>
+                <div class="action-list" id="controlActionList"></div>
+            </section>
+        </div>
+    </aside>
 
     <div id="controls">
         <div class="control-row">
@@ -426,44 +544,121 @@
             <button class="mode-toggle" onclick="toggleMode()">🔄 Switch Mode</button>
         </div>
 
-        <div id="timeline">
-            <div id="timeline-progress"></div>
-        </div>
-
         <div class="system-selector">
             <button class="system-btn active" data-system="faceted">🔷 FACETED</button>
             <button class="system-btn" data-system="quantum">🌌 QUANTUM</button>
             <button class="system-btn" data-system="holographic">✨ HOLOGRAPHIC</button>
+            <button class="system-btn" data-system="polychora">🔮 POLYCHORA</button>
+        </div>
+
+        <div class="control-row color-controls">
+            <label for="colorModeControl">Color Mode</label>
+            <select id="colorModeControl"></select>
+            <label for="colorPaletteControl">Palette</label>
+            <select id="colorPaletteControl"></select>
+            <div class="gradient-preview" id="gradientPreview"></div>
+        </div>
+
+        <div class="control-row color-controls">
+            <label for="gradientTypeControl">Gradient</label>
+            <select id="gradientTypeControl"></select>
+            <label for="gradientSpeedControl">Speed</label>
+            <input type="range" id="gradientSpeedControl" min="0" max="2" step="0.01" value="0.25">
+            <span class="control-value" id="gradientSpeedValue">0.25x</span>
+            <label for="colorReactivityControl">Reactivity</label>
+            <input type="range" id="colorReactivityControl" min="0" max="1" step="0.05" value="0.65">
+            <span class="control-value" id="colorReactivityValue">65%</span>
         </div>
 
         <div id="status">Select a mode to begin</div>
     </div>
 
     <script type="module">
+        import './js/audio/audio-engine.js';
+        import './js/controls/ui-handlers.js';
         import { VIB34DIntegratedEngine } from './src/core/Engine.js';
         import { QuantumEngine } from './src/quantum/QuantumEngine.js';
         import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
 
         let choreographer = null;
         let currentMode = null;
+        window.currentMode = currentMode;
+
+        function updateTimelineAvailability(mode) {
+            const isChoreographed = mode === 'choreographed';
+            const timelineSection = document.getElementById('timelineSection');
+            const toggleButton = document.getElementById('timelineEditorToggle');
+
+            if (timelineSection) {
+                timelineSection.classList.toggle('inactive', !isChoreographed);
+                timelineSection.setAttribute('aria-disabled', isChoreographed ? 'false' : 'true');
+            }
+
+            if (toggleButton) {
+                toggleButton.disabled = !isChoreographed;
+                toggleButton.setAttribute('aria-disabled', isChoreographed ? 'false' : 'true');
+            }
+        }
+
+        window.toggleTimelineEditor = function(force) {
+            const editor = document.getElementById('timeline-editor');
+            const toggleButton = document.getElementById('timelineEditorToggle');
+            if (!editor) return;
+
+            const isChoreographed = currentMode === 'choreographed';
+            let shouldOpen;
+
+            if (typeof force === 'boolean') {
+                shouldOpen = force && isChoreographed;
+            } else {
+                shouldOpen = !editor.classList.contains('active');
+                if (shouldOpen && !isChoreographed) {
+                    shouldOpen = false;
+                }
+            }
+
+            editor.classList.toggle('active', shouldOpen);
+            editor.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+
+            if (toggleButton) {
+                toggleButton.textContent = shouldOpen ? 'Hide Timeline' : '📝 Edit Timeline';
+                toggleButton.setAttribute('aria-pressed', shouldOpen ? 'true' : 'false');
+            }
+        };
 
         window.selectMode = function(mode) {
             currentMode = mode;
+            window.currentMode = currentMode;
             document.getElementById('mode-selector').style.display = 'none';
             document.getElementById('controls').classList.add('active');
             document.getElementById('info-panel').classList.add('active');
+            const controlPanel = document.getElementById('controlPanel');
+            if (controlPanel) {
+                controlPanel.classList.remove('hidden');
+            }
 
             if (mode === 'choreographed') {
-                document.getElementById('timeline-editor').classList.add('active');
                 document.getElementById('mode-title').textContent = '🎬 HYBRID MODE';
                 document.getElementById('mode-description').textContent = 'Choreographed sequences + Full audio reactivity + System switching';
+                toggleTimelineEditor(true);
             } else {
                 document.getElementById('mode-title').textContent = '🎧 REACTIVE MODE';
                 document.getElementById('mode-description').textContent = 'Real-time audio analysis with automatic parameter mapping';
+                toggleTimelineEditor(false);
             }
+
+            updateTimelineAvailability(mode);
 
             // Initialize choreographer with selected mode
             initChoreographer(mode);
+
+            if (window.refreshColorControls) {
+                window.refreshColorControls();
+            }
+
+            if (window.refreshControlPanel) {
+                window.refreshControlPanel();
+            }
         };
 
         window.toggleMode = function() {
@@ -484,17 +679,14 @@
         // Global functions for timeline editor
         window.addSequence = function() {
             if (!choreographer) return;
-            choreographer.addSequenceToTimeline({
-                time: 0,
-                duration: 10,
-                effects: {
-                    geometry: 'hold',
-                    rotation: 'smooth',
-                    chaos: 0.5,
-                    speed: 1.0,
-                    colorShift: 'medium'
-                }
-            });
+            const sequence = typeof choreographer.createSequenceFromDefaults === 'function'
+                ? choreographer.createSequenceFromDefaults()
+                : {
+                    time: 0,
+                    duration: 10,
+                    effects: { geometry: 'cycle', rotation: 'smooth', chaos: 0.3, speed: 1.0, colorShift: 'medium' }
+                };
+            choreographer.addSequenceToTimeline(sequence);
         };
 
         window.saveChoreography = function() {

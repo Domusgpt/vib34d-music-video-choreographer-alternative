@@ -3,11 +3,234 @@
  * Dual-mode system: Reactive (built-in audio reactivity) + Choreographed (timeline-based)
  */
 
-import { VIB34DIntegratedEngine } from './src/core/Engine.js';
-import { QuantumEngine } from './src/quantum/QuantumEngine.js';
-import { RealHolographicSystem } from './src/holograms/RealHolographicSystem.js';
 import { DynamicParameterBridge } from './src/choreography/DynamicParameterBridge.js';
 import { GeometryLibrary } from './src/geometry/GeometryLibrary.js';
+import { SystemRegistry } from './src/systems/shared/SystemRegistry.js';
+import { FacetedSystem } from './src/systems/faceted/FacetedSystem.js';
+import { QuantumSystem } from './src/systems/quantum/QuantumSystem.js';
+import { HolographicSystem } from './src/systems/holographic/HolographicSystem.js';
+import { PolychoraSystem } from './src/systems/polychora/PolychoraSystem.js';
+import {
+    registerSystemRegistry,
+    syncActiveSystemState,
+    getActiveParameterManager as getRegistryParameterManager
+} from './src/systems/shared/SystemAccess.js';
+import { resolveSystemDescriptor } from './src/systems/shared/SystemMetadata.js';
+
+const SYSTEM_ICON_MAP = {
+    faceted: '🔷',
+    quantum: '🌌',
+    holographic: '✨',
+    polychora: '🔮'
+};
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function toNumber(value) {
+    if (value === undefined || value === null || value === '') {
+        return null;
+    }
+    const numeric = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(numeric) ? numeric : null;
+}
+
+function coerceNumber(value, fallback) {
+    const numeric = toNumber(value);
+    if (numeric === null) {
+        return fallback;
+    }
+    return numeric;
+}
+
+function formatOptionLabel(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? String(value) : '';
+    }
+    const text = String(value).trim();
+    if (!text) {
+        return 'Auto';
+    }
+    if (text.length === 1) {
+        return text.toUpperCase();
+    }
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function formatValueForInput(value) {
+    if (value === undefined || value === null || value === '') {
+        return '';
+    }
+    return escapeHtml(String(value));
+}
+
+function normalizeOptionEntry(option, { allowEmpty = false } = {}) {
+    if (option === null || option === undefined) {
+        return null;
+    }
+
+    if (typeof option === 'string' || typeof option === 'number') {
+        const raw = String(option);
+        const trimmed = raw.trim();
+        if (!trimmed && !allowEmpty) {
+            return null;
+        }
+        const value = trimmed || (allowEmpty ? '' : trimmed);
+        const label = trimmed || raw || (allowEmpty ? 'Auto' : '');
+        return { value, label, icon: null };
+    }
+
+    if (typeof option === 'object') {
+        const rawValue = option.value ?? option.key ?? option.id ?? option.name ?? option.label;
+        const stringValue = rawValue === undefined || rawValue === null ? '' : String(rawValue);
+        const trimmed = stringValue.trim();
+        if (!trimmed && !allowEmpty) {
+            return null;
+        }
+        const value = trimmed || (allowEmpty ? '' : trimmed);
+        let label = option.label || option.title || option.name || '';
+        label = label && typeof label === 'string' ? label.trim() : '';
+        if (!label) {
+            label = trimmed || (allowEmpty && !value ? 'Auto' : '');
+        }
+        const normalized = {
+            value,
+            label,
+            icon: option.icon || null
+        };
+        if (option.description || option.hint) {
+            normalized.description = option.description || option.hint;
+        }
+        if (option.dataset && typeof option.dataset === 'object') {
+            normalized.dataset = { ...option.dataset };
+        }
+        return normalized;
+    }
+
+    return null;
+}
+
+function collectOptions(groups, { allowEmpty = false } = {}) {
+    const result = [];
+    const seen = new Set();
+    const sourceGroups = Array.isArray(groups) ? groups : [groups];
+
+    sourceGroups.forEach(group => {
+        if (!group) {
+            return;
+        }
+        const entries = Array.isArray(group) ? group : [group];
+        entries.forEach(entry => {
+            const option = normalizeOptionEntry(entry, { allowEmpty });
+            if (!option) {
+                return;
+            }
+            const value = option.value ?? '';
+            const normalizedValue = value.toLowerCase();
+            if (!normalizedValue && allowEmpty) {
+                if (result.some(opt => opt.value === '')) {
+                    return;
+                }
+                result.push(option);
+                return;
+            }
+            if (seen.has(normalizedValue)) {
+                return;
+            }
+            seen.add(normalizedValue);
+            result.push(option);
+        });
+    });
+
+    return result;
+}
+
+function cloneSequenceInput(sequence) {
+    if (!sequence || typeof sequence !== 'object') {
+        return { time: 0, duration: 0, effects: {} };
+    }
+
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(sequence);
+        } catch (error) {
+            // Fallback to JSON copy below
+        }
+    }
+
+    try {
+        return JSON.parse(JSON.stringify(sequence));
+    } catch (error) {
+        const clone = { ...sequence };
+        clone.effects = sequence.effects && typeof sequence.effects === 'object'
+            ? { ...sequence.effects }
+            : {};
+        return clone;
+    }
+}
+
+function cloneDeep(value, cache = new WeakMap()) {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+
+    if (cache.has(value)) {
+        return cache.get(value);
+    }
+
+    if (typeof structuredClone === 'function') {
+        try {
+            const cloned = structuredClone(value);
+            cache.set(value, cloned);
+            return cloned;
+        } catch (error) {
+            // structuredClone may throw for certain object types; fall back to manual clone
+        }
+    }
+
+    if (Array.isArray(value)) {
+        const clonedArray = value.map(item => cloneDeep(item, cache));
+        cache.set(value, clonedArray);
+        return clonedArray;
+    }
+
+    const clonedObject = {};
+    cache.set(value, clonedObject);
+    Object.keys(value).forEach(key => {
+        clonedObject[key] = cloneDeep(value[key], cache);
+    });
+    return clonedObject;
+}
+
+function stripUndefinedDeep(value) {
+    if (Array.isArray(value)) {
+        return value
+            .map(item => stripUndefinedDeep(item))
+            .filter(item => item !== undefined);
+    }
+
+    if (value && typeof value === 'object') {
+        const result = {};
+        Object.entries(value).forEach(([key, entry]) => {
+            const cleaned = stripUndefinedDeep(entry);
+            if (cleaned !== undefined) {
+                result[key] = cleaned;
+            }
+        });
+        return result;
+    }
+
+    return value === undefined ? undefined : value;
+}
 
 export class MusicVideoChoreographer {
     constructor(mode = 'reactive') {
@@ -22,6 +245,25 @@ export class MusicVideoChoreographer {
         this.animationId = null;
         this.canvasManager = null;
 
+        this.systemRegistry = new SystemRegistry({
+            containerId: 'vib34dLayers',
+            autoClear: true,
+            destroyOnSwitch: true
+        });
+
+        const facetedDescriptor = resolveSystemDescriptor('faceted');
+        const quantumDescriptor = resolveSystemDescriptor('quantum');
+        const holographicDescriptor = resolveSystemDescriptor('holographic');
+        const polychoraDescriptor = resolveSystemDescriptor('polychora');
+
+        this.systemRegistry.register('faceted', () => new FacetedSystem(), facetedDescriptor);
+        this.systemRegistry.register('quantum', () => new QuantumSystem(), quantumDescriptor);
+        this.systemRegistry.register('holographic', () => new HolographicSystem(), holographicDescriptor);
+        this.systemRegistry.register('polychora', () => new PolychoraSystem(), polychoraDescriptor);
+        this.defaultTimelineDescriptor = facetedDescriptor?.timeline || null;
+        registerSystemRegistry(this.systemRegistry);
+        this.activeSystem = null;
+
         // Beat detection
         this.beatThreshold = 0.7;
         this.lastBeatTime = 0;
@@ -31,6 +273,7 @@ export class MusicVideoChoreographer {
         // Choreography sequences (for choreographed mode)
         this.sequences = [];
         this.currentSequence = null;
+        this.importedTimelineDefaults = null;
         this.dynamicBridge = new DynamicParameterBridge(this);
 
         // Geometry controls
@@ -54,6 +297,394 @@ export class MusicVideoChoreographer {
         this.init();
     }
 
+    resolveParameterManager() {
+        const registryManager = getRegistryParameterManager();
+        if (registryManager) {
+            return registryManager;
+        }
+        if (this.currentEngine?.parameterManager) {
+            return this.currentEngine.parameterManager;
+        }
+        if (this.activeSystem?.engine?.parameterManager) {
+            return this.activeSystem.engine.parameterManager;
+        }
+        return null;
+    }
+
+    setParameterValue(param, value, options = {}) {
+        const manager = this.resolveParameterManager();
+        const allowOverflow = options?.allowOverflow ?? false;
+
+        if (manager) {
+            try {
+                if (allowOverflow && typeof manager.setParameterExternal === 'function') {
+                    const applied = manager.setParameterExternal(param, value, { allowOverflow: true });
+                    if (applied) {
+                        return true;
+                    }
+                }
+
+                if (typeof manager.setParameter === 'function') {
+                    const ownsParam = manager.params && Object.prototype.hasOwnProperty.call(manager.params, param);
+                    const result = manager.setParameter(param, value);
+                    if (ownsParam || result !== false) {
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] ParameterManager set failed', param, error);
+            }
+        }
+
+        const engineManager = this.currentEngine?.parameterManager;
+        if (engineManager && engineManager !== manager && typeof engineManager.setParameter === 'function') {
+            try {
+                const result = engineManager.setParameter(param, value);
+                if (result !== false) {
+                    return true;
+                }
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] Engine parameter set failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameter) {
+            try {
+                this.currentEngine.updateParameter(param, value);
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameter fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine?.updateParameters) {
+            try {
+                this.currentEngine.updateParameters({ [param]: value });
+                return true;
+            } catch (error) {
+                console.debug('[MusicVideoChoreographer] updateParameters fallback failed', param, error);
+            }
+        }
+
+        if (this.currentEngine && param in this.currentEngine) {
+            this.currentEngine[param] = value;
+            return true;
+        }
+
+        return false;
+    }
+
+    getSystemIcon(systemKey) {
+        const normalized = typeof systemKey === 'string' ? systemKey.toLowerCase() : '';
+        return SYSTEM_ICON_MAP[normalized] || '';
+    }
+
+    formatSystemLabel(systemKey) {
+        if (!systemKey) {
+            return 'System';
+        }
+        const metadata = this.systemRegistry.getSystemMetadata(systemKey)
+            || resolveSystemDescriptor(systemKey);
+        if (metadata?.title) {
+            return metadata.title;
+        }
+        const text = String(systemKey).trim();
+        if (!text) {
+            return 'System';
+        }
+        return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+
+    getTimelineDescriptor(systemKey = this.currentSystem || 'faceted') {
+        const normalized = typeof systemKey === 'string' ? systemKey.toLowerCase() : 'faceted';
+        const metadata = this.systemRegistry.getSystemMetadata(normalized);
+        if (metadata?.timeline) {
+            return metadata.timeline;
+        }
+        const fallback = resolveSystemDescriptor(normalized);
+        if (fallback?.timeline) {
+            return fallback.timeline;
+        }
+        return this.defaultTimelineDescriptor || null;
+    }
+
+    getTimelineFormOptions() {
+        const activeKey = this.currentSystem || 'faceted';
+        const activeDescriptor = this.systemRegistry.getSystemMetadata(activeKey) || resolveSystemDescriptor(activeKey);
+        const activeTimeline = activeDescriptor?.timeline || this.defaultTimelineDescriptor || {};
+        const fallbackTimeline = this.defaultTimelineDescriptor
+            || resolveSystemDescriptor('faceted')?.timeline
+            || {};
+        const importedForm = this.importedTimelineDefaults?.form || {};
+        const registrySystems = this.systemRegistry.listSystems();
+        const registryOptions = registrySystems.map(({ key, metadata }) => ({
+            value: key,
+            label: metadata?.title || this.formatSystemLabel(key),
+            icon: this.getSystemIcon(key)
+        }));
+
+        return {
+            systemOptions: collectOptions([
+                activeTimeline.form?.systemOptions,
+                fallbackTimeline.form?.systemOptions,
+                importedForm.systemOptions,
+                registryOptions
+            ]),
+            geometryModes: collectOptions([
+                activeTimeline.form?.geometryModes,
+                fallbackTimeline.form?.geometryModes,
+                importedForm.geometryModes
+            ]),
+            rotationModes: collectOptions([
+                activeTimeline.form?.rotationModes,
+                fallbackTimeline.form?.rotationModes,
+                importedForm.rotationModes
+            ]),
+            colorShiftModes: collectOptions([
+                activeTimeline.form?.colorShiftModes,
+                fallbackTimeline.form?.colorShiftModes,
+                importedForm.colorShiftModes
+            ]),
+            geometryAudioAxes: collectOptions([
+                activeTimeline.form?.geometryAudioAxes,
+                fallbackTimeline.form?.geometryAudioAxes,
+                importedForm.geometryAudioAxes
+            ], { allowEmpty: true })
+        };
+    }
+
+    collectTimelineDefaultsSnapshot() {
+        const fallback = this.defaultTimelineDescriptor
+            || resolveSystemDescriptor('faceted')?.timeline
+            || {};
+        const base = cloneDeep(fallback.sequenceDefaults?.base || {});
+        const aggregatedPerSystem = {};
+        const fallbackPerSystem = fallback.sequenceDefaults?.perSystem
+            || fallback.sequenceDefaults?.systems
+            || {};
+
+        Object.entries(fallbackPerSystem).forEach(([key, value]) => {
+            if (!value || typeof value !== 'object') {
+                return;
+            }
+            aggregatedPerSystem[key.toLowerCase()] = cloneDeep(value);
+        });
+
+        const registrySystems = this.systemRegistry.listSystems();
+        registrySystems.forEach(({ key, metadata }) => {
+            const descriptor = resolveSystemDescriptor(key, metadata || {});
+            const timeline = descriptor?.timeline || {};
+            const perSystem = timeline.sequenceDefaults?.perSystem || timeline.sequenceDefaults?.systems || {};
+            const normalizedKey = (key || '').toLowerCase();
+
+            if (perSystem && typeof perSystem === 'object') {
+                const overrides = perSystem[normalizedKey]
+                    || perSystem[key]
+                    || {};
+                if (overrides && typeof overrides === 'object' && Object.keys(overrides).length) {
+                    aggregatedPerSystem[normalizedKey] = {
+                        ...(aggregatedPerSystem[normalizedKey] ? cloneDeep(aggregatedPerSystem[normalizedKey]) : {}),
+                        ...cloneDeep(overrides)
+                    };
+                } else if (!aggregatedPerSystem[normalizedKey]) {
+                    aggregatedPerSystem[normalizedKey] = {};
+                }
+            } else if (!aggregatedPerSystem[normalizedKey]) {
+                aggregatedPerSystem[normalizedKey] = {};
+            }
+        });
+
+        const form = cloneDeep(fallback.form || {});
+        if (!Array.isArray(form.systemOptions)) {
+            form.systemOptions = [];
+        }
+        const seen = new Set(
+            form.systemOptions.map(option => (option?.value || option?.key || option?.id || '').toString().toLowerCase())
+        );
+        registrySystems.forEach(({ key, metadata }) => {
+            const normalizedKey = (key || '').toLowerCase();
+            if (seen.has(normalizedKey)) {
+                return;
+            }
+            form.systemOptions.push(stripUndefinedDeep({
+                value: normalizedKey,
+                label: metadata?.title || this.formatSystemLabel(normalizedKey),
+                icon: this.getSystemIcon(normalizedKey)
+            }));
+            seen.add(normalizedKey);
+        });
+
+        return stripUndefinedDeep({
+            base,
+            perSystem: aggregatedPerSystem,
+            form
+        });
+    }
+
+    collectSystemMetadataSnapshot() {
+        const systems = this.systemRegistry.listSystems();
+        if (!Array.isArray(systems) || !systems.length) {
+            return [];
+        }
+
+        return systems.map(({ key, metadata }) => {
+            const descriptor = resolveSystemDescriptor(key, metadata || {});
+            const timeline = descriptor?.timeline || {};
+            return stripUndefinedDeep({
+                key,
+                title: descriptor?.title || this.formatSystemLabel(key),
+                accentColor: descriptor?.accentColor || null,
+                icon: this.getSystemIcon(key),
+                timeline: {
+                    sequenceDefaults: cloneDeep(timeline.sequenceDefaults || {}),
+                    form: cloneDeep(timeline.form || {})
+                }
+            });
+        });
+    }
+
+    collectGeometrySnapshot() {
+        if (typeof GeometryLibrary?.getGeometryNames !== 'function') {
+            return null;
+        }
+        const names = GeometryLibrary.getGeometryNames();
+        return stripUndefinedDeep({
+            version: GeometryLibrary.version ?? 0,
+            names: Array.isArray(names) ? names.slice() : [],
+            metadata: typeof GeometryLibrary.getGeometryMetadata === 'function'
+                ? GeometryLibrary.getGeometryMetadata(names)
+                : []
+        });
+    }
+
+    sanitizeSequenceForExport(sequence) {
+        const applied = this.applySequenceDefaults(sequence, { assignTime: false });
+        const sanitized = cloneSequenceInput(applied);
+        const timeNumeric = toNumber(sanitized.time);
+        const durationNumeric = toNumber(sanitized.duration);
+
+        sanitized.time = timeNumeric !== null ? timeNumeric : 0;
+        sanitized.duration = durationNumeric !== null ? durationNumeric : 12;
+
+        const effects = sanitized.effects && typeof sanitized.effects === 'object'
+            ? sanitized.effects
+            : {};
+        sanitized.effects = effects;
+
+        const systemKey = (effects.system || sanitized.system || this.currentSystem || 'faceted')
+            .toString()
+            .toLowerCase();
+        effects.system = systemKey;
+
+        ['geometry', 'rotation', 'colorShift'].forEach(field => {
+            if (typeof effects[field] === 'string') {
+                effects[field] = effects[field].trim();
+            }
+        });
+
+        ['chaos', 'speed', 'geometryInterval', 'geometryEnergyThreshold'].forEach(field => {
+            if (effects[field] === undefined || effects[field] === null) {
+                return;
+            }
+            const numeric = toNumber(effects[field]);
+            if (numeric === null) {
+                delete effects[field];
+                return;
+            }
+            effects[field] = numeric;
+        });
+
+        if (effects.geometryCycles !== undefined && effects.geometryCycles !== null) {
+            const numeric = parseInt(effects.geometryCycles, 10);
+            if (Number.isFinite(numeric)) {
+                effects.geometryCycles = numeric;
+            } else {
+                delete effects.geometryCycles;
+            }
+        }
+
+        if (effects.geometryAudioAxis !== undefined && effects.geometryAudioAxis !== null) {
+            effects.geometryAudioAxis = String(effects.geometryAudioAxis).toLowerCase();
+        }
+
+        if (effects.parameters && typeof effects.parameters === 'object') {
+            effects.parameters = cloneDeep(effects.parameters);
+        }
+
+        if (effects.actions && !Array.isArray(effects.actions)) {
+            effects.actions = [effects.actions];
+        }
+
+        return stripUndefinedDeep({
+            time: sanitized.time,
+            duration: sanitized.duration,
+            effects
+        });
+    }
+
+    buildChoreographyExportPayload() {
+        const sequences = Array.isArray(this.sequences) ? this.sequences : [];
+        return stripUndefinedDeep({
+            schemaVersion: 'vib34d.timeline/1.0',
+            generatedAt: new Date().toISOString(),
+            mode: this.mode,
+            activeSystem: this.currentSystem || 'faceted',
+            timelineDefaults: this.collectTimelineDefaultsSnapshot(),
+            systems: this.collectSystemMetadataSnapshot(),
+            geometryLibrary: this.collectGeometrySnapshot(),
+            sequences: sequences.map(seq => this.sanitizeSequenceForExport(seq))
+        });
+    }
+
+    buildOptionMarkup(selectedValue, options, { allowEmpty = false, fallbackLabel } = {}) {
+        const optionList = Array.isArray(options) ? options : [];
+        const selectedString = selectedValue === undefined || selectedValue === null
+            ? ''
+            : typeof selectedValue === 'string'
+                ? selectedValue
+                : String(selectedValue);
+        const normalizedSelected = selectedString.toLowerCase();
+        let hasSelected = false;
+
+        const markup = optionList.map(option => {
+            if (!option) {
+                return '';
+            }
+            const value = option.value === undefined || option.value === null ? '' : String(option.value);
+            const normalizedValue = value.toLowerCase();
+            const isSelected = normalizedValue === normalizedSelected
+                || (allowEmpty && !normalizedSelected && !normalizedValue);
+            if (isSelected) {
+                hasSelected = true;
+            }
+            const labelParts = [];
+            if (option.icon) {
+                labelParts.push(option.icon);
+            }
+            const optionLabel = option.label || value || (allowEmpty && !value ? 'Auto' : '');
+            if (optionLabel) {
+                labelParts.push(optionLabel);
+            }
+            const label = labelParts.join(' ').trim() || (allowEmpty && !value ? 'Auto' : value);
+            return `<option value="${escapeHtml(value)}"${isSelected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+        }).join('');
+
+        if (!hasSelected && selectedString) {
+            const label = typeof fallbackLabel === 'function'
+                ? fallbackLabel(selectedValue)
+                : formatOptionLabel(selectedValue);
+            return `${markup}<option value="${escapeHtml(selectedString)}" selected>${escapeHtml(label)}</option>`;
+        }
+
+        return markup;
+    }
+
+    buildSystemOptionsMarkup(selectedValue, options) {
+        return this.buildOptionMarkup(selectedValue, options, {
+            fallbackLabel: value => this.formatSystemLabel(value)
+        });
+    }
+
     refreshGeometryMetadata() {
         this.geometryNames = GeometryLibrary.getGeometryNames();
         this.geometryCount = this.geometryNames.length;
@@ -68,8 +699,9 @@ export class MusicVideoChoreographer {
             this.lastGeometryIndex = 0;
         }
 
-        if (this.currentEngine && this.currentEngine.parameterManager && this.currentEngine.parameterManager.updateGeometryRange) {
-            this.currentEngine.parameterManager.updateGeometryRange(this.geometryCount);
+        const manager = this.resolveParameterManager();
+        if (manager?.updateGeometryRange) {
+            manager.updateGeometryRange(this.geometryCount);
         }
 
         this.applyGeometryMetadataToUI();
@@ -121,6 +753,12 @@ export class MusicVideoChoreographer {
                 console.warn('[MusicVideoChoreographer] geometry unsubscribe failed', err);
             }
             this.geometrySubscription = null;
+        }
+
+        if (this.systemRegistry) {
+            this.systemRegistry.destroyAll({ reason: 'choreographer-destroy' }).catch(error => {
+                console.warn('[MusicVideoChoreographer] Failed to destroy system registry', error);
+            });
         }
     }
 
@@ -222,6 +860,9 @@ export class MusicVideoChoreographer {
         // Audio events
         this.audio.addEventListener('ended', () => this.stop());
         this.audio.addEventListener('timeupdate', () => this.updateTimeline());
+
+        this.updateTimelineReadout(0, this.audio?.duration || 0);
+        this.emitTimelineUpdate('init');
     }
 
     async loadAudioFile(file) {
@@ -229,6 +870,10 @@ export class MusicVideoChoreographer {
 
         const url = URL.createObjectURL(file);
         this.audio.src = url;
+
+        this.audio.addEventListener('loadedmetadata', () => {
+            this.updateTimelineReadout(0, this.audio.duration);
+        }, { once: true });
 
         // Connect audio to analyser
         if (!this.sourceNode) {
@@ -248,7 +893,7 @@ export class MusicVideoChoreographer {
 
     async generateDefaultChoreography() {
         // Auto-generate choreography sequences WITH SYSTEM SWITCHING
-        this.sequences = [
+        const templates = [
             {
                 time: 0,
                 duration: 14,
@@ -460,124 +1105,367 @@ export class MusicVideoChoreographer {
             }
         ];
 
+        this.sequences = templates.map(seq => this.applySequenceDefaults(seq, { assignTime: false }));
+        this.sequences.sort((a, b) => (toNumber(a.time) ?? 0) - (toNumber(b.time) ?? 0));
         this.resetGeometryState(false);
         this.renderSequenceList();
         this.scanGeometryDescriptors(this.sequences);
         console.log('🎬 Generated default choreography with system switching');
     }
 
+    async applyTimelinePreset(presetId) {
+        const id = typeof presetId === 'string' ? presetId.toLowerCase() : '';
+
+        try {
+            if (['blank', 'blank-timeline', 'blank slate', 'blank-slate', 'empty', 'clear'].includes(id)) {
+                this.clearTimeline({ silent: true });
+                this.updateStatus('Timeline cleared — ready for manual choreography');
+                return true;
+            }
+
+            await this.generateDefaultChoreography();
+            this.updateStatus('Loaded cinematic switch-up preset');
+            return true;
+        } catch (error) {
+            console.error('Failed to apply timeline preset', presetId, error);
+        }
+
+        return false;
+    }
+
+    resolveSequenceDefaults(systemKey = this.currentSystem || 'faceted', overrides = {}) {
+        const normalized = typeof systemKey === 'string' ? systemKey.toLowerCase() : 'faceted';
+        const timeline = this.getTimelineDescriptor(normalized) || {};
+        const fallbackTimeline = this.defaultTimelineDescriptor
+            || resolveSystemDescriptor('faceted')?.timeline
+            || {};
+        const imported = this.importedTimelineDefaults || {};
+
+        const baseDefaults = cloneDeep({
+            ...(fallbackTimeline.sequenceDefaults?.base || {}),
+            ...(timeline.sequenceDefaults?.base || timeline.sequenceDefaults || {}),
+            ...(imported.base || {})
+        });
+
+        const fallbackPerSystem = fallbackTimeline.sequenceDefaults?.perSystem || {};
+        const perSystem = timeline.sequenceDefaults?.perSystem || timeline.sequenceDefaults?.systems || {};
+        const importedPerSystem = imported.perSystem || {};
+        const systemDefaults = cloneDeep({
+            ...(fallbackPerSystem[normalized] || fallbackPerSystem[systemKey] || {}),
+            ...(perSystem?.[normalized] || perSystem?.[systemKey] || {}),
+            ...(importedPerSystem?.[normalized] || importedPerSystem?.[systemKey] || {})
+        });
+
+        const overrideSource = overrides && typeof overrides === 'object' ? cloneDeep(overrides) : {};
+
+        return {
+            ...baseDefaults,
+            ...systemDefaults,
+            ...overrideSource
+        };
+    }
+
+    calculateNextSequenceStart(spacing = 0) {
+        if (!Array.isArray(this.sequences) || !this.sequences.length) {
+            return 0;
+        }
+
+        const lastEnd = this.sequences.reduce((max, seq) => {
+            const start = toNumber(seq?.time) ?? 0;
+            const duration = toNumber(seq?.duration) ?? 0;
+            const end = start + duration;
+            return end > max ? end : max;
+        }, 0);
+
+        const spacingValue = toNumber(spacing) ?? 0;
+        const total = lastEnd + spacingValue;
+        return Math.round(total * 100) / 100;
+    }
+
+    createSequenceFromDefaults(options = {}) {
+        const systemKey = (options.system || this.currentSystem || 'faceted').toString().toLowerCase();
+        const overrides = options.overrides && typeof options.overrides === 'object'
+            ? cloneDeep(options.overrides)
+            : {};
+        const defaults = this.resolveSequenceDefaults(systemKey);
+        const spacing = toNumber(defaults.spacing) ?? 0;
+        const duration = coerceNumber(options.duration ?? defaults.duration, defaults.duration ?? 12);
+        const providedTime = toNumber(options.time);
+        const time = providedTime !== null ? providedTime : this.calculateNextSequenceStart(spacing);
+
+        const effectsOverrides = overrides.effects && typeof overrides.effects === 'object'
+            ? cloneDeep(overrides.effects)
+            : overrides;
+        const effects = {
+            system: systemKey
+        };
+
+        const geometryValue = effectsOverrides.geometry ?? defaults.geometry;
+        if (typeof geometryValue === 'number' && Number.isFinite(geometryValue)) {
+            effects.geometry = geometryValue;
+        } else if (typeof geometryValue === 'string') {
+            effects.geometry = geometryValue.trim();
+        } else if (geometryValue !== undefined) {
+            effects.geometry = geometryValue;
+        }
+
+        const rotationValue = effectsOverrides.rotation ?? defaults.rotation;
+        if (rotationValue !== undefined && rotationValue !== null) {
+            effects.rotation = typeof rotationValue === 'string' ? rotationValue.trim() : rotationValue;
+        }
+
+        const colorShiftValue = effectsOverrides.colorShift ?? defaults.colorShift ?? 'medium';
+        effects.colorShift = typeof colorShiftValue === 'string' ? colorShiftValue.trim() : colorShiftValue;
+
+        effects.chaos = coerceNumber(effectsOverrides.chaos ?? defaults.chaos, defaults.chaos ?? 0.25);
+        effects.speed = coerceNumber(effectsOverrides.speed ?? defaults.speed, defaults.speed ?? 1);
+        effects.geometryInterval = coerceNumber(
+            effectsOverrides.geometryInterval ?? defaults.geometryInterval,
+            defaults.geometryInterval ?? 4
+        );
+        effects.geometryCycles = coerceNumber(
+            effectsOverrides.geometryCycles ?? defaults.geometryCycles,
+            defaults.geometryCycles ?? 2
+        );
+
+        const axisSource = effectsOverrides.geometryAudioAxis ?? defaults.geometryAudioAxis ?? '';
+        effects.geometryAudioAxis = typeof axisSource === 'string'
+            ? axisSource.trim()
+            : axisSource !== undefined && axisSource !== null
+                ? String(axisSource)
+                : '';
+
+        effects.geometryEnergyThreshold = coerceNumber(
+            effectsOverrides.geometryEnergyThreshold ?? defaults.geometryEnergyThreshold,
+            defaults.geometryEnergyThreshold ?? 0.5
+        );
+
+        Object.entries(effectsOverrides).forEach(([key, value]) => {
+            if (value === undefined) {
+                return;
+            }
+            if ([
+                'geometry',
+                'rotation',
+                'colorShift',
+                'chaos',
+                'speed',
+                'geometryInterval',
+                'geometryCycles',
+                'geometryAudioAxis',
+                'geometryEnergyThreshold'
+            ].includes(key)) {
+                return;
+            }
+            effects[key] = value;
+        });
+
+        return {
+            time,
+            duration,
+            effects
+        };
+    }
+
+    applySequenceDefaults(sequence, { assignTime = true } = {}) {
+        const clone = cloneSequenceInput(sequence);
+        const effects = clone.effects && typeof clone.effects === 'object' ? clone.effects : {};
+        clone.effects = effects;
+
+        const systemKey = (effects.system || clone.system || this.currentSystem || 'faceted').toString().toLowerCase();
+        effects.system = systemKey;
+
+        const defaults = this.resolveSequenceDefaults(systemKey);
+        const spacing = toNumber(defaults.spacing) ?? 0;
+
+        if (assignTime) {
+            const timeNumeric = toNumber(clone.time);
+            clone.time = timeNumeric !== null ? timeNumeric : this.calculateNextSequenceStart(spacing);
+        } else if (clone.time !== undefined) {
+            const timeNumeric = toNumber(clone.time);
+            if (timeNumeric !== null) {
+                clone.time = timeNumeric;
+            }
+        }
+
+        const durationNumeric = coerceNumber(clone.duration, defaults.duration ?? 12);
+        clone.duration = durationNumeric;
+
+        if (effects.geometry === undefined || effects.geometry === null || (typeof effects.geometry === 'string' && !effects.geometry.trim())) {
+            effects.geometry = defaults.geometry;
+        } else if (typeof effects.geometry === 'string') {
+            effects.geometry = effects.geometry.trim();
+        }
+
+        if (effects.rotation === undefined || effects.rotation === null || (typeof effects.rotation === 'string' && !effects.rotation.trim())) {
+            effects.rotation = defaults.rotation;
+        } else if (typeof effects.rotation === 'string') {
+            effects.rotation = effects.rotation.trim();
+        }
+
+        if (effects.colorShift === undefined || effects.colorShift === null || (typeof effects.colorShift === 'string' && !effects.colorShift.trim())) {
+            effects.colorShift = defaults.colorShift ?? 'medium';
+        } else if (typeof effects.colorShift === 'string') {
+            effects.colorShift = effects.colorShift.trim();
+        }
+
+        const numericProps = {
+            chaos: defaults.chaos,
+            speed: defaults.speed,
+            geometryInterval: defaults.geometryInterval,
+            geometryCycles: defaults.geometryCycles,
+            geometryEnergyThreshold: defaults.geometryEnergyThreshold
+        };
+
+        Object.entries(numericProps).forEach(([prop, fallback]) => {
+            const numeric = toNumber(effects[prop]);
+            if (numeric === null) {
+                if (fallback !== undefined) {
+                    effects[prop] = coerceNumber(fallback, fallback);
+                }
+            } else {
+                effects[prop] = numeric;
+            }
+        });
+
+        const axisSource = effects.geometryAudioAxis ?? defaults.geometryAudioAxis ?? '';
+        effects.geometryAudioAxis = typeof axisSource === 'string'
+            ? axisSource.trim()
+            : axisSource !== undefined && axisSource !== null
+                ? String(axisSource)
+                : '';
+
+        return clone;
+    }
+
     renderSequenceList() {
         const list = document.getElementById('sequence-list');
         if (!list) return;
 
+        const formOptions = this.getTimelineFormOptions();
+
         const legendMarkup = `
             <div class="geometry-legend-panel" style="margin-bottom:10px;padding:8px;border-radius:6px;background:rgba(0,255,255,0.06);border:1px solid rgba(0,255,255,0.2);font-size:10px;line-height:1.5;">
                 <strong>Available Geometries (${this.geometryNames.length})</strong><br>
-                ${this.geometryNames.map((name, idx) => `<span style="display:inline-block;margin:2px 4px;padding:2px 6px;border-radius:4px;background:rgba(0,255,255,0.08);">${idx}: ${name}</span>`).join(' ')}
+                ${this.geometryNames.map((name, idx) => `<span style="display:inline-block;margin:2px 4px;padding:2px 6px;border-radius:4px;background:rgba(0,255,255,0.08);">${idx}: ${escapeHtml(name)}</span>`).join(' ')}
             </div>
         `;
 
         const sequenceMarkup = this.sequences.length ? this.sequences.map((seq, index) => {
-            const dynamicSummary = this.renderDynamicSummary(seq.effects);
-            const startIndex = this.resolveGeometryDescriptor(seq.effects.geometryStart);
-            const geometryListValue = this.describeGeometryListInput(seq.effects.geometryList);
-            const intervalValue = seq.effects.geometryInterval ?? '';
-            const cyclesValue = seq.effects.geometryCycles ?? '';
-            const thresholdValue = seq.effects.geometryEnergyThreshold ?? '';
-            const axisValue = seq.effects.geometryAudioAxis ?? '';
-            const geometryValue = seq.effects.geometry;
+            const effects = seq.effects || {};
+            const systemValue = effects.system || this.currentSystem || 'faceted';
+            const defaults = this.resolveSequenceDefaults(systemValue);
+
+            const startNumeric = toNumber(seq.time);
+            const durationNumeric = toNumber(seq.duration);
+            const startDisplay = startNumeric !== null ? startNumeric : 0;
+            const endDisplay = startDisplay + (durationNumeric !== null ? durationNumeric : (defaults.duration ?? 0));
+
+            const geometryValue = effects.geometry;
+            const geometryValueNormalized = typeof geometryValue === 'string' ? geometryValue.trim().toLowerCase() : '';
+            const geometrySelectedMode = geometryValueNormalized
+                && formOptions.geometryModes.some(option => option && option.value && option.value.toLowerCase() === geometryValueNormalized);
+            const geometryModeMarkup = this.buildOptionMarkup(
+                geometrySelectedMode ? geometryValue : '',
+                formOptions.geometryModes
+            );
+
             const numericGeometryTarget = (typeof geometryValue === 'number' && Number.isFinite(geometryValue))
                 ? this.normalizeGeometryIndex(geometryValue)
                 : null;
+
+            const geometryOptionsMarkup = this.geometryNames.map((name, idx) => {
+                const normalized = name.toLowerCase();
+                const isSelected = (typeof geometryValue === 'string' && geometryValueNormalized === normalized)
+                    || (numericGeometryTarget !== null && numericGeometryTarget === idx);
+                return `<option value="${escapeHtml(name)}"${isSelected ? ' selected' : ''}>${escapeHtml(name)}</option>`;
+            }).join('');
+
+            const systemOptionsMarkup = this.buildSystemOptionsMarkup(systemValue, formOptions.systemOptions);
+            const rotationOptionsMarkup = this.buildOptionMarkup(effects.rotation, formOptions.rotationModes);
+            const colorShiftOptionsMarkup = this.buildOptionMarkup(effects.colorShift, formOptions.colorShiftModes);
+            const axisOptionsMarkup = this.renderGeometryAxisOptions(effects.geometryAudioAxis, formOptions.geometryAudioAxes);
+
+            const startIndex = this.resolveGeometryDescriptor(effects.geometryStart);
+            const geometryListValue = this.describeGeometryListInput(effects.geometryList);
+            const intervalNumeric = toNumber(effects.geometryInterval);
+            const cyclesNumeric = toNumber(effects.geometryCycles);
+            const thresholdNumeric = toNumber(effects.geometryEnergyThreshold);
+            const chaosNumeric = toNumber(effects.chaos);
+            const speedNumeric = toNumber(effects.speed);
+
+            const thresholdPlaceholderValue = defaults.geometryEnergyThreshold ?? (effects.geometry === 'explosive' ? 0.4 : 0.6);
+
             return `
             <div class="sequence-item">
-                <h4>Sequence ${index + 1} (${seq.time}s - ${seq.time + seq.duration}s)</h4>
+                <h4>Sequence ${index + 1} (${escapeHtml(String(startDisplay))}s - ${escapeHtml(String(endDisplay))}s)</h4>
                 <div class="sequence-controls">
                     <label>Start Time (s)</label>
-                    <input type="number" value="${seq.time}" onchange="choreographer.updateSequence(${index}, 'time', this.value)">
+                    <input type="number" value="${formatValueForInput(startNumeric !== null ? startNumeric : 0)}" onchange="choreographer.updateSequence(${index}, 'time', this.value)">
 
                     <label>Duration (s)</label>
-                    <input type="number" value="${seq.duration}" onchange="choreographer.updateSequence(${index}, 'duration', this.value)">
+                    <input type="number" value="${formatValueForInput(durationNumeric !== null ? durationNumeric : defaults.duration ?? 0)}" onchange="choreographer.updateSequence(${index}, 'duration', this.value)">
 
                     <label>🎨 System</label>
                     <select onchange="choreographer.updateSequence(${index}, 'system', this.value)" style="grid-column: span 2;">
-                        <option value="faceted" ${seq.effects.system === 'faceted' ? 'selected' : ''}>🔷 Faceted</option>
-                        <option value="quantum" ${seq.effects.system === 'quantum' ? 'selected' : ''}>🌌 Quantum</option>
-                        <option value="holographic" ${seq.effects.system === 'holographic' ? 'selected' : ''}>✨ Holographic</option>
+                        ${systemOptionsMarkup}
                     </select>
 
                     <label>Geometry</label>
                     <select onchange="choreographer.updateSequence(${index}, 'geometry', this.value)">
-                        <option value="hold" ${seq.effects.geometry === 'hold' ? 'selected' : ''}>Hold</option>
-                        <option value="cycle" ${seq.effects.geometry === 'cycle' ? 'selected' : ''}>Cycle</option>
-                        <option value="morph" ${seq.effects.geometry === 'morph' ? 'selected' : ''}>Morph</option>
-                        <option value="random" ${seq.effects.geometry === 'random' ? 'selected' : ''}>Random</option>
-                        <option value="explosive" ${seq.effects.geometry === 'explosive' ? 'selected' : ''}>Explosive</option>
-                        ${this.geometryNames.map((name, idx) => {
-                            const normalized = name.toLowerCase();
-                            const isSelected = (typeof geometryValue === 'string' && geometryValue.toLowerCase() === normalized)
-                                || (numericGeometryTarget !== null && numericGeometryTarget === idx);
-                            return `<option value="${name}" ${isSelected ? 'selected' : ''}>${name}</option>`;
-                        }).join('')}
+                        ${geometryModeMarkup}${geometryOptionsMarkup}
                     </select>
 
                     <label>Start Geometry</label>
                     <select onchange="choreographer.updateSequence(${index}, 'geometryStart', this.value)">
                         <option value="" ${startIndex === null || startIndex === undefined ? 'selected' : ''}>Auto (carry over)</option>
-                        ${this.geometryNames.map((name, idx) => `<option value="${idx}" ${startIndex === idx ? 'selected' : ''}>${idx}: ${name}</option>`).join('')}
+                        ${this.geometryNames.map((name, idx) => `<option value="${idx}" ${startIndex === idx ? 'selected' : ''}>${idx}: ${escapeHtml(name)}</option>`).join('')}
                     </select>
 
                     <label>Geometry List</label>
-                    <input type="text" value="${geometryListValue}" placeholder="e.g. Tetrahedron, Wave, 3" onchange="choreographer.updateSequence(${index}, 'geometryList', this.value)">
+                    <input type="text" value="${formatValueForInput(geometryListValue)}" placeholder="e.g. Tetrahedron, Wave, 3" onchange="choreographer.updateSequence(${index}, 'geometryList', this.value)">
 
                     <label>Geometry Interval (s)</label>
-                    <input type="number" step="0.1" min="0.1" value="${intervalValue}" placeholder="2" onchange="choreographer.updateSequence(${index}, 'geometryInterval', this.value)">
+                    <input type="number" step="0.1" min="0.1" value="${formatValueForInput(intervalNumeric !== null ? intervalNumeric : '')}" placeholder="${formatValueForInput(defaults.geometryInterval ?? '')}" onchange="choreographer.updateSequence(${index}, 'geometryInterval', this.value)">
 
                     <label>Geometry Cycles</label>
-                    <input type="number" step="1" min="1" value="${cyclesValue}" placeholder="1" onchange="choreographer.updateSequence(${index}, 'geometryCycles', this.value)">
+                    <input type="number" step="1" min="1" value="${formatValueForInput(cyclesNumeric !== null ? cyclesNumeric : '')}" placeholder="${formatValueForInput(defaults.geometryCycles ?? '')}" onchange="choreographer.updateSequence(${index}, 'geometryCycles', this.value)">
 
                     <label>Geometry Audio Axis</label>
                     <select onchange="choreographer.updateSequence(${index}, 'geometryAudioAxis', this.value)">
-                        ${this.renderGeometryAxisOptions(axisValue)}
+                        ${axisOptionsMarkup}
                     </select>
 
                     <label>Random Threshold</label>
-                    <input type="number" step="0.05" min="0" max="1" value="${thresholdValue}" placeholder="${seq.effects.geometry === 'explosive' ? 0.4 : 0.6}" onchange="choreographer.updateSequence(${index}, 'geometryEnergyThreshold', this.value)">
+                    <input type="number" step="0.05" min="0" max="1" value="${formatValueForInput(thresholdNumeric !== null ? thresholdNumeric : '')}" placeholder="${formatValueForInput(thresholdPlaceholderValue)}" onchange="choreographer.updateSequence(${index}, 'geometryEnergyThreshold', this.value)">
 
                     <label>Rotation</label>
                     <select onchange="choreographer.updateSequence(${index}, 'rotation', this.value)">
-                        <option value="minimal" ${seq.effects.rotation === 'minimal' ? 'selected' : ''}>Minimal</option>
-                        <option value="smooth" ${seq.effects.rotation === 'smooth' ? 'selected' : ''}>Smooth</option>
-                        <option value="accelerate" ${seq.effects.rotation === 'accelerate' ? 'selected' : ''}>Accelerate</option>
-                        <option value="chaos" ${seq.effects.rotation === 'chaos' ? 'selected' : ''}>Chaos</option>
-                        <option value="extreme" ${seq.effects.rotation === 'extreme' ? 'selected' : ''}>Extreme</option>
+                        ${rotationOptionsMarkup}
                     </select>
 
                     <label>Chaos Base</label>
-                    <input type="number" step="0.1" min="0" max="1" value="${seq.effects.chaos || 0.5}" onchange="choreographer.updateSequence(${index}, 'chaos', this.value)">
+                    <input type="number" step="0.1" min="0" max="1" value="${formatValueForInput(chaosNumeric !== null ? chaosNumeric : defaults.chaos ?? 0.5)}" onchange="choreographer.updateSequence(${index}, 'chaos', this.value)">
 
                     <label>Speed Base</label>
-                    <input type="number" step="0.1" min="0.1" max="3" value="${seq.effects.speed || 1.0}" onchange="choreographer.updateSequence(${index}, 'speed', this.value)">
+                    <input type="number" step="0.1" min="0.1" max="3" value="${formatValueForInput(speedNumeric !== null ? speedNumeric : defaults.speed ?? 1)}" onchange="choreographer.updateSequence(${index}, 'speed', this.value)">
 
                     <label>Color Shift</label>
                     <select onchange="choreographer.updateSequence(${index}, 'colorShift', this.value)">
-                        <option value="freeze" ${seq.effects.colorShift === 'freeze' ? 'selected' : ''}>Freeze</option>
-                        <option value="slow" ${seq.effects.colorShift === 'slow' ? 'selected' : ''}>Slow</option>
-                        <option value="medium" ${seq.effects.colorShift === 'medium' ? 'selected' : ''}>Medium</option>
-                        <option value="fast" ${seq.effects.colorShift === 'fast' ? 'selected' : ''}>Fast</option>
-                        <option value="rainbow" ${seq.effects.colorShift === 'rainbow' ? 'selected' : ''}>Rainbow</option>
+                        ${colorShiftOptionsMarkup}
                     </select>
                 </div>
                 <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,255,255,0.05); border-radius: 3px;">
                     ℹ️ Audio reactivity is ALWAYS active - these are base values that audio modulates
                 </div>
-                ${dynamicSummary}
+                ${this.renderDynamicSummary(effects)}
                 <button onclick="choreographer.deleteSequence(${index})" style="margin-top: 10px; background: #f44; font-size: 10px; padding: 5px;">Delete</button>
             </div>
         `;
         }).join('') : `<div class="sequence-empty" style="padding:12px;border:1px dashed rgba(0,255,255,0.3);border-radius:6px;font-size:11px;color:#7ff;">No sequences defined yet.</div>`;
 
         list.innerHTML = legendMarkup + sequenceMarkup;
+        this.emitTimelineUpdate('render');
     }
 
     describeGeometryStrategy(effects = {}) {
@@ -590,35 +1478,38 @@ export class MusicVideoChoreographer {
             if (typeof geometry === 'string') {
                 const trimmed = geometry.trim();
                 if (this.geometryModes.has(trimmed.toLowerCase())) {
-                    summaryParts.push(`Mode: ${trimmed}`);
+                    summaryParts.push(`Mode: ${escapeHtml(trimmed)}`);
                 } else {
                     const index = this.resolveGeometryDescriptor(trimmed);
                     if (index !== null && index !== undefined) {
-                        summaryParts.push(`Target: ${this.getGeometryName(index)} (#${index})`);
+                        const name = escapeHtml(this.getGeometryName(index));
+                        summaryParts.push(`Target: ${name} (#${index})`);
                     } else {
-                        summaryParts.push(`Target: ${GeometryLibrary.normalizeName(trimmed)}`);
+                        summaryParts.push(`Target: ${escapeHtml(GeometryLibrary.normalizeName(trimmed))}`);
                     }
                 }
             } else if (typeof geometry === 'number' && Number.isFinite(geometry)) {
                 const normalized = this.normalizeGeometryIndex(geometry);
-                summaryParts.push(`Target #: ${this.getGeometryName(normalized)} (#${normalized})`);
+                const name = escapeHtml(this.getGeometryName(normalized));
+                summaryParts.push(`Target #: ${name} (#${normalized})`);
             } else if (typeof geometry === 'object') {
                 const mode = geometry.mode || geometry.behavior || geometry.type;
                 if (mode) {
-                    summaryParts.push(`Mode: ${mode}`);
+                    summaryParts.push(`Mode: ${escapeHtml(String(mode))}`);
                 }
                 if (geometry.name) {
                     const index = this.resolveGeometryDescriptor(geometry.name);
                     if (index !== null && index !== undefined) {
-                        summaryParts.push(`Target: ${this.getGeometryName(index)} (#${index})`);
+                        const name = escapeHtml(this.getGeometryName(index));
+                        summaryParts.push(`Target: ${name} (#${index})`);
                     } else {
-                        summaryParts.push(`Target: ${GeometryLibrary.normalizeName(geometry.name)}`);
+                        summaryParts.push(`Target: ${escapeHtml(GeometryLibrary.normalizeName(geometry.name))}`);
                     }
                 }
                 if (geometry.list) {
                     const listSummary = this.describeGeometryListInput(geometry.list);
                     if (listSummary) {
-                        summaryParts.push(`List: ${listSummary}`);
+                        summaryParts.push(`List: ${escapeHtml(listSummary)}`);
                     }
                 }
             }
@@ -626,12 +1517,13 @@ export class MusicVideoChoreographer {
 
         const startIndex = this.resolveGeometryDescriptor(effects.geometryStart);
         if (startIndex !== null && startIndex !== undefined) {
-            summaryParts.push(`Start ➜ ${this.getGeometryName(startIndex)} (#${startIndex})`);
+            const name = escapeHtml(this.getGeometryName(startIndex));
+            summaryParts.push(`Start ➜ ${name} (#${startIndex})`);
         }
 
         const listValue = this.describeGeometryListInput(effects.geometryList);
         if (listValue) {
-            summaryParts.push(`List ➜ ${listValue}`);
+            summaryParts.push(`List ➜ ${escapeHtml(listValue)}`);
         }
 
         if (effects.geometryInterval !== undefined && effects.geometryInterval !== null) {
@@ -643,7 +1535,7 @@ export class MusicVideoChoreographer {
         }
 
         if (effects.geometryAudioAxis) {
-            summaryParts.push(`Axis ${effects.geometryAudioAxis}`);
+            summaryParts.push(`Axis ${escapeHtml(String(effects.geometryAudioAxis))}`);
         }
 
         if (effects.geometryEnergyThreshold !== undefined) {
@@ -665,10 +1557,11 @@ export class MusicVideoChoreographer {
         }
         if (effects.parameters && Object.keys(effects.parameters).length) {
             const entries = Object.entries(effects.parameters).map(([name, descriptor]) => {
+                const safeName = escapeHtml(String(name));
                 if (typeof descriptor === 'number') {
-                    return `${name}: ${descriptor}`;
+                    return `${safeName}: ${escapeHtml(String(descriptor))}`;
                 }
-                if (typeof descriptor === 'object') {
+                if (typeof descriptor === 'object' && descriptor !== null) {
                     const details = [];
                     if (descriptor.audioAxis || descriptor.audio) {
                         details.push(`↔ audio:${descriptor.audioAxis || descriptor.audio}`);
@@ -679,21 +1572,25 @@ export class MusicVideoChoreographer {
                     if (descriptor.mode) {
                         details.push(`mode:${descriptor.mode}`);
                     }
-                    return `${name}: ${descriptor.value ?? descriptor.base ?? 'auto'}${details.length ? ' (' + details.join(', ') + ')' : ''}`;
+                    const baseValue = descriptor.value ?? descriptor.base ?? 'auto';
+                    const detailText = details.length ? ` (${details.join(', ')})` : '';
+                    return `${safeName}: ${escapeHtml(String(baseValue))}${escapeHtml(detailText)}`;
                 }
-                return `${name}: ${descriptor}`;
+                return `${safeName}: ${escapeHtml(String(descriptor))}`;
             }).join('<br>');
             parts.push(`<div class="dynamic-summary" style="margin-top:6px;padding:6px;border-radius:4px;background:rgba(0,255,255,0.05);font-size:10px;line-height:1.4;"><strong>Dynamic Parameters</strong><br>${entries}</div>`);
         }
 
         if (effects.actions && effects.actions.length) {
             const entries = effects.actions.map(action => {
-                if (typeof action === 'string') return action;
-                if (action.type) {
-                    const suffix = action.args ? ` → ${JSON.stringify(action.args)}` : '';
-                    return `${action.type}${suffix}`;
+                if (typeof action === 'string') {
+                    return escapeHtml(action);
                 }
-                return JSON.stringify(action);
+                if (action && typeof action === 'object' && action.type) {
+                    const suffix = action.args ? ` → ${JSON.stringify(action.args)}` : '';
+                    return escapeHtml(`${action.type}${suffix}`);
+                }
+                return escapeHtml(JSON.stringify(action));
             }).join('<br>');
             parts.push(`<div class="dynamic-summary" style="margin-top:6px;padding:6px;border-radius:4px;background:rgba(255,0,255,0.05);font-size:10px;line-height:1.4;"><strong>Actions</strong><br>${entries}</div>`);
         }
@@ -791,73 +1688,67 @@ export class MusicVideoChoreographer {
         this.renderSequenceList();
     }
 
+    clearTimeline(options = {}) {
+        this.sequences = [];
+        this.scanGeometryDescriptors(this.sequences);
+        this.resetGeometryState(true);
+        this.renderSequenceList();
+        if (!options.silent) {
+            this.updateStatus('Timeline cleared');
+        }
+    }
+
     addSequenceToTimeline(newSeq) {
-        this.sequences.push(newSeq);
-        this.sequences.sort((a, b) => a.time - b.time);
+        if (!newSeq) {
+            return;
+        }
+
+        const sequence = this.applySequenceDefaults(newSeq);
+        this.sequences.push(sequence);
+        this.sequences.sort((a, b) => (toNumber(a.time) ?? 0) - (toNumber(b.time) ?? 0));
         this.scanGeometryDescriptors(this.sequences);
         this.resetGeometryState(true);
         this.renderSequenceList();
     }
 
     async switchSystem(systemName) {
-        // Cleanup old engine
-        if (this.currentEngine && this.currentEngine.destroy) {
-            this.currentEngine.destroy();
-        }
-
-        // Clear canvases
-        const container = document.getElementById('vib34dLayers');
-        container.innerHTML = '';
-
-        // Create canvases based on system requirements
-        if (systemName === 'faceted') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'quantum') {
-            const layers = ['background', 'shadow', 'content', 'highlight', 'accent'];
-            layers.forEach(layer => {
-                const canvas = document.createElement('canvas');
-                canvas.id = `quantum-${layer}-canvas`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            });
-        } else if (systemName === 'holographic') {
-            for (let i = 0; i < 5; i++) {
-                const canvas = document.createElement('canvas');
-                canvas.id = `holo-layer-${i}`;
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                container.appendChild(canvas);
-            }
-        }
-
-        // Initialize new engine
         try {
-            if (systemName === 'faceted') {
-                this.currentEngine = new VIB34DIntegratedEngine();
-            } else if (systemName === 'quantum') {
-                this.currentEngine = new QuantumEngine();
-            } else if (systemName === 'holographic') {
-                this.currentEngine = new RealHolographicSystem();
-            }
+            const system = await this.systemRegistry.activate(systemName, {
+                clearContainer: true
+            });
 
+            this.activeSystem = system;
+            this.currentEngine = system?.engine || null;
             this.currentSystem = systemName;
-            this.canvasManager = this.currentEngine?.canvasManager || null;
+            this.canvasManager = system?.canvasManager || this.currentEngine?.canvasManager || null;
+
             this.dynamicBridge.bindToEngine(this.currentEngine);
 
-            // Update UI
             document.querySelectorAll('.system-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.system === systemName);
             });
 
-            console.log('✅ Switched to', systemName, 'system');
+            const metadata = typeof this.systemRegistry.getSystemMetadata === 'function'
+                ? this.systemRegistry.getSystemMetadata(systemName)
+                : null;
+
+            syncActiveSystemState();
+
+            if (metadata) {
+                window.dispatchEvent(new CustomEvent('vib34d:system-selected', {
+                    detail: { key: systemName, metadata }
+                }));
+
+                const statusElement = document.getElementById('status');
+                if (statusElement) {
+                    const currentStatus = statusElement.textContent || '';
+                    if (!currentStatus.trim() || /select a mode/i.test(currentStatus) || /system ready/i.test(currentStatus)) {
+                        statusElement.textContent = `System ready: ${metadata.title || systemName}`;
+                    }
+                }
+            }
+
+            console.log('✅ Switched to', systemName, 'system via SystemRegistry');
             this.refreshGeometryMetadata();
         } catch (error) {
             console.error('Failed to switch system:', error);
@@ -870,6 +1761,7 @@ export class MusicVideoChoreographer {
         }
 
         this.audio.play();
+        this.updateTimeline();
         this.isPlaying = true;
         this.startVisualization();
         this.updateStatus('Playing...');
@@ -878,6 +1770,7 @@ export class MusicVideoChoreographer {
     pause() {
         this.audio.pause();
         this.isPlaying = false;
+        this.updateTimeline();
         this.updateStatus('Paused');
     }
 
@@ -885,6 +1778,7 @@ export class MusicVideoChoreographer {
         this.audio.pause();
         this.audio.currentTime = 0;
         this.isPlaying = false;
+        this.updateTimeline();
         this.updateStatus('Stopped');
     }
 
@@ -956,14 +1850,8 @@ export class MusicVideoChoreographer {
      * REACTIVE MODE: Built-in audio reactivity with direct parameter mapping
      */
     applyReactiveMode(audioData) {
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // Direct audio-to-parameter mapping
@@ -1013,14 +1901,8 @@ export class MusicVideoChoreographer {
 
         const effects = activeSequence.effects;
 
-        const setParam = (param, value) => {
-            if (this.currentEngine.parameterManager) {
-                this.currentEngine.parameterManager.setParameter(param, value);
-            } else if (this.currentEngine.updateParameter) {
-                this.currentEngine.updateParameter(param, value);
-            } else if (this.currentEngine.updateParameters) {
-                this.currentEngine.updateParameters({ [param]: value });
-            }
+        const setParam = (param, value, options) => {
+            this.setParameterValue(param, value, options);
         };
 
         // CHECK FOR SYSTEM SWITCH (if sequence specifies a different system)
@@ -1383,20 +2265,18 @@ export class MusicVideoChoreographer {
         return formatted.join(', ');
     }
 
-    renderGeometryAxisOptions(selected) {
-        const normalized = (selected || '').toString().toLowerCase();
-        const options = [
-            { value: '', label: 'Auto (energy mix)' },
-            { value: 'bass', label: 'Bass' },
-            { value: 'mid', label: 'Mid' },
-            { value: 'high', label: 'High' },
-            { value: 'energy', label: 'Energy' }
-        ];
+    renderGeometryAxisOptions(selected, axisOptions = []) {
+        const options = Array.isArray(axisOptions) && axisOptions.length
+            ? axisOptions
+            : collectOptions([
+                axisOptions,
+                this.defaultTimelineDescriptor?.form?.geometryAudioAxes || []
+            ], { allowEmpty: true });
 
-        return options.map(({ value, label }) => {
-            const isSelected = value === '' ? !normalized : normalized === value;
-            return `<option value="${value}" ${isSelected ? 'selected' : ''}>${label}</option>`;
-        }).join('');
+        return this.buildOptionMarkup(selected, options, {
+            allowEmpty: true,
+            fallbackLabel: () => 'Auto'
+        });
     }
 
     normalizeGeometryBehaviorValue(value) {
@@ -1565,12 +2445,23 @@ export class MusicVideoChoreographer {
 
     ingestAIChoreography(sequenceData) {
         try {
-            const normalized = this.dynamicBridge.normalizeSequences(sequenceData);
-            this.sequences = normalized.map(seq => ({
+            const {
+                sequences,
+                timelineDefaults,
+                geometryMetadata,
+                systemMetadata
+            } = this.normalizeImportedChoreography(sequenceData);
+
+            this.setImportedTimelineDefaults(timelineDefaults, systemMetadata);
+            this.applyImportedGeometryMetadata(geometryMetadata);
+
+            const normalized = this.dynamicBridge.normalizeSequences(Array.isArray(sequences) ? sequences : []);
+            this.sequences = normalized.map(seq => this.applySequenceDefaults({
                 time: seq.time,
                 duration: seq.duration,
                 effects: seq.effects
-            }));
+            }, { assignTime: false }));
+
             this.scanGeometryDescriptors(this.sequences);
             this.resetGeometryState(true);
             this.renderSequenceList();
@@ -1581,9 +2472,247 @@ export class MusicVideoChoreographer {
         }
     }
 
+    normalizeImportedChoreography(input) {
+        if (Array.isArray(input)) {
+            return {
+                sequences: input,
+                timelineDefaults: null,
+                geometryMetadata: null,
+                systemMetadata: []
+            };
+        }
+
+        if (!input || typeof input !== 'object') {
+            throw new Error('Choreography data must be an array or object');
+        }
+
+        const candidates = [
+            input.sequences,
+            input.timeline?.sequences,
+            input.timeline,
+            input.data?.sequences,
+            input.data,
+            input.steps
+        ];
+
+        let sequences = [];
+        for (const candidate of candidates) {
+            if (Array.isArray(candidate)) {
+                sequences = candidate;
+                break;
+            }
+        }
+
+        return {
+            sequences,
+            timelineDefaults: input.timelineDefaults || input.timeline?.defaults || input.defaults || null,
+            geometryMetadata: input.geometryLibrary || input.geometry || null,
+            systemMetadata: Array.isArray(input.systems) ? input.systems : []
+        };
+    }
+
+    setImportedTimelineDefaults(defaults, systems = []) {
+        const sanitized = this.sanitizeImportedTimelineDefaults(defaults, systems);
+        this.importedTimelineDefaults = sanitized || null;
+    }
+
+    sanitizeImportedTimelineDefaults(defaults, systemsInput = []) {
+        const hasDefaults = defaults && typeof defaults === 'object';
+        const systemList = Array.isArray(systemsInput) ? systemsInput : [];
+
+        if (!hasDefaults && !systemList.length) {
+            return null;
+        }
+
+        const sanitized = {
+            base: {},
+            perSystem: {},
+            form: {}
+        };
+
+        if (hasDefaults) {
+            if (defaults.base && typeof defaults.base === 'object') {
+                sanitized.base = cloneDeep(defaults.base);
+            } else if (defaults.global && typeof defaults.global === 'object') {
+                sanitized.base = cloneDeep(defaults.global);
+            }
+
+            const perSystemSource = defaults.perSystem || defaults.systems;
+            if (perSystemSource && typeof perSystemSource === 'object') {
+                Object.entries(perSystemSource).forEach(([key, value]) => {
+                    if (!value || typeof value !== 'object') {
+                        return;
+                    }
+                    const normalizedKey = key.toLowerCase();
+                    sanitized.perSystem[normalizedKey] = cloneDeep(value);
+                });
+            }
+
+            if (defaults.form && typeof defaults.form === 'object') {
+                sanitized.form = cloneDeep(defaults.form);
+            }
+        }
+
+        systemList.forEach(entry => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            const key = (entry.key || entry.id || entry.system || entry.value || '').toString();
+            if (!key) {
+                return;
+            }
+            const normalizedKey = key.toLowerCase();
+            const timeline = entry.timeline || {};
+
+            if (!Object.keys(sanitized.base).length && timeline.sequenceDefaults?.base) {
+                sanitized.base = cloneDeep(timeline.sequenceDefaults.base);
+            }
+
+            const seqDefaults = timeline.sequenceDefaults || {};
+            const perSystemDefaults = seqDefaults.perSystem?.[normalizedKey]
+                || seqDefaults.perSystem?.[key]
+                || seqDefaults.systems?.[normalizedKey]
+                || seqDefaults.systems?.[key]
+                || null;
+
+            if (perSystemDefaults && typeof perSystemDefaults === 'object') {
+                sanitized.perSystem[normalizedKey] = {
+                    ...(sanitized.perSystem[normalizedKey] || {}),
+                    ...cloneDeep(perSystemDefaults)
+                };
+            } else if (!sanitized.perSystem[normalizedKey]) {
+                sanitized.perSystem[normalizedKey] = {};
+            }
+
+            if (!sanitized.form.systemOptions) {
+                sanitized.form.systemOptions = [];
+            }
+
+            const hasOption = sanitized.form.systemOptions.some(option => {
+                const value = (option?.value || option?.key || option?.id || '').toString().toLowerCase();
+                return value === normalizedKey;
+            });
+
+            if (!hasOption) {
+                sanitized.form.systemOptions.push(stripUndefinedDeep({
+                    value: normalizedKey,
+                    label: entry.title || entry.label || this.formatSystemLabel(normalizedKey),
+                    icon: entry.icon || entry.emoji || this.getSystemIcon(normalizedKey)
+                }));
+            }
+
+            if (timeline.form && typeof timeline.form === 'object') {
+                sanitized.form = {
+                    ...cloneDeep(timeline.form),
+                    ...sanitized.form,
+                    systemOptions: sanitized.form.systemOptions
+                };
+            }
+        });
+
+        const cleaned = stripUndefinedDeep(sanitized);
+        const hasBase = cleaned.base && Object.keys(cleaned.base).length;
+        const hasPerSystem = cleaned.perSystem && Object.keys(cleaned.perSystem).length;
+        const hasForm = cleaned.form && Object.keys(cleaned.form).length;
+
+        if (!hasBase && !hasPerSystem && !hasForm) {
+            return null;
+        }
+
+        return cleaned;
+    }
+
+    applyImportedGeometryMetadata(metadata) {
+        if (!metadata) {
+            return;
+        }
+
+        const names = Array.isArray(metadata.names)
+            ? metadata.names
+            : Array.isArray(metadata.list)
+                ? metadata.list
+                : Array.isArray(metadata)
+                    ? metadata
+                    : [];
+
+        if (!names.length) {
+            return;
+        }
+
+        let registered = false;
+        names.forEach(name => {
+            if (!name) {
+                return;
+            }
+            if (typeof name === 'string') {
+                if (GeometryLibrary.registerGeometry(name)) {
+                    registered = true;
+                }
+                return;
+            }
+            if (name && typeof name === 'object' && name.rawName) {
+                if (GeometryLibrary.registerGeometry(name.rawName)) {
+                    registered = true;
+                }
+            }
+        });
+
+        if (registered) {
+            this.refreshGeometryMetadata();
+        }
+    }
+
     updateTimeline() {
-        const progress = (this.audio.currentTime / this.audio.duration) * 100;
-        document.getElementById('timeline-progress').style.width = progress + '%';
+        const bar = document.getElementById('timeline-progress');
+        const duration = Number.isFinite(this.audio?.duration) ? this.audio.duration : 0;
+        const current = Number.isFinite(this.audio?.currentTime) ? this.audio.currentTime : 0;
+        const ratio = duration > 0 ? Math.min(Math.max(current / duration, 0), 1) : 0;
+
+        if (bar) {
+            bar.style.width = `${(ratio * 100).toFixed(3)}%`;
+        }
+
+        this.updateTimelineReadout(current, duration);
+    }
+
+    updateTimelineReadout(current = 0, duration = null) {
+        const currentLabel = document.getElementById('timelineCurrent');
+        const durationLabel = document.getElementById('timelineDuration');
+
+        if (currentLabel) {
+            currentLabel.textContent = this.formatTimelineTime(current);
+        }
+
+        if (durationLabel) {
+            const referenceDuration = duration ?? (Number.isFinite(this.audio?.duration) ? this.audio.duration : 0);
+            durationLabel.textContent = this.formatTimelineTime(referenceDuration);
+        }
+    }
+
+    formatTimelineTime(value = 0) {
+        if (!Number.isFinite(value) || value < 0) {
+            return '0:00';
+        }
+
+        const minutes = Math.floor(value / 60);
+        const seconds = Math.floor(value % 60);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    emitTimelineUpdate(reason = 'update') {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const detail = {
+            reason,
+            mode: this.mode,
+            system: this.currentSystem,
+            count: Array.isArray(this.sequences) ? this.sequences.length : 0,
+            duration: Number.isFinite(this.audio?.duration) ? this.audio.duration : null
+        };
+
+        window.dispatchEvent(new CustomEvent('vib34d:timeline-updated', { detail }));
     }
 
     updateInfoPanel(audioData) {
@@ -1596,7 +2725,8 @@ export class MusicVideoChoreographer {
     }
 
     exportChoreography() {
-        const data = JSON.stringify(this.sequences, null, 2);
+        const payload = this.buildChoreographyExportPayload();
+        const data = JSON.stringify(payload, null, 2);
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
