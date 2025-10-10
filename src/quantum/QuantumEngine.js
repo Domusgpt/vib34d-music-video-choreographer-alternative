@@ -10,13 +10,21 @@ import { GeometryLibrary } from '../geometry/GeometryLibrary.js';
 export class QuantumEngine {
     constructor() {
         console.log('🔮 Initializing VIB34D Quantum Engine...');
-        
+
         this.visualizers = [];
         this.parameters = new ParameterManager();
         this.isActive = false;
-        
+
+        this.geometryNames = [];
+        this.geometryMetadata = [];
+        this.geometryUnsubscribe = null;
+        this.activeGeometryLabel = 'Unknown';
+        this.lastGeometryLogSignature = '';
+
+        this.initializeGeometryManagement();
+
         // REMOVED: Built-in reactivity - ReactivityManager handles all interactions now
-        
+
         // Initialize with quantum-enhanced defaults
         this.parameters.setParameter('hue', 280); // Purple-blue for quantum
         this.parameters.setParameter('intensity', 0.7); // Higher intensity
@@ -25,6 +33,160 @@ export class QuantumEngine {
         this.parameters.setParameter('morphFactor', 1.0);
         
         this.init();
+    }
+
+    initializeGeometryManagement() {
+        const initialNames = GeometryLibrary.getGeometryNames();
+        this.handleGeometryUpdate(initialNames);
+        this.subscribeToGeometryLibrary();
+    }
+
+    buildGeometryList(source = []) {
+        const list = Array.isArray(source) ? source : [];
+        const deduped = [];
+        const seen = new Set();
+
+        list.forEach((name) => {
+            const normalized = GeometryLibrary.normalizeName(name);
+            if (!normalized) {
+                return;
+            }
+
+            const key = normalized.toUpperCase();
+            if (seen.has(key)) {
+                return;
+            }
+
+            seen.add(key);
+            deduped.push(GeometryLibrary.formatDisplayName(normalized));
+        });
+
+        return deduped;
+    }
+
+    getFallbackGeometryNames() {
+        if (Array.isArray(GeometryLibrary?.baseGeometries) && GeometryLibrary.baseGeometries.length) {
+            return this.buildGeometryList(GeometryLibrary.baseGeometries);
+        }
+
+        return [
+            'Tetrahedron',
+            'Hypercube',
+            'Sphere',
+            'Torus',
+            'Klein Bottle',
+            'Fractal',
+            'Wave',
+            'Crystal'
+        ];
+    }
+
+    resolveGeometryIndex(value) {
+        const catalog = this.geometryNames.length ? this.geometryNames : this.getFallbackGeometryNames();
+        if (!catalog.length) {
+            return 0;
+        }
+
+        if (typeof value === 'string') {
+            const normalized = GeometryLibrary.normalizeName(value);
+            if (normalized) {
+                const searchKey = normalized.toUpperCase();
+                const foundIndex = catalog.findIndex(
+                    (name) => GeometryLibrary.normalizeName(name).toUpperCase() === searchKey
+                );
+
+                if (foundIndex !== -1) {
+                    return foundIndex;
+                }
+            }
+
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) {
+                return this.resolveGeometryIndex(parsed);
+            }
+
+            return 0;
+        }
+
+        let numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            numeric = 0;
+        }
+
+        numeric = Math.round(numeric);
+        if (numeric < 0) {
+            numeric = 0;
+        }
+
+        if (numeric >= catalog.length) {
+            numeric = catalog.length - 1;
+        }
+
+        return numeric;
+    }
+
+    handleGeometryUpdate(names) {
+        const next = this.buildGeometryList(names);
+        const catalog = next.length ? next : this.getFallbackGeometryNames();
+
+        this.geometryNames = catalog;
+        this.geometryMetadata = GeometryLibrary.getGeometryMetadata(catalog);
+
+        this.parameters.updateGeometryRange(catalog.length);
+        const activeIndex = this.resolveGeometryIndex(this.parameters.getParameter('geometry'));
+        this.parameters.setParameter('geometry', activeIndex);
+        this.activeGeometryLabel = this.getGeometryDisplayName(activeIndex);
+
+        this.visualizers.forEach((visualizer) => {
+            if (typeof visualizer.updateGeometryMetadata === 'function') {
+                visualizer.updateGeometryMetadata(catalog, this.geometryMetadata);
+            }
+            if (typeof visualizer.updateParameters === 'function') {
+                visualizer.updateParameters({ geometry: activeIndex });
+            }
+        });
+
+        this.logGeometryUpdate(catalog, activeIndex);
+    }
+
+    subscribeToGeometryLibrary() {
+        if (typeof GeometryLibrary?.subscribe !== 'function') {
+            return;
+        }
+
+        if (typeof this.geometryUnsubscribe === 'function') {
+            this.geometryUnsubscribe();
+        }
+
+        this.geometryUnsubscribe = GeometryLibrary.subscribe(({ names }) => {
+            this.handleGeometryUpdate(Array.isArray(names) ? names : []);
+        });
+    }
+
+    logGeometryUpdate(catalog = [], activeIndex = 0) {
+        const label = catalog[activeIndex] || 'Unknown';
+        const signature = `${catalog.join('|')}::${activeIndex}`;
+
+        if (this.lastGeometryLogSignature === signature) {
+            return;
+        }
+
+        this.lastGeometryLogSignature = signature;
+        console.log('🌌 Quantum geometry catalog updated:', catalog);
+        console.log(`🌌 Active quantum geometry → ${label}`);
+    }
+
+    getGeometryDisplayName(index) {
+        const catalog = this.geometryNames.length ? this.geometryNames : this.getFallbackGeometryNames();
+        return catalog[index] || 'Unknown';
+    }
+
+    getGeometryNames() {
+        return [...this.geometryNames];
+    }
+
+    getActiveGeometryName() {
+        return this.activeGeometryLabel;
     }
     
     /**
@@ -161,27 +323,37 @@ export class QuantumEngine {
      * Update parameter across all quantum visualizers with enhanced integration
      */
     updateParameter(param, value) {
+        let nextValue = value;
+
+        if (param === 'geometry') {
+            nextValue = this.resolveGeometryIndex(value);
+        }
+
         // Update internal parameter manager
-        this.parameters.setParameter(param, value);
-        
+        this.parameters.setParameter(param, nextValue);
+
+        if (param === 'geometry') {
+            this.activeGeometryLabel = this.getGeometryDisplayName(nextValue);
+        }
+
         // CRITICAL: Apply to all quantum visualizers with immediate render
         this.visualizers.forEach(visualizer => {
             if (visualizer.updateParameters) {
                 const params = {};
-                params[param] = value;
+                params[param] = nextValue;
                 visualizer.updateParameters(params);
             } else {
                 // Fallback: direct parameter update with manual render
                 if (visualizer.params) {
-                    visualizer.params[param] = value;
+                    visualizer.params[param] = nextValue;
                     if (visualizer.render) {
                         visualizer.render();
                     }
                 }
             }
         });
-        
-        console.log(`🔮 Updated quantum ${param}: ${value}`);
+
+        console.log(`🔮 Updated quantum ${param}: ${nextValue}`);
     }
     
     /**
@@ -215,10 +387,16 @@ export class QuantumEngine {
      * Set parameters from loaded/imported data
      */
     setParameters(params) {
-        Object.keys(params).forEach(param => {
-            this.parameters.setParameter(param, params[param]);
+        const sanitized = { ...params };
+
+        if (Object.prototype.hasOwnProperty.call(sanitized, 'geometry')) {
+            sanitized.geometry = this.resolveGeometryIndex(sanitized.geometry);
+        }
+
+        Object.keys(sanitized).forEach(param => {
+            this.parameters.setParameter(param, sanitized[param]);
         });
-        this.updateParameters(params);
+        this.updateParameters(sanitized);
     }
     
     /**
@@ -301,7 +479,16 @@ export class QuantumEngine {
         if (window.universalReactivity) {
             window.universalReactivity.disconnectSystem('quantum');
         }
-        
+
+        if (typeof this.geometryUnsubscribe === 'function') {
+            try {
+                this.geometryUnsubscribe();
+            } catch (error) {
+                console.warn('Failed to dispose quantum geometry subscription', error);
+            }
+            this.geometryUnsubscribe = null;
+        }
+
         this.visualizers.forEach(visualizer => {
             if (visualizer.destroy) {
                 visualizer.destroy();

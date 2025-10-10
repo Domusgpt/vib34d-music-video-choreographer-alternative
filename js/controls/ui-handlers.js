@@ -4,9 +4,154 @@
  * Extracted from monolithic index.html for clean architecture
  */
 
+import { GeometryLibrary } from '../../src/geometry/GeometryLibrary.js';
+
 // Global state variables
 let audioEnabled = window.audioEnabled || false;
 let interactivityEnabled = false;
+
+// Geometry state & helpers
+const LEGACY_SYSTEM_KEYS = ['faceted', 'quantum', 'holographic', 'polychora'];
+let cachedGeometryNames = sanitizeGeometryList(GeometryLibrary.getGeometryNames());
+let geometrySubscriptionCleanup = null;
+let geometryGridElement = null;
+let geometryGridSystem = 'faceted';
+
+function sanitizeGeometryList(names = []) {
+    const seen = new Set();
+    const sanitized = [];
+
+    names.forEach(name => {
+        const normalized = GeometryLibrary.normalizeName(name);
+        if (!normalized) return;
+        const key = normalized.toUpperCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        sanitized.push(normalized);
+    });
+
+    return sanitized;
+}
+
+function mergeGeometrySources(primary = [], secondary = []) {
+    const merged = [];
+    const seen = new Set();
+
+    const pushList = list => {
+        list.forEach(name => {
+            const normalized = GeometryLibrary.normalizeName(name);
+            if (!normalized) return;
+            const key = normalized.toUpperCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            merged.push(normalized);
+        });
+    };
+
+    pushList(primary);
+    pushList(secondary);
+
+    return merged;
+}
+
+function createDynamicGeometryList(names) {
+    const list = [...names];
+    Object.defineProperty(list, '__dynamic', { value: true, enumerable: false, configurable: true });
+    return list;
+}
+
+function syncLegacyGeometryState(names) {
+    window.geometries = window.geometries || {};
+
+    LEGACY_SYSTEM_KEYS.forEach(system => {
+        const existing = window.geometries[system];
+        if (Array.isArray(existing)) {
+            if (existing.__dynamic) {
+                existing.splice(0, existing.length, ...names);
+            }
+        } else {
+            window.geometries[system] = createDynamicGeometryList(names);
+        }
+    });
+}
+
+function ensureGeometrySubscription() {
+    if (geometrySubscriptionCleanup) return;
+
+    geometrySubscriptionCleanup = GeometryLibrary.subscribe(({ names }) => {
+        const sanitized = sanitizeGeometryList(Array.isArray(names) ? names : []);
+        cachedGeometryNames = sanitized.length ? sanitized : sanitizeGeometryList(GeometryLibrary.getGeometryNames());
+        if (!cachedGeometryNames.length) {
+            cachedGeometryNames = sanitizeGeometryList([
+                'TETRAHEDRON',
+                'HYPERCUBE',
+                'SPHERE',
+                'TORUS',
+                'KLEIN BOTTLE',
+                'FRACTAL',
+                'WAVE',
+                'CRYSTAL'
+            ]);
+        }
+
+        syncLegacyGeometryState(cachedGeometryNames);
+
+        if (geometryGridElement) {
+            renderGeometryGrid();
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (geometrySubscriptionCleanup) {
+            try {
+                geometrySubscriptionCleanup();
+            } catch (err) {
+                console.warn('[UIHandlers] Failed to dispose geometry subscription', err);
+            }
+            geometrySubscriptionCleanup = null;
+        }
+    }, { once: true });
+}
+
+function getGeometryNamesForSystem(system = window.currentSystem || 'faceted') {
+    const fallback = cachedGeometryNames.length ? cachedGeometryNames : sanitizeGeometryList(GeometryLibrary.getGeometryNames());
+    const manual = window.geometries?.[system];
+    if (!Array.isArray(manual) || !manual.length) {
+        return fallback;
+    }
+
+    const sanitizedManual = sanitizeGeometryList(manual);
+    if (!sanitizedManual.length) {
+        return fallback;
+    }
+
+    return mergeGeometrySources(sanitizedManual, fallback);
+}
+
+function renderGeometryGrid() {
+    if (!geometryGridElement) return;
+
+    const names = getGeometryNamesForSystem(geometryGridSystem);
+    if (!names.length) {
+        geometryGridElement.innerHTML = '<div class="geom-empty">No geometries available</div>';
+        return;
+    }
+
+    const previousActive = geometryGridElement.querySelector('.geom-btn.active');
+    let activeIndex = previousActive ? parseInt(previousActive.dataset.index, 10) : 0;
+    if (!Number.isFinite(activeIndex) || activeIndex < 0 || activeIndex >= names.length) {
+        activeIndex = 0;
+    }
+
+    geometryGridElement.innerHTML = names.map((name, index) => `
+        <button class="geom-btn ${index === activeIndex ? 'active' : ''}" data-index="${index}" onclick="selectGeometry(${index})">
+            ${name}
+        </button>
+    `).join('');
+}
+
+syncLegacyGeometryState(cachedGeometryNames);
+ensureGeometrySubscription();
 
 /**
  * Main parameter update function - CRITICAL for all visualizers
@@ -146,10 +291,14 @@ function randomizeParameters() {
 function randomizeGeometryAndHue() {
     // Randomize geometry selection
     if (window.currentSystem !== 'holographic') {
-        const geometryCount = window.geometries?.[window.currentSystem]?.length || 8;
-        const randomGeometry = Math.floor(Math.random() * geometryCount);
-        if (window.selectGeometry) {
-            window.selectGeometry(randomGeometry);
+        const geometryNames = getGeometryNamesForSystem(window.currentSystem);
+        if (geometryNames.length) {
+            const randomGeometry = Math.floor(Math.random() * geometryNames.length);
+            if (window.selectGeometry) {
+                window.selectGeometry(randomGeometry);
+            }
+        } else {
+            console.warn('[UIHandlers] Unable to randomize geometry - no shapes registered');
         }
     }
     
@@ -647,18 +796,15 @@ window.addEventListener('message', (event) => {
 window.setupGeometry = function(system) {
     const grid = document.getElementById('geometryGrid');
     if (!grid) return;
-    
-    const geoList = window.geometries?.[system] || window.geometries?.faceted || [
-        'TETRAHEDRON', 'HYPERCUBE', 'SPHERE', 'TORUS', 
-        'KLEIN BOTTLE', 'FRACTAL', 'WAVE', 'CRYSTAL'
-    ];
-    
-    grid.innerHTML = geoList.map((name, i) => 
-        `<button class="geom-btn ${i === 0 ? 'active' : ''}" 
-                 data-index="${i}" onclick="selectGeometry(${i})">
-            ${name}
-        </button>`
-    ).join('');
+
+    geometryGridElement = grid;
+    geometryGridSystem = system || window.currentSystem || 'faceted';
+
+    if (!geometrySubscriptionCleanup) {
+        ensureGeometrySubscription();
+    }
+
+    renderGeometryGrid();
 };
 
 /**
